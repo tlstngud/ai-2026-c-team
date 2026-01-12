@@ -277,7 +277,7 @@ const Dashboard = () => {
                                     <div className="bg-black/30 backdrop-blur-md px-4 py-2 rounded-full border border-white/10">
                                         <span className="text-xs font-bold text-white/80 uppercase tracking-wider flex items-center gap-2">
                                             <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                                            Live Cam
+                                            Live Cam.
                                         </span>
                                     </div>
 
