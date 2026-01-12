@@ -1,7 +1,6 @@
 {
-  "buildCommand": "npm run build",
+  "buildCommand": "cd driver_front && npm install && npm run build",
   "outputDirectory": "driver_front/dist",
-  "installCommand": "npm install",
-  "rootDirectory": "driver_front",
+  "installCommand": "cd driver_front && npm install",
   "framework": "vite"
 }
