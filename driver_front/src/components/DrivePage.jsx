@@ -20,7 +20,7 @@ const DrivePage = ({
 }) => {
     if (showCameraView) {
         return (
-            <div className="min-h-full bg-black text-white font-sans flex flex-col relative h-full">
+            <div className="bg-black text-white font-sans flex flex-col relative w-full h-[100dvh] sm:h-full">
                 <div className="relative flex-1 bg-gray-900 overflow-hidden">
                     {!hasPermission && (
                         <div className="absolute inset-0 flex items-center justify-center z-0">
