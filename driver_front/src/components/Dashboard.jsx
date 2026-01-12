@@ -38,12 +38,24 @@ const Dashboard = () => {
     const startCamera = async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: "user" },
+                video: {
+                    facingMode: "user",
+                    width: { ideal: 1280 }, // iOS 호환성을 위해 min 제약 제거
+                    height: { ideal: 720 },
+                    frameRate: { ideal: 30 }
+                },
                 audio: false
             });
 
-            if (videoRef.current) videoRef.current.srcObject = stream;
-            if (videoRef2.current) videoRef2.current.srcObject = stream;
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+                // iOS 비디오 자동 재생 정책 대응: 명시적 play 호출
+                videoRef.current.play().catch(e => console.warn("Video 1 play failed:", e));
+            }
+            if (videoRef2.current) {
+                videoRef2.current.srcObject = stream;
+                videoRef2.current.play().catch(e => console.warn("Video 2 play failed:", e));
+            }
             streamRef.current = stream;
             setHasPermission(true);
         } catch (err) {
