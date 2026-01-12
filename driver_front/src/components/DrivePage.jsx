@@ -31,6 +31,7 @@ const DrivePage = ({
         isDraggingRef.current = true;
         dragStartY.current = e.touches[0].clientY;
         dragStartHeight.current = modalHeight;
+        e.stopPropagation();
         e.preventDefault();
     };
 
@@ -82,6 +83,7 @@ const DrivePage = ({
                 const newHeight = Math.max(200, Math.min(500, dragStartHeight.current + deltaY));
                 setModalHeight(newHeight);
                 e.preventDefault();
+                e.stopPropagation();
             };
 
             const mouseMoveHandler = (e) => {
@@ -92,14 +94,21 @@ const DrivePage = ({
                 e.preventDefault();
             };
 
+            const touchEndHandler = () => {
+                setIsDragging(false);
+                isDraggingRef.current = false;
+            };
+
             document.addEventListener('touchmove', touchMoveHandler, { passive: false });
-            document.addEventListener('touchend', handleTouchEnd);
+            document.addEventListener('touchend', touchEndHandler, { passive: false });
+            document.addEventListener('touchcancel', touchEndHandler, { passive: false });
             document.addEventListener('mousemove', mouseMoveHandler);
             document.addEventListener('mouseup', handleMouseUp);
 
             return () => {
                 document.removeEventListener('touchmove', touchMoveHandler);
-                document.removeEventListener('touchend', handleTouchEnd);
+                document.removeEventListener('touchend', touchEndHandler);
+                document.removeEventListener('touchcancel', touchEndHandler);
                 document.removeEventListener('mousemove', mouseMoveHandler);
                 document.removeEventListener('mouseup', handleMouseUp);
             };
@@ -225,7 +234,7 @@ const DrivePage = ({
 
                             <div className="flex flex-col items-end">
                                 <span className="text-5xl font-bold tracking-tighter drop-shadow-md text-white">
-                                    {parseFloat(score).toFixed(2)}
+                                    {Math.floor(score)}
                                 </span>
                                 <span className="text-xs font-medium text-white/60">Score</span>
                             </div>
@@ -267,14 +276,27 @@ const DrivePage = ({
                         height: `${modalHeight}px`,
                         minHeight: `${modalHeight}px`,
                         maxHeight: `${modalHeight}px`,
-                        transition: isDragging ? 'none' : 'height 0.2s ease-out'
+                        transition: isDragging ? 'none' : 'height 0.2s ease-out',
+                        touchAction: 'pan-y',
+                        WebkitOverflowScrolling: 'touch'
                     }}
                 >
                     <div
                         className="flex flex-col items-center gap-2 mb-10 cursor-grab active:cursor-grabbing touch-none"
                         onTouchStart={handleTouchStart}
                         onMouseDown={handleMouseDown}
-                        style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
+                        onTouchMove={(e) => {
+                            if (isDraggingRef.current) {
+                                e.preventDefault();
+                                e.stopPropagation();
+                            }
+                        }}
+                        style={{ 
+                            userSelect: 'none', 
+                            WebkitUserSelect: 'none',
+                            touchAction: 'none',
+                            WebkitTouchCallout: 'none'
+                        }}
                     >
                         <div className="w-12 h-1 bg-gray-200 rounded-full"></div>
                     </div>
@@ -363,7 +385,7 @@ const DrivePage = ({
                     </svg>
                     <div className="flex flex-col items-center z-10">
                         <span className={`text-5xl font-bold tracking-tighter ${hasPermission ? 'text-black' : 'text-black'}`}>
-                            {parseFloat(score).toFixed(2)}
+                            {Math.floor(score)}
                         </span>
                         <span className="text-xs font-medium mt-1 text-gray-400">POINTS</span>
                     </div>
