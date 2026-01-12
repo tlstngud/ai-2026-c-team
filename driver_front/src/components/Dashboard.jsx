@@ -38,12 +38,26 @@ const Dashboard = () => {
     const startCamera = async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: "user" },
+                video: {
+                    facingMode: "user",
+                    width: { ideal: 1280, min: 640 }, // 기본 720p, 최소 480p
+                    height: { ideal: 720, min: 480 },
+                    frameRate: { ideal: 30, max: 30 } // FPS 30 고정
+                },
                 audio: false
             });
 
-            if (videoRef.current) videoRef.current.srcObject = stream;
-            if (videoRef2.current) videoRef2.current.srcObject = stream;
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+                videoRef.current.setAttribute("playsinline", "true"); // iOS 블랙스크린 방지
+                // iOS 비디오 자동 재생 정책 대응: 명시적 play 호출
+                videoRef.current.play().catch(e => console.warn("Video 1 play failed:", e));
+            }
+            if (videoRef2.current) {
+                videoRef2.current.srcObject = stream;
+                videoRef2.current.setAttribute("playsinline", "true");
+                videoRef2.current.play().catch(e => console.warn("Video 2 play failed:", e));
+            }
             streamRef.current = stream;
             setHasPermission(true);
         } catch (err) {
