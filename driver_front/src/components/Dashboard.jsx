@@ -34,9 +34,46 @@ const Dashboard = () => {
         if (saved) setHistory(JSON.parse(saved));
     }, []);
 
+
     // --- Camera Setup ---
+    const attachStreamToVideo = (stream) => {
+        if (!stream) return;
+
+        const setupVideo = (videoEl) => {
+            if (!videoEl) return;
+            videoEl.srcObject = stream;
+            videoEl.setAttribute("playsinline", "true"); // iOS 블랙스크린 방지
+            videoEl.setAttribute("webkit-playsinline", "true");
+
+            videoEl.onloadedmetadata = () => {
+                videoEl.play().catch(e => console.warn("Video play failed:", e));
+            };
+
+            const playPromise = videoEl.play();
+            if (playPromise !== undefined) {
+                playPromise
+                    .then(() => {
+                        // 모바일에서 video 요소 강제 표시
+                        videoEl.style.display = 'block';
+                        videoEl.style.visibility = 'visible';
+                    })
+                    .catch(e => console.warn("Video play failed:", e));
+            }
+        };
+
+        if (videoRef.current) setupVideo(videoRef.current);
+        if (videoRef2.current) setupVideo(videoRef2.current);
+    };
+
     const startCamera = async () => {
         try {
+            // 이미 스트림이 있다면 재연결만 수행
+            if (streamRef.current && streamRef.current.active) {
+                attachStreamToVideo(streamRef.current);
+                setHasPermission(true);
+                return;
+            }
+
             // 모바일 호환성을 위해 제약 완화 및 사용자 정의 제약 적용
             const constraints = {
                 video: {
@@ -49,58 +86,12 @@ const Dashboard = () => {
             };
 
             const stream = await navigator.mediaDevices.getUserMedia(constraints);
-
-            if (videoRef.current) {
-                videoRef.current.srcObject = stream;
-                videoRef.current.setAttribute("playsinline", "true"); // iOS 블랙스크린 방지
-                videoRef.current.setAttribute("webkit-playsinline", "true");
-
-                // 모바일에서 video 요소가 확실히 보이도록 처리
-                videoRef.current.onloadedmetadata = () => {
-                    videoRef.current?.play().catch(e => {
-                        console.warn("Video 1 play failed:", e);
-                    });
-                };
-
-                // 모바일에서 비디오가 보이도록 명시적 재생
-                const playPromise = videoRef.current.play();
-                if (playPromise !== undefined) {
-                    playPromise
-                        .then(() => {
-                            console.log("Video 1 playing successfully");
-                            // 모바일에서 video 요소 강제 표시
-                            if (videoRef.current) {
-                                videoRef.current.style.display = 'block';
-                                videoRef.current.style.visibility = 'visible';
-                            }
-                        })
-                        .catch(e => {
-                            console.warn("Video 1 play failed:", e);
-                        });
-                }
-            }
-            if (videoRef2.current) {
-                videoRef2.current.srcObject = stream;
-                videoRef2.current.setAttribute("playsinline", "true");
-                videoRef2.current.setAttribute("webkit-playsinline", "true");
-
-                const playPromise2 = videoRef2.current.play();
-                if (playPromise2 !== undefined) {
-                    playPromise2
-                        .then(() => {
-                            console.log("Video 2 playing successfully");
-                        })
-                        .catch(e => {
-                            console.warn("Video 2 play failed:", e);
-                        });
-                }
-            }
             streamRef.current = stream;
+            attachStreamToVideo(stream);
             setHasPermission(true);
         } catch (err) {
             console.error("Camera Error:", err);
             setHasPermission(false);
-            // 에러 상세 정보 로깅
             if (err.name === 'NotAllowedError') {
                 console.error("카메라 권한이 거부되었습니다.");
             } else if (err.name === 'NotFoundError') {
@@ -122,10 +113,29 @@ const Dashboard = () => {
     };
 
     useEffect(() => {
-        if (showCameraView) startCamera();
-        else stopCamera();
-        return () => { if (!showCameraView) stopCamera(); };
+        if (showCameraView) {
+            startCamera();
+        } else {
+            // Stop camera only if we really want to stop it completely. 
+            // But based on user request, maybe we should keep it running if active?
+            // For now, follow existing logic but startCamera handles existing stream.
+            stopCamera();
+        }
+        return () => {
+            // Cleanup only if component unmounts completely, or leave it to logic
+            if (!showCameraView) stopCamera();
+        };
     }, [showCameraView]);
+
+    // 페이지 이동 후 돌아왔을 때 스트림 재연결 (카메라가 켜져있는 상태라면)
+    useEffect(() => {
+        if (currentPage === 'drive' && showCameraView && streamRef.current && streamRef.current.active) {
+            // 약간의 지연을 주어 DOM이 확실히 렌더링 된 후 연결 시도
+            setTimeout(() => {
+                attachStreamToVideo(streamRef.current);
+            }, 100);
+        }
+    }, [currentPage, showCameraView]);
 
     // --- Session Time Counter ---
     useEffect(() => {

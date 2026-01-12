@@ -31,6 +31,7 @@ const DrivePage = ({
         isDraggingRef.current = true;
         dragStartY.current = e.touches[0].clientY;
         dragStartHeight.current = modalHeight;
+        e.stopPropagation();
         e.preventDefault();
     };
 
@@ -82,6 +83,7 @@ const DrivePage = ({
                 const newHeight = Math.max(200, Math.min(500, dragStartHeight.current + deltaY));
                 setModalHeight(newHeight);
                 e.preventDefault();
+                e.stopPropagation();
             };
 
             const mouseMoveHandler = (e) => {
@@ -92,14 +94,21 @@ const DrivePage = ({
                 e.preventDefault();
             };
 
+            const touchEndHandler = () => {
+                setIsDragging(false);
+                isDraggingRef.current = false;
+            };
+
             document.addEventListener('touchmove', touchMoveHandler, { passive: false });
-            document.addEventListener('touchend', handleTouchEnd);
+            document.addEventListener('touchend', touchEndHandler, { passive: false });
+            document.addEventListener('touchcancel', touchEndHandler, { passive: false });
             document.addEventListener('mousemove', mouseMoveHandler);
             document.addEventListener('mouseup', handleMouseUp);
 
             return () => {
                 document.removeEventListener('touchmove', touchMoveHandler);
-                document.removeEventListener('touchend', handleTouchEnd);
+                document.removeEventListener('touchend', touchEndHandler);
+                document.removeEventListener('touchcancel', touchEndHandler);
                 document.removeEventListener('mousemove', mouseMoveHandler);
                 document.removeEventListener('mouseup', handleMouseUp);
             };
@@ -138,11 +147,10 @@ const DrivePage = ({
 
     if (showCameraView) {
         return (
-            <div className="bg-black text-white font-sans flex flex-col relative" style={{
-                height: '100%',
+            <div className="bg-black text-white font-sans flex flex-col relative w-full" style={{
+                height: '100dvh',
                 minHeight: '100%',
                 maxHeight: '100%',
-                width: '100%',
                 overflow: 'hidden'
             }}>
                 <div
@@ -268,14 +276,27 @@ const DrivePage = ({
                         height: `${modalHeight}px`,
                         minHeight: `${modalHeight}px`,
                         maxHeight: `${modalHeight}px`,
-                        transition: isDragging ? 'none' : 'height 0.2s ease-out'
+                        transition: isDragging ? 'none' : 'height 0.2s ease-out',
+                        touchAction: 'pan-y',
+                        WebkitOverflowScrolling: 'touch'
                     }}
                 >
                     <div
                         className="flex flex-col items-center gap-2 mb-10 cursor-grab active:cursor-grabbing touch-none"
                         onTouchStart={handleTouchStart}
                         onMouseDown={handleMouseDown}
-                        style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
+                        onTouchMove={(e) => {
+                            if (isDraggingRef.current) {
+                                e.preventDefault();
+                                e.stopPropagation();
+                            }
+                        }}
+                        style={{ 
+                            userSelect: 'none', 
+                            WebkitUserSelect: 'none',
+                            touchAction: 'none',
+                            WebkitTouchCallout: 'none'
+                        }}
                     >
                         <div className="w-12 h-1 bg-gray-200 rounded-full"></div>
                     </div>
