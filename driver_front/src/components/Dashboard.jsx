@@ -78,9 +78,9 @@ const Dashboard = () => {
             const constraints = {
                 video: {
                     facingMode: "user",
-                    width: { ideal: 1280, min: 640 }, // 기본 720p, 최소 480p
-                    height: { ideal: 720, min: 480 },
-                    frameRate: { ideal: 30, max: 30 } // FPS 30 고정
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                    frameRate: { ideal: 30 }
                 },
                 audio: false
             };
@@ -246,10 +246,21 @@ const Dashboard = () => {
         <div className="min-h-screen bg-gray-200 flex justify-center items-center font-sans">
 
             {/* 2. 모바일 컨테이너: 최대 너비 제한 (430px - iPhone Pro Max 급), 그림자, 둥근 모서리 */}
-            <div className="w-full max-w-[430px] min-h-screen sm:h-screen sm:max-h-screen bg-white sm:rounded-[40px] shadow-2xl overflow-hidden relative border-0 sm:border-[8px] sm:border-gray-900 ring-1 ring-black/5 flex flex-col">
+            <div
+                className="w-full max-w-[430px] bg-white sm:rounded-[40px] shadow-2xl overflow-hidden relative border-0 sm:border-[8px] sm:border-gray-900 ring-1 ring-black/5 flex flex-col"
+                style={showCameraView ? {
+                    height: '100vh',
+                    minHeight: '100vh',
+                    maxHeight: '100vh'
+                } : {
+                    minHeight: '100vh',
+                    height: '100vh',
+                    maxHeight: '100vh'
+                }}
+            >
 
                 {/* 실제 앱 컨텐츠 영역 */}
-                <div className="flex-1 overflow-y-auto scrollbar-hide bg-white relative pb-24">
+                <div className={`flex-1 scrollbar-hide bg-white relative ${showCameraView ? 'overflow-hidden' : 'overflow-y-auto pb-24'}`} style={showCameraView ? { height: '100%', minHeight: '100%', maxHeight: '100%' } : {}}>
 
                     {/* 페이지별 컨텐츠 */}
                     {currentPage === 'drive' && (
