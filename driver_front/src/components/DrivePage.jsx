@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Play, Square, Camera, CameraOff } from 'lucide-react';
 import { STATE_CONFIG, APPLE_STATE_CONFIG } from './constants';
 
@@ -19,6 +19,92 @@ const DrivePage = ({
     CurrentIcon
 }) => {
     const videoContainerRef = useRef(null);
+    const modalRef = useRef(null);
+    const [modalHeight, setModalHeight] = useState(360); // 기본 높이
+    const [isDragging, setIsDragging] = useState(false);
+    const dragStartY = useRef(0);
+    const dragStartHeight = useRef(0);
+
+    // 모달 드래그 핸들러
+    const handleTouchStart = (e) => {
+        setIsDragging(true);
+        isDraggingRef.current = true;
+        dragStartY.current = e.touches[0].clientY;
+        dragStartHeight.current = modalHeight;
+        e.preventDefault();
+    };
+
+    const isDraggingRef = useRef(false);
+
+    const handleTouchMove = (e) => {
+        if (!isDraggingRef.current) return;
+
+        const currentY = e.touches[0].clientY;
+        const deltaY = dragStartY.current - currentY; // 위로 드래그하면 양수
+        const newHeight = Math.max(200, Math.min(500, dragStartHeight.current + deltaY));
+        setModalHeight(newHeight);
+        e.preventDefault();
+    };
+
+    const handleTouchEnd = () => {
+        setIsDragging(false);
+        isDraggingRef.current = false;
+    };
+
+    // 마우스 드래그 지원 (데스크탑)
+    const handleMouseDown = (e) => {
+        setIsDragging(true);
+        isDraggingRef.current = true;
+        dragStartY.current = e.clientY;
+        dragStartHeight.current = modalHeight;
+        e.preventDefault();
+    };
+
+    const handleMouseMove = (e) => {
+        if (!isDraggingRef.current) return;
+        const deltaY = dragStartY.current - e.clientY;
+        const newHeight = Math.max(200, Math.min(500, dragStartHeight.current + deltaY));
+        setModalHeight(newHeight);
+        e.preventDefault();
+    };
+
+    const handleMouseUp = () => {
+        setIsDragging(false);
+        isDraggingRef.current = false;
+    };
+
+    useEffect(() => {
+        if (isDragging) {
+            const touchMoveHandler = (e) => {
+                if (!isDraggingRef.current) return;
+                const currentY = e.touches[0].clientY;
+                const deltaY = dragStartY.current - currentY;
+                const newHeight = Math.max(200, Math.min(500, dragStartHeight.current + deltaY));
+                setModalHeight(newHeight);
+                e.preventDefault();
+            };
+
+            const mouseMoveHandler = (e) => {
+                if (!isDraggingRef.current) return;
+                const deltaY = dragStartY.current - e.clientY;
+                const newHeight = Math.max(200, Math.min(500, dragStartHeight.current + deltaY));
+                setModalHeight(newHeight);
+                e.preventDefault();
+            };
+
+            document.addEventListener('touchmove', touchMoveHandler, { passive: false });
+            document.addEventListener('touchend', handleTouchEnd);
+            document.addEventListener('mousemove', mouseMoveHandler);
+            document.addEventListener('mouseup', handleMouseUp);
+
+            return () => {
+                document.removeEventListener('touchmove', touchMoveHandler);
+                document.removeEventListener('touchend', handleTouchEnd);
+                document.removeEventListener('mousemove', mouseMoveHandler);
+                document.removeEventListener('mouseup', handleMouseUp);
+            };
+        }
+    }, [isDragging, modalHeight]);
 
     // 모바일에서 video 높이 동적 설정
     useEffect(() => {
@@ -174,8 +260,23 @@ const DrivePage = ({
                     </div>
                 </div>
 
-                <div className="bg-white pb-14 pt-11 px-6 rounded-t-[32px] z-30 shadow-[0_-10px_40px_rgba(0,0,0,0.2)] relative flex-shrink-0" style={{ marginTop: '-20px', minHeight: '360px' }}>
-                    <div className="flex flex-col items-center gap-2 mb-10">
+                <div
+                    ref={modalRef}
+                    className="bg-white pb-14 pt-11 px-6 rounded-t-[32px] z-30 shadow-[0_-10px_40px_rgba(0,0,0,0.2)] relative flex-shrink-0"
+                    style={{
+                        marginTop: '-20px',
+                        height: `${modalHeight}px`,
+                        minHeight: `${modalHeight}px`,
+                        maxHeight: `${modalHeight}px`,
+                        transition: isDragging ? 'none' : 'height 0.2s ease-out'
+                    }}
+                >
+                    <div
+                        className="flex flex-col items-center gap-2 mb-10 cursor-grab active:cursor-grabbing touch-none"
+                        onTouchStart={handleTouchStart}
+                        onMouseDown={handleMouseDown}
+                        style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
+                    >
                         <div className="w-12 h-1 bg-gray-200 rounded-full"></div>
                     </div>
 
