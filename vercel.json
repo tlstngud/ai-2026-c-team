@@ -1,0 +1,7 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "driver_front/dist",
+  "installCommand": "npm install",
+  "rootDirectory": "driver_front",
+  "framework": "vite"
+}
