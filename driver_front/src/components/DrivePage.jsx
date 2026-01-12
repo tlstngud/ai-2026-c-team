@@ -138,11 +138,10 @@ const DrivePage = ({
 
     if (showCameraView) {
         return (
-            <div className="bg-black text-white font-sans flex flex-col relative" style={{
-                height: '100%',
+            <div className="bg-black text-white font-sans flex flex-col relative w-full" style={{
+                height: '100dvh',
                 minHeight: '100%',
                 maxHeight: '100%',
-                width: '100%',
                 overflow: 'hidden'
             }}>
                 <div
