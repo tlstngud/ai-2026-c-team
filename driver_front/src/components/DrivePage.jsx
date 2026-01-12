@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Play, Square, Camera, CameraOff } from 'lucide-react';
 import { STATE_CONFIG, APPLE_STATE_CONFIG } from './constants';
 
@@ -18,12 +18,61 @@ const DrivePage = ({
     currentConfig,
     CurrentIcon
 }) => {
+    const videoContainerRef = useRef(null);
+
+    // 모바일에서 video 높이 동적 설정
+    useEffect(() => {
+        if (showCameraView && videoRef.current && videoContainerRef.current) {
+            const updateVideoHeight = () => {
+                const container = videoContainerRef.current;
+                const video = videoRef.current;
+                if (container && video) {
+                    const containerHeight = container.offsetHeight || container.clientHeight;
+                    if (containerHeight > 0) {
+                        video.style.height = `${containerHeight}px`;
+                        video.style.width = '100%';
+                    }
+                }
+            };
+
+            // 초기 설정
+            updateVideoHeight();
+
+            // 리사이즈 이벤트
+            const resizeObserver = new ResizeObserver(updateVideoHeight);
+            if (videoContainerRef.current) {
+                resizeObserver.observe(videoContainerRef.current);
+            }
+
+            return () => {
+                resizeObserver.disconnect();
+            };
+        }
+    }, [showCameraView, hasPermission, videoRef]);
+
     if (showCameraView) {
         return (
-            <div className="min-h-full bg-black text-white font-sans flex flex-col relative h-full">
-                <div className="relative flex-1 bg-gray-900 overflow-hidden">
+            <div className="bg-black text-white font-sans flex flex-col relative" style={{
+                height: '100%',
+                minHeight: '100%',
+                maxHeight: '100%',
+                width: '100%',
+                overflow: 'hidden'
+            }}>
+                <div
+                    ref={videoContainerRef}
+                    className="relative bg-black overflow-hidden flex-1"
+                    style={{
+                        width: '100%',
+                        height: '100%',
+                        minHeight: 0,
+                        flex: '1 1 0%',
+                        position: 'relative',
+                        maxHeight: '100%'
+                    }}
+                >
                     {!hasPermission && (
-                        <div className="absolute inset-0 flex items-center justify-center z-0">
+                        <div className="absolute inset-0 flex items-center justify-center z-50">
                             <p className="text-gray-500">Camera Loading...</p>
                         </div>
                     )}
@@ -33,10 +82,54 @@ const DrivePage = ({
                         autoPlay
                         playsInline
                         muted
-                        className="absolute inset-0 w-full h-full object-cover transform scale-x-[-1]"
+                        webkit-playsinline="true"
+                        x5-playsinline="true"
+                        x5-video-player-type="h5"
+                        x5-video-player-fullscreen="true"
+                        style={{
+                            transform: 'scaleX(-1)',
+                            WebkitTransform: 'scaleX(-1)',
+                            width: '100%',
+                            height: '100%',
+                            minWidth: '100%',
+                            minHeight: '100%',
+                            maxWidth: '100%',
+                            maxHeight: '100%',
+                            objectFit: 'cover',
+                            backgroundColor: '#000',
+                            zIndex: 0,
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            display: 'block',
+                            visibility: 'visible',
+                            margin: 0,
+                            padding: 0
+                        }}
+                        onLoadedMetadata={(e) => {
+                            const video = e.target;
+                            // 모바일에서 높이 강제 설정
+                            const container = video.parentElement;
+                            if (container) {
+                                const updateVideoSize = () => {
+                                    const containerHeight = container.offsetHeight || container.clientHeight || window.innerHeight;
+                                    const containerWidth = container.offsetWidth || container.clientWidth || window.innerWidth;
+                                    video.style.height = `${containerHeight}px`;
+                                    video.style.width = `${containerWidth}px`;
+                                    video.style.minHeight = `${containerHeight}px`;
+                                    video.style.minWidth = `${containerWidth}px`;
+                                };
+                                updateVideoSize();
+                                // 리사이즈 이벤트 리스너 추가
+                                window.addEventListener('resize', updateVideoSize);
+                            }
+                            video.play().catch(err => console.warn("Auto-play failed:", err));
+                        }}
                     />
 
-                    <div className="absolute inset-0 pointer-events-none z-10 flex flex-col justify-between p-6 pb-28">
+                    <div className="absolute inset-0 pointer-events-none z-20 flex flex-col justify-between p-6 pb-28">
                         <div className="flex justify-between items-start">
                             <div className="bg-black/30 backdrop-blur-md px-4 py-2 rounded-full border border-white/10">
                                 <span className="text-xs font-bold text-white/80 uppercase tracking-wider flex items-center gap-2">
@@ -81,12 +174,12 @@ const DrivePage = ({
                     </div>
                 </div>
 
-                <div className="bg-white h-auto pb-8 pt-4 px-6 rounded-t-[32px] -mt-6 z-20 shadow-[0_-10px_40px_rgba(0,0,0,0.2)] relative">
-                    <div className="flex flex-col items-center gap-2 mb-6">
+                <div className="bg-white pb-14 pt-11 px-6 rounded-t-[32px] z-30 shadow-[0_-10px_40px_rgba(0,0,0,0.2)] relative flex-shrink-0" style={{ marginTop: '-20px', minHeight: '360px' }}>
+                    <div className="flex flex-col items-center gap-2 mb-10">
                         <div className="w-12 h-1 bg-gray-200 rounded-full"></div>
                     </div>
 
-                    <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center justify-between mb-10">
                         <div>
                             <p className="text-gray-500 text-xs font-bold uppercase">Session Time</p>
                             <p className="text-2xl font-bold text-black font-mono">
@@ -101,7 +194,7 @@ const DrivePage = ({
                         </div>
                     </div>
 
-                    <div className="flex gap-3 mb-4">
+                    <div className="flex gap-3 mb-6">
                         <button
                             onClick={() => setShowCameraView(false)}
                             className="flex-1 h-14 rounded-xl bg-gray-100 text-black font-bold flex items-center justify-center gap-2 transition-all active:scale-95"
@@ -148,8 +241,15 @@ const DrivePage = ({
                         autoPlay
                         playsInline
                         muted
-                        className={`w-full h-full object-cover ${hasPermission ? 'scale-x-[-1]' : ''}`}
-                        style={{ transform: hasPermission ? 'scaleX(-1)' : 'none' }}
+                        webkit-playsinline="true"
+                        className="w-full h-full object-cover"
+                        style={{
+                            transform: 'scaleX(-1)',
+                            WebkitTransform: 'scaleX(-1)',
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover'
+                        }}
                     />
                     <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-white"></div>
                 </div>

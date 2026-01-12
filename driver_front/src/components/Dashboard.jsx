@@ -37,7 +37,8 @@ const Dashboard = () => {
     // --- Camera Setup ---
     const startCamera = async () => {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({
+            // 모바일 호환성을 위해 제약 완화 및 사용자 정의 제약 적용
+            const constraints = {
                 video: {
                     facingMode: "user",
                     width: { ideal: 1280, min: 640 }, // 기본 720p, 최소 480p
@@ -45,24 +46,68 @@ const Dashboard = () => {
                     frameRate: { ideal: 30, max: 30 } // FPS 30 고정
                 },
                 audio: false
-            });
+            };
+
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
 
             if (videoRef.current) {
                 videoRef.current.srcObject = stream;
                 videoRef.current.setAttribute("playsinline", "true"); // iOS 블랙스크린 방지
-                // iOS 비디오 자동 재생 정책 대응: 명시적 play 호출
-                videoRef.current.play().catch(e => console.warn("Video 1 play failed:", e));
+                videoRef.current.setAttribute("webkit-playsinline", "true");
+
+                // 모바일에서 video 요소가 확실히 보이도록 처리
+                videoRef.current.onloadedmetadata = () => {
+                    videoRef.current?.play().catch(e => {
+                        console.warn("Video 1 play failed:", e);
+                    });
+                };
+
+                // 모바일에서 비디오가 보이도록 명시적 재생
+                const playPromise = videoRef.current.play();
+                if (playPromise !== undefined) {
+                    playPromise
+                        .then(() => {
+                            console.log("Video 1 playing successfully");
+                            // 모바일에서 video 요소 강제 표시
+                            if (videoRef.current) {
+                                videoRef.current.style.display = 'block';
+                                videoRef.current.style.visibility = 'visible';
+                            }
+                        })
+                        .catch(e => {
+                            console.warn("Video 1 play failed:", e);
+                        });
+                }
             }
             if (videoRef2.current) {
                 videoRef2.current.srcObject = stream;
                 videoRef2.current.setAttribute("playsinline", "true");
-                videoRef2.current.play().catch(e => console.warn("Video 2 play failed:", e));
+                videoRef2.current.setAttribute("webkit-playsinline", "true");
+
+                const playPromise2 = videoRef2.current.play();
+                if (playPromise2 !== undefined) {
+                    playPromise2
+                        .then(() => {
+                            console.log("Video 2 playing successfully");
+                        })
+                        .catch(e => {
+                            console.warn("Video 2 play failed:", e);
+                        });
+                }
             }
             streamRef.current = stream;
             setHasPermission(true);
         } catch (err) {
             console.error("Camera Error:", err);
             setHasPermission(false);
+            // 에러 상세 정보 로깅
+            if (err.name === 'NotAllowedError') {
+                console.error("카메라 권한이 거부되었습니다.");
+            } else if (err.name === 'NotFoundError') {
+                console.error("카메라를 찾을 수 없습니다.");
+            } else if (err.name === 'OverconstrainedError') {
+                console.error("카메라 제약 조건을 만족할 수 없습니다:", err.constraint);
+            }
         }
     };
 
@@ -191,10 +236,21 @@ const Dashboard = () => {
         <div className="min-h-screen bg-gray-200 flex justify-center items-center font-sans">
 
             {/* 2. 모바일 컨테이너: 최대 너비 제한 (430px - iPhone Pro Max 급), 그림자, 둥근 모서리 */}
-            <div className="w-full max-w-[430px] min-h-screen sm:h-screen sm:max-h-screen bg-white sm:rounded-[40px] shadow-2xl overflow-hidden relative border-0 sm:border-[8px] sm:border-gray-900 ring-1 ring-black/5 flex flex-col">
+            <div
+                className="w-full max-w-[430px] bg-white sm:rounded-[40px] shadow-2xl overflow-hidden relative border-0 sm:border-[8px] sm:border-gray-900 ring-1 ring-black/5 flex flex-col"
+                style={showCameraView ? {
+                    height: '100vh',
+                    minHeight: '100vh',
+                    maxHeight: '100vh'
+                } : {
+                    minHeight: '100vh',
+                    height: '100vh',
+                    maxHeight: '100vh'
+                }}
+            >
 
                 {/* 실제 앱 컨텐츠 영역 */}
-                <div className="flex-1 overflow-y-auto scrollbar-hide bg-white relative pb-24">
+                <div className={`flex-1 scrollbar-hide bg-white relative ${showCameraView ? 'overflow-hidden' : 'overflow-y-auto pb-24'}`} style={showCameraView ? { height: '100%', minHeight: '100%', maxHeight: '100%' } : {}}>
 
                     {/* 페이지별 컨텐츠 */}
                     {currentPage === 'drive' && (
