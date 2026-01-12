@@ -14,23 +14,23 @@ const BottomNav = ({ currentPage, onPageChange, selectedLog }) => {
     return (
         <div className="fixed bottom-0 left-0 right-0 flex justify-center py-3 px-4 z-50 pointer-events-none sm:pointer-events-auto">
             <nav className="pointer-events-auto bg-white/80 backdrop-blur-xl border border-slate-200 rounded-3xl shadow-2xl flex justify-around items-center h-20 px-6 py-3 w-[90%] max-w-[360px] sm:max-w-[360px]">
-                <NavButton 
-                    active={currentPage === 'drive'} 
-                    onClick={() => onPageChange('drive')} 
-                    icon={<Video size={22} />} 
-                    label="드라이브" 
+                <NavButton
+                    active={currentPage === 'drive'}
+                    onClick={() => onPageChange('drive')}
+                    icon={<Video size={22} />}
+                    label="드라이브"
                 />
-                <NavButton 
-                    active={currentPage === 'insurance'} 
-                    onClick={() => onPageChange('insurance')} 
-                    icon={<ShieldCheck size={22} />} 
-                    label="보험혜택" 
+                <NavButton
+                    active={currentPage === 'insurance'}
+                    onClick={() => onPageChange('insurance')}
+                    icon={<ShieldCheck size={22} />}
+                    label="보험혜택"
                 />
-                <NavButton 
-                    active={currentPage === 'log'} 
-                    onClick={() => onPageChange('log')} 
-                    icon={<History size={22} />} 
-                    label="주행기록" 
+                <NavButton
+                    active={currentPage === 'log'}
+                    onClick={() => onPageChange('log')}
+                    icon={<History size={22} />}
+                    label="주행기록"
                 />
             </nav>
         </div>
