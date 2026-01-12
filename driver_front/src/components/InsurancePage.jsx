@@ -50,7 +50,7 @@ const InsurancePage = ({ score = 85 }) => {
                         <div>
                             <p className="text-[10px] font-bold text-blue-500 uppercase tracking-wider mb-1">Safety Score</p>
                             <h2 className="text-5xl font-black text-slate-900 tracking-tighter">
-                                {score}<span className="text-lg text-slate-300 ml-1 font-normal">pts</span>
+                                {parseFloat(score).toFixed(2)}<span className="text-lg text-slate-300 ml-1 font-normal">pts</span>
                             </h2>
                         </div>
                         <div className="bg-blue-50 p-2 rounded-xl">
@@ -59,7 +59,7 @@ const InsurancePage = ({ score = 85 }) => {
                     </div>
                     <div className="space-y-2">
                         <p className="text-xs font-bold text-slate-600">
-                            다음 할인까지 <span className="text-blue-600">{100 - score > 0 ? 100 - score : 0}점</span>
+                            다음 할인까지 <span className="text-blue-600">{100 - score > 0 ? parseFloat(100 - score).toFixed(2) : 0}점</span>
                         </p>
                         <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
                             <div className="bg-blue-600 h-full transition-all duration-700" style={{ width: `${(score / 120) * 100}%` }}></div>

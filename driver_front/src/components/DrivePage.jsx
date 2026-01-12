@@ -225,7 +225,7 @@ const DrivePage = ({
 
                             <div className="flex flex-col items-end">
                                 <span className="text-5xl font-bold tracking-tighter drop-shadow-md text-white">
-                                    {Math.floor(score)}
+                                    {parseFloat(score).toFixed(2)}
                                 </span>
                                 <span className="text-xs font-medium text-white/60">Score</span>
                             </div>
@@ -363,7 +363,7 @@ const DrivePage = ({
                     </svg>
                     <div className="flex flex-col items-center z-10">
                         <span className={`text-5xl font-bold tracking-tighter ${hasPermission ? 'text-black' : 'text-black'}`}>
-                            {Math.floor(score)}
+                            {parseFloat(score).toFixed(2)}
                         </span>
                         <span className="text-xs font-medium mt-1 text-gray-400">POINTS</span>
                     </div>
