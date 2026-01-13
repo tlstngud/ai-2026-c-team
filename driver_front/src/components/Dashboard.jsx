@@ -93,6 +93,7 @@ const Dashboard = () => {
     const [speedLimit, setSpeedLimit] = useState(null); // 도로 제한 속도 (km/h)
     const [roadName, setRoadName] = useState(null); // 도로명
     const [speedLimitLoading, setSpeedLimitLoading] = useState(false); // 제한 속도 조회 중 상태
+    const [speedLimitDebug, setSpeedLimitDebug] = useState(null); // 디버깅 정보 (모바일용)
     const gpsWatchIdRef = useRef(null);
 
     const scoreRef = useRef(100);
@@ -311,6 +312,15 @@ const Dashboard = () => {
                     } else if (data.type === 'SPEED_LIMIT') {
                         // 제한 속도 업데이트 (TMAP API 응답)
                         setSpeedLimitLoading(false); // 조회 완료
+
+                        // 디버깅 정보 저장 (모바일용)
+                        setSpeedLimitDebug({
+                            speedLimit: data.speedLimit,
+                            roadName: data.roadName,
+                            timestamp: new Date().toLocaleTimeString(),
+                            hasData: !!(data.speedLimit || data.roadName)
+                        });
+
                         if (data.speedLimit !== undefined) {
                             setSpeedLimit(data.speedLimit);
                         }
@@ -320,6 +330,10 @@ const Dashboard = () => {
                     } else if (data.type === 'SPEED_LIMIT_LOADING') {
                         // 제한 속도 조회 시작
                         setSpeedLimitLoading(true);
+                        setSpeedLimitDebug({
+                            status: '조회 중...',
+                            timestamp: new Date().toLocaleTimeString()
+                        });
                     } else if (data.type === 'MOTION') {
                         // 가속도 센서 데이터: 급가속/급감속 감지
                         setGpsAcceleration(data.accelValue);
@@ -631,6 +645,7 @@ const Dashboard = () => {
                                         speedLimit={speedLimit}
                                         roadName={roadName}
                                         speedLimitLoading={speedLimitLoading}
+                                        speedLimitDebug={speedLimitDebug}
                                     />
                                 </>
                             )}

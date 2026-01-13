@@ -136,20 +136,56 @@ const getSpeedLimitFromTmap = async (latitude, longitude) => {
                 // 첫 번째 매칭된 포인트 사용 (가장 가까운 도로)
                 const matchedPoint = matchedPoints[0];
 
-                result = {
-                    speedLimit: matchedPoint.speed || null, // 제한 속도 (km/h)
-                    roadName: matchedPoint.roadCategory !== undefined
+                // 디버깅: matchedPoint의 모든 필드 확인
+                console.log('🔍 matchedPoint 상세 정보:', {
+                    전체객체: matchedPoint,
+                    모든키: Object.keys(matchedPoint),
+                    speed: matchedPoint.speed,
+                    speedLimit: matchedPoint.speedLimit,
+                    limitSpeed: matchedPoint.limitSpeed,
+                    linkId: matchedPoint.linkId,
+                    roadCategory: matchedPoint.roadCategory,
+                    roadName: matchedPoint.roadName,
+                    roadType: matchedPoint.roadType
+                });
+
+                // speed 필드 확인 (응답 구조: speed는 숫자로 옴)
+                // matchedPoint.speed가 숫자이거나 문자열일 수 있으므로 Number로 변환
+                const speedLimitValue = matchedPoint.speed !== undefined && matchedPoint.speed !== null
+                    ? Number(matchedPoint.speed)
+                    : (matchedPoint.speedLimit !== undefined && matchedPoint.speedLimit !== null
+                        ? Number(matchedPoint.speedLimit)
+                        : (matchedPoint.limitSpeed !== undefined && matchedPoint.limitSpeed !== null
+                            ? Number(matchedPoint.limitSpeed)
+                            : (matchedPoint.maxSpeed !== undefined && matchedPoint.maxSpeed !== null
+                                ? Number(matchedPoint.maxSpeed)
+                                : null)));
+
+                // 도로명 확인 (roadCategory를 도로명으로 매핑)
+                // 응답 구조에는 roadName 필드가 없고 roadCategory만 있음
+                const roadNameValue = matchedPoint.roadName ||
+                    (matchedPoint.roadCategory !== undefined && matchedPoint.roadCategory !== null
                         ? roadCategoryMap[matchedPoint.roadCategory] || `도로등급 ${matchedPoint.roadCategory}`
-                        : null,
+                        : null);
+
+                result = {
+                    speedLimit: speedLimitValue, // 제한 속도 (km/h) - 숫자로 변환
+                    roadName: roadNameValue,
                     roadId: matchedPoint.linkId || null // 링크 ID
                 };
 
-                console.log('✅ TMAP API 성공:', {
-                    제한속도: result.speedLimit ? `${result.speedLimit}km/h` : '없음',
-                    도로명: result.roadName || '없음',
+                console.log('✅ TMAP API 성공 - 파싱 결과:', {
+                    원본speed: matchedPoint.speed,
+                    speed타입: typeof matchedPoint.speed,
+                    파싱된제한속도: result.speedLimit,
+                    제한속도타입: typeof result.speedLimit,
+                    제한속도표시: result.speedLimit ? `${result.speedLimit}km/h` : '없음',
+                    원본roadCategory: matchedPoint.roadCategory,
+                    roadCategory타입: typeof matchedPoint.roadCategory,
+                    파싱된도로명: result.roadName || '없음',
                     도로ID: result.roadId || '없음',
-                    도로등급: matchedPoint.roadCategory !== undefined ? matchedPoint.roadCategory : '없음',
-                    매칭된포인트수: matchedPoints.length
+                    매칭된포인트수: matchedPoints.length,
+                    결과객체전체: result
                 });
 
                 return result;
@@ -457,18 +493,49 @@ export const startGpsMonitoring = (onUpdate, onError) => {
                     const prevLimit = currentSpeedLimit;
                     const prevRoad = currentRoadName;
 
+                    // 결과 상세 로그 (항상 출력)
+                    console.log('🔍 TMAP API 조회 결과 상세:', {
+                        result객체: result,
+                        speedLimit: result.speedLimit,
+                        speedLimit타입: typeof result.speedLimit,
+                        speedLimit값존재: result.speedLimit !== null && result.speedLimit !== undefined,
+                        roadName: result.roadName,
+                        roadId: result.roadId,
+                        이전제한속도: prevLimit,
+                        이전도로명: prevRoad
+                    });
+
                     currentSpeedLimit = result.speedLimit;
                     currentRoadName = result.roadName;
+
+                    // 결과가 없어도 로그 출력
+                    if (!result.speedLimit && !result.roadName) {
+                        console.warn('⚠️ TMAP API: 제한 속도와 도로명 모두 없음', {
+                            위도: latitude.toFixed(6),
+                            경도: longitude.toFixed(6),
+                            정확도: accuracy.toFixed(0) + 'm',
+                            result객체: result,
+                            가능한원인: 'matchedPoints 배열이 비어있거나 도로 매칭 실패'
+                        });
+                    }
 
                     // 변경사항이 있을 때만 로그
                     if (prevLimit !== currentSpeedLimit || prevRoad !== currentRoadName) {
                         console.log('🛣️ 제한 속도 업데이트:', {
                             이전: prevLimit ? `${prevLimit}km/h (${prevRoad})` : '없음',
-                            현재: currentSpeedLimit ? `${currentSpeedLimit}km/h (${currentRoadName})` : '없음'
+                            현재: currentSpeedLimit ? `${currentSpeedLimit}km/h (${currentRoadName})` : '없음',
+                            업데이트여부: '변경됨',
+                            speedLimit값: currentSpeedLimit,
+                            speedLimit타입: typeof currentSpeedLimit
+                        });
+                    } else {
+                        console.log('ℹ️ 제한 속도 변경 없음:', {
+                            현재값: currentSpeedLimit ? `${currentSpeedLimit}km/h (${currentRoadName})` : '없음',
+                            speedLimit값: currentSpeedLimit
                         });
                     }
 
-                    // 제한 속도 업데이트를 콜백으로 전달
+                    // 제한 속도 업데이트를 콜백으로 전달 (null이어도 전달)
                     onUpdate({
                         type: 'SPEED_LIMIT',
                         speedLimit: currentSpeedLimit,
@@ -476,6 +543,11 @@ export const startGpsMonitoring = (onUpdate, onError) => {
                     });
                 }).catch(error => {
                     console.error('❌ 제한 속도 조회 중 오류:', error);
+                    console.error('오류 상세:', {
+                        name: error.name,
+                        message: error.message,
+                        stack: error.stack
+                    });
                     // 오류 발생 시에도 로딩 상태 해제
                     onUpdate({
                         type: 'SPEED_LIMIT',

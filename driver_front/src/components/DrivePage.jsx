@@ -26,7 +26,8 @@ const DrivePage = ({
     gpsStatus = 'GPS 검색중...',
     speedLimit = null,
     roadName = null,
-    speedLimitLoading = false
+    speedLimitLoading = false,
+    speedLimitDebug = null
 }) => {
     const videoContainerRef = useRef(null);
     const modalRef = useRef(null);
@@ -337,7 +338,7 @@ const DrivePage = ({
                         </div>
 
                         {/* 하단 중앙: 제한 속도 및 도로 정보 (큰 카드) */}
-                        {isActive && (speedLimitLoading || speedLimit || roadName) && (
+                        {isActive && (
                             <div className="self-center mb-20">
                                 <div className="bg-black/50 backdrop-blur-xl px-6 py-4 rounded-2xl border-2 border-white/20 shadow-2xl">
                                     <div className="flex flex-col items-center gap-2">
@@ -350,7 +351,7 @@ const DrivePage = ({
                                                     </span>
                                                 </div>
                                             </>
-                                        ) : (
+                                        ) : speedLimit || roadName ? (
                                             <>
                                                 {speedLimit && (
                                                     <div className="flex items-center gap-3">
@@ -371,7 +372,42 @@ const DrivePage = ({
                                                         </span>
                                                     </div>
                                                 )}
+                                                {/* 디버깅 정보 (모바일용) */}
+                                                {speedLimitDebug && (
+                                                    <div className="mt-2 pt-2 border-t border-white/10 w-full">
+                                                        <div className="flex flex-col items-center gap-1">
+                                                            <span className="text-[9px] text-white/40">
+                                                                업데이트: {speedLimitDebug.timestamp}
+                                                            </span>
+                                                            <span className="text-[9px] text-white/40">
+                                                                데이터: {speedLimitDebug.hasData ? '있음' : '없음'} |
+                                                                속도: {speedLimitDebug.speedLimit ?? 'null'} |
+                                                                도로: {speedLimitDebug.roadName ?? 'null'}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </>
+                                        ) : (
+                                            <div className="flex flex-col items-center gap-2">
+                                                <span className="text-sm font-medium text-white/50">
+                                                    도로 정보 없음
+                                                </span>
+                                                {/* 디버깅 정보 (모바일용) */}
+                                                {speedLimitDebug && (
+                                                    <div className="mt-1 pt-2 border-t border-white/10 w-full">
+                                                        <div className="flex flex-col items-center gap-1">
+                                                            <span className="text-[9px] text-white/40">
+                                                                {speedLimitDebug.timestamp}
+                                                            </span>
+                                                            <span className="text-[9px] text-white/40">
+                                                                속도: {speedLimitDebug.speedLimit ?? 'null'} |
+                                                                도로: {speedLimitDebug.roadName ?? 'null'}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
                                         )}
                                     </div>
                                 </div>
