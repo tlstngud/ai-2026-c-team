@@ -12,30 +12,30 @@ import LogDetailPage from './LogDetailPage';
 
 // 지자체별 챌린지 데이터베이스
 const MUNICIPALITY_DB = {
-    '춘천': { 
-        name: '춘천시', 
-        campaign: '스마일 춘천 안전운전', 
-        color: 'bg-emerald-500', 
+    '춘천': {
+        name: '춘천시',
+        campaign: '스마일 춘천 안전운전',
+        color: 'bg-emerald-500',
         accent: 'text-emerald-600',
-        target: 90, 
+        target: 90,
         reward: '춘천사랑상품권 3만원 + 보험할인',
         bgImage: 'from-emerald-900 to-slate-900'
     },
-    '서울': { 
-        name: '서울특별시', 
-        campaign: '서울 마이-티 드라이버', 
-        color: 'bg-indigo-600', 
+    '서울': {
+        name: '서울특별시',
+        campaign: '서울 마이-티 드라이버',
+        color: 'bg-indigo-600',
         accent: 'text-indigo-600',
-        target: 92, 
+        target: 92,
         reward: '서울시 공영주차장 50% 할인권',
         bgImage: 'from-indigo-900 to-slate-900'
     },
-    'default': { 
-        name: '전국 공통', 
-        campaign: '대한민국 안전운전 챌린지', 
-        color: 'bg-blue-600', 
+    'default': {
+        name: '전국 공통',
+        campaign: '대한민국 안전운전 챌린지',
+        color: 'bg-blue-600',
         accent: 'text-blue-600',
-        target: 90, 
+        target: 90,
         reward: '안전운전 인증서 발급',
         bgImage: 'from-blue-900 to-slate-900'
     }
@@ -76,10 +76,14 @@ const Dashboard = () => {
 
     // --- Initialize History ---
     useEffect(() => {
-<<<<<<< HEAD
-        const saved = localStorage.getItem('drivingHistory');
-        if (saved) setHistory(JSON.parse(saved));
-    }, []);
+        if (user) {
+            const saved = getLogsByUserId(user.id);
+            setHistory(saved || []);
+        } else {
+            const saved = localStorage.getItem('drivingHistory');
+            if (saved) setHistory(JSON.parse(saved));
+        }
+    }, [user]);
 
     // --- 주소 입력 및 지자체 배정 로직 ---
     const handleAddressSubmit = () => {
@@ -95,27 +99,18 @@ const Dashboard = () => {
             let assigned = MUNICIPALITY_DB['default'];
             if (inputAddress.includes('춘천')) assigned = MUNICIPALITY_DB['춘천'];
             else if (inputAddress.includes('서울')) assigned = MUNICIPALITY_DB['서울'];
-            
+
             const regionData = {
                 ...assigned,
                 address: inputAddress
             };
-            
+
             setUserRegion(regionData);
             localStorage.setItem('userRegion', JSON.stringify(regionData));
             setStep('dashboard');
         }, 1500);
     };
 
-=======
-        if (user) {
-            const saved = getLogsByUserId(user.id);
-            setHistory(saved || []);
-        } else {
-            setHistory([]);
-        }
-    }, [user]);
->>>>>>> bcb00001ca2d35ee2f8cb6db9e5186c0cd8d7704
 
     // --- Camera Setup ---
     const attachStreamToVideo = (stream) => {
@@ -327,14 +322,10 @@ const Dashboard = () => {
 
     // 페이지별 렌더링
     const renderPage = () => {
-<<<<<<< HEAD
-        if (currentPage === 'insurance') return <InsurancePage score={score} history={history} userRegion={userRegion} />;
-=======
         if (currentPage === 'insurance') {
-            const avgScore = history.length > 0 ? getAverageScore() : 100;
-            return <InsurancePage score={avgScore} history={history} />;
+            const avgScore = history.length > 0 ? getAverageScore() : score;
+            return <InsurancePage score={avgScore} history={history} userRegion={userRegion} />;
         }
->>>>>>> bcb00001ca2d35ee2f8cb6db9e5186c0cd8d7704
         if (currentPage === 'log') {
             if (selectedLog) return <LogDetailPage data={selectedLog} onBack={() => setSelectedLog(null)} />;
             return <DrivingLogPage onSelectLog={(log) => setSelectedLog(log)} history={history} />;
@@ -370,9 +361,9 @@ const Dashboard = () => {
                             <div className="w-12 h-12 bg-black rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-black/20">
                                 <MapPin className="text-white" size={24} />
                             </div>
-                            <h1 className="text-3xl font-black text-slate-900 mb-2">어디에<br/>거주하시나요?</h1>
+                            <h1 className="text-3xl font-black text-slate-900 mb-2">어디에<br />거주하시나요?</h1>
                             <p className="text-slate-500 text-sm leading-relaxed">
-                                거주하시는 지자체의 안전운전 챌린지에<br/>자동으로 연결해 드립니다.
+                                거주하시는 지자체의 안전운전 챌린지에<br />자동으로 연결해 드립니다.
                             </p>
                         </div>
 
@@ -380,8 +371,8 @@ const Dashboard = () => {
                             <div className="relative">
                                 <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1 mb-2 block">도로명 주소</label>
                                 <div className="relative">
-                                    <input 
-                                        type="text" 
+                                    <input
+                                        type="text"
                                         value={inputAddress}
                                         onChange={(e) => setInputAddress(e.target.value)}
                                         placeholder="예) 강원도 춘천시 중앙로 1"
@@ -394,14 +385,14 @@ const Dashboard = () => {
 
                             <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                                 <p className="text-[10px] text-slate-400 font-medium leading-relaxed">
-                                    * 입력하신 주소지 관할 지자체의 예산으로 보험 할인 혜택이 제공됩니다.<br/>
+                                    * 입력하신 주소지 관할 지자체의 예산으로 보험 할인 혜택이 제공됩니다.<br />
                                     * 추후 증빙 서류 제출이 요구될 수 있습니다.
                                 </p>
                             </div>
                         </div>
 
                         <div className="mt-auto">
-                            <button 
+                            <button
                                 onClick={handleAddressSubmit}
                                 className="w-full h-16 bg-black text-white rounded-2xl font-bold text-lg shadow-xl shadow-black/10 active:scale-95 transition-all"
                             >
@@ -429,31 +420,31 @@ const Dashboard = () => {
                         {/* 실제 앱 컨텐츠 영역 */}
                         <div className={`flex-1 scrollbar-hide bg-white relative ${showCameraView ? 'overflow-hidden' : 'overflow-y-auto pb-24'}`} style={showCameraView ? { height: '100%', minHeight: '100%', maxHeight: '100%' } : {}}>
 
-                    {/* 페이지별 컨텐츠 */}
-                    {currentPage === 'drive' && (
-                        <>
-                            {!showCameraView && (
-                                <Header isActive={isActive} averageScore={getAverageScore()} />
+                            {/* 페이지별 컨텐츠 */}
+                            {currentPage === 'drive' && (
+                                <>
+                                    {!showCameraView && (
+                                        <Header isActive={isActive} averageScore={getAverageScore()} />
+                                    )}
+                                    <DrivePage
+                                        showCameraView={showCameraView}
+                                        setShowCameraView={setShowCameraView}
+                                        hasPermission={hasPermission}
+                                        videoRef={videoRef}
+                                        videoRef2={videoRef2}
+                                        isActive={isActive}
+                                        score={score}
+                                        sessionTime={sessionTime}
+                                        currentState={currentState}
+                                        eventCount={eventCount}
+                                        toggleSession={toggleSession}
+                                        formatTime={formatTime}
+                                        currentConfig={currentConfig}
+                                        CurrentIcon={CurrentIcon}
+                                        userRegion={userRegion}
+                                    />
+                                </>
                             )}
-                            <DrivePage
-                                showCameraView={showCameraView}
-                                setShowCameraView={setShowCameraView}
-                                hasPermission={hasPermission}
-                                videoRef={videoRef}
-                                videoRef2={videoRef2}
-                                isActive={isActive}
-                                score={score}
-                                sessionTime={sessionTime}
-                                currentState={currentState}
-                                eventCount={eventCount}
-                                toggleSession={toggleSession}
-                                formatTime={formatTime}
-                                currentConfig={currentConfig}
-                                CurrentIcon={CurrentIcon}
-                                userRegion={userRegion}
-                            />
-                        </>
-                    )}
 
                             {/* 다른 페이지 렌더링 */}
                             {renderPage()}
@@ -481,8 +472,8 @@ const Dashboard = () => {
                                                 <div>
                                                     <p className="text-sm font-bold">{userRegion.name} 챌린지</p>
                                                     <p className="text-xs text-white/80">
-                                                        {Math.floor(score) >= userRegion.target 
-                                                            ? "목표 점수 달성! 포인트가 적립되었습니다." 
+                                                        {Math.floor(score) >= userRegion.target
+                                                            ? "목표 점수 달성! 포인트가 적립되었습니다."
                                                             : `목표(${userRegion.target}점)까지 조금만 더 힘내세요!`}
                                                     </p>
                                                 </div>
