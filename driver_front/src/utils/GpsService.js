@@ -1,42 +1,43 @@
 /**
- * GPS 기반 속도, 가속도, 감속도 모니터링 서비스
+ * GPS + 가속도 센서 기반 차량 모니터링 서비스
+ * - GPS: 속도 표시용
+ * - 가속도 센서: 급가속/급감속 감지용 (더 정확)
  */
 
-// 두 좌표 간 거리 계산 (Haversine formula)
-const calculateDistance = (lat1, lon1, lat2, lon2) => {
-    const R = 6371e3; // 지구 반지름 (미터)
-    const φ1 = lat1 * Math.PI / 180;
-    const φ2 = lat2 * Math.PI / 180;
-    const Δφ = (lat2 - lat1) * Math.PI / 180;
-    const Δλ = (lon2 - lon1) * Math.PI / 180;
+// G-Force 임계값 (1G ≈ 9.8m/s²)
+const HARD_ACCEL_THRESHOLD = 3.5; // m/s² (급가속)
+const HARD_BRAKE_THRESHOLD = -4.5; // m/s² (급감속, 브레이크가 더 강함)
+const MIN_SPEED_FOR_MOTION = 10; // km/h (이 속도 이상일 때만 가속도 센서 판단)
 
-    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-        Math.cos(φ1) * Math.cos(φ2) *
-        Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+/**
+ * iOS 13+ 가속도 센서 권한 요청
+ * @returns {Promise<boolean>} 권한 허용 여부
+ */
+export const requestMotionPermission = async () => {
+    if (typeof DeviceMotionEvent === 'undefined') {
+        return false;
+    }
 
-    return R * c; // 미터 단위
-};
+    // iOS 13+ 권한 요청 필요
+    if (typeof DeviceMotionEvent.requestPermission === 'function') {
+        try {
+            const permission = await DeviceMotionEvent.requestPermission();
+            return permission === 'granted';
+        } catch (e) {
+            console.error('가속도 센서 권한 요청 실패:', e);
+            return false;
+        }
+    }
 
-// 속도 계산 (m/s -> km/h)
-const calculateSpeed = (distance, timeDiff) => {
-    if (timeDiff === 0) return 0;
-    const speedMs = distance / timeDiff; // m/s
-    return speedMs * 3.6; // km/h로 변환
-};
-
-// 가속도 계산 (m/s²)
-const calculateAcceleration = (speed1, speed2, timeDiff) => {
-    if (timeDiff === 0) return 0;
-    const speedDiff = (speed2 - speed1) / 3.6; // km/h -> m/s
-    return speedDiff / timeDiff; // m/s²
+    // Android 또는 iOS 12 이하는 권한 요청 불필요
+    return true;
 };
 
 /**
- * GPS 모니터링 시작
- * @param {Function} onUpdate - 위치 업데이트 콜백 (speed, acceleration, isHardAccel, isHardBrake)
+ * GPS + 가속도 센서 모니터링 시작
+ * @param {Function} onUpdate - 업데이트 콜백
  * @param {Function} onError - 에러 콜백
- * @returns {number} watchId - watchPosition ID
+ * @returns {Function} 정리(Cleanup) 함수
  */
 export const startGpsMonitoring = (onUpdate, onError) => {
     if (!navigator.geolocation) {
@@ -44,99 +45,105 @@ export const startGpsMonitoring = (onUpdate, onError) => {
         return null;
     }
 
-    let lastPosition = null;
-    let lastTime = null;
-    let lastSpeed = 0;
-    let lastOverspeedCheck = 0; // 과속 체크 throttle
-    const positionHistory = []; // 최근 위치 기록 (정확도 향상)
+    let lastSpeedKmh = 0;
+    let lastOverspeedCheck = 0;
+    let motionHandler = null;
+    let gpsWatchId = null;
 
-    const options = {
-        enableHighAccuracy: true, // 고정밀도 위치 사용
-        timeout: 10000, // 10초 타임아웃
-        maximumAge: 1000 // 1초 이내 캐시된 위치 사용
+    // --- [A] 가속도 센서 (급가속/급감속 감지용) ---
+    const handleMotion = (event) => {
+        const { acceleration } = event;
+        if (!acceleration) return;
+
+        // 차량 진행 방향의 가속도 (y축 기준, 폰을 세워뒀을 때)
+        // iOS와 Android 간 좌표계 차이 고려 필요
+        const accelY = acceleration.y || 0;
+        const accelX = acceleration.x || 0;
+
+        // 벡터 크기 계산 (x, y축 모두 고려)
+        const accelMagnitude = Math.sqrt(accelX * accelX + accelY * accelY);
+
+        // 필터링: 작은 진동 무시 (1.0 m/s² 미만)
+        if (accelMagnitude < 1.0) return;
+
+        // 속도가 10km/h 이상일 때만 판단 (정지 상태에서의 노이즈 제거)
+        if (lastSpeedKmh < MIN_SPEED_FOR_MOTION) return;
+
+        let isHardAccel = false;
+        let isHardBrake = false;
+
+        // y축이 주축 (세로 방향, 일반적인 차량 거치 상태)
+        // 양수 = 가속, 음수 = 감속 (기기 방향에 따라 반대일 수 있음)
+        // 안전하게 절댓값이 큰 쪽을 사용
+        if (Math.abs(accelY) > Math.abs(accelX)) {
+            if (accelY > HARD_ACCEL_THRESHOLD) {
+                isHardAccel = true;
+            } else if (accelY < HARD_BRAKE_THRESHOLD) {
+                isHardBrake = true;
+            }
+        } else {
+            // x축이 주축인 경우
+            if (accelX > HARD_ACCEL_THRESHOLD) {
+                isHardAccel = true;
+            } else if (accelX < HARD_BRAKE_THRESHOLD) {
+                isHardBrake = true;
+            }
+        }
+
+        if (isHardAccel || isHardBrake) {
+            onUpdate({
+                type: 'MOTION',
+                accelValue: Math.abs(accelY) > Math.abs(accelX) ? accelY : accelX,
+                isHardAccel,
+                isHardBrake,
+                speed: lastSpeedKmh // 현재 속도 정보도 함께 전달
+            });
+        }
     };
 
-    const watchId = navigator.geolocation.watchPosition(
+    // 가속도 센서 이벤트 리스너 등록
+    if (typeof DeviceMotionEvent !== 'undefined') {
+        motionHandler = handleMotion;
+        window.addEventListener('devicemotion', motionHandler);
+    }
+
+    // --- [B] GPS (속도 및 위치 표시용) ---
+    const options = {
+        enableHighAccuracy: true,
+        timeout: 5000,
+        maximumAge: 0 // 캐시 사용 안 함
+    };
+
+    gpsWatchId = navigator.geolocation.watchPosition(
         (position) => {
             const { latitude, longitude, speed: gpsSpeed, accuracy } = position.coords;
             const currentTime = Date.now();
 
-            let speedKmh = 0;
-            let acceleration = 0;
-            let isHardAccel = false;
-            let isHardBrake = false;
+            // GPS 속도 (m/s -> km/h)
+            // speed가 null이면 0 처리 (거리 기반 계산은 오차가 크므로 사용 안 함)
+            const currentSpeedKmh = (gpsSpeed !== null && gpsSpeed !== undefined && gpsSpeed >= 0)
+                ? gpsSpeed * 3.6
+                : 0;
+
+            lastSpeedKmh = currentSpeedKmh;
+
+            // 과속 감지 (5초마다 한 번만 체크)
             let isOverspeed = false;
-
-            // GPS 속도가 있으면 우선 사용 (더 정확)
-            if (gpsSpeed !== null && gpsSpeed !== undefined && gpsSpeed >= 0) {
-                speedKmh = gpsSpeed * 3.6; // m/s -> km/h
-                const timeDiff = lastTime ? (currentTime - lastTime) / 1000 : 0;
-
-                if (timeDiff > 0 && timeDiff < 5 && lastSpeed >= 0) { // 5초 이내, 유효한 속도만
-                    acceleration = calculateAcceleration(lastSpeed, speedKmh, timeDiff);
-                    isHardAccel = acceleration > 3.0; // 3 m/s² 이상 = 급가속
-                    isHardBrake = acceleration < -4.0; // -4 m/s² 이하 = 급감속
-                }
-
-                lastSpeed = speedKmh;
-            } else if (lastPosition && lastTime) {
-                // GPS 속도가 없으면 거리 기반 계산
-                const distance = calculateDistance(
-                    lastPosition.latitude,
-                    lastPosition.longitude,
-                    latitude,
-                    longitude
-                );
-                const timeDiff = (currentTime - lastTime) / 1000; // 초 단위
-
-                if (timeDiff > 0 && timeDiff < 5 && distance > 0) { // 5초 이내, 유효한 거리만
-                    speedKmh = calculateSpeed(distance, timeDiff);
-
-                    if (lastSpeed >= 0) {
-                        acceleration = calculateAcceleration(lastSpeed, speedKmh, timeDiff);
-                        isHardAccel = acceleration > 3.0;
-                        isHardBrake = acceleration < -4.0;
-                    }
-
-                    lastSpeed = speedKmh;
-                }
-            }
-
-            // 과속 감지 (5초마다 한 번만 체크하여 중복 방지)
-            if (speedKmh > 0 && (currentTime - lastOverspeedCheck) > 5000) {
-                isOverspeed = speedKmh > 100; // 100km/h 이상
+            if (currentSpeedKmh > 0 && (currentTime - lastOverspeedCheck) > 5000) {
+                isOverspeed = currentSpeedKmh > 100; // 100km/h 이상
                 if (isOverspeed) {
                     lastOverspeedCheck = currentTime;
                 }
             }
 
-            // 항상 속도는 업데이트 (가속도가 없어도)
             onUpdate({
-                speed: speedKmh,
-                acceleration: acceleration,
-                isHardAccel,
-                isHardBrake,
-                isOverspeed,
+                type: 'GPS',
                 latitude,
                 longitude,
-                accuracy
+                speed: currentSpeedKmh,
+                accuracy,
+                isOverspeed
             });
-
-            // 위치 기록 저장
-            positionHistory.push({
-                latitude,
-                longitude,
-                time: currentTime,
-                speed: lastSpeed
-            });
-
-            // 최근 10개만 유지
-            if (positionHistory.length > 10) {
-                positionHistory.shift();
-            }
-
-            lastPosition = { latitude, longitude };
-            lastTime = currentTime;
         },
         (error) => {
             console.error('GPS Error:', error);
@@ -145,16 +152,24 @@ export const startGpsMonitoring = (onUpdate, onError) => {
         options
     );
 
-    return watchId;
+    // 정리(Cleanup) 함수 반환
+    return () => {
+        if (motionHandler) {
+            window.removeEventListener('devicemotion', motionHandler);
+        }
+        if (gpsWatchId !== null) {
+            navigator.geolocation.clearWatch(gpsWatchId);
+        }
+    };
 };
 
 /**
  * GPS 모니터링 중지
- * @param {number} watchId - watchPosition ID
+ * @param {Function} cleanup - startGpsMonitoring에서 반환된 정리 함수
  */
-export const stopGpsMonitoring = (watchId) => {
-    if (watchId !== null) {
-        navigator.geolocation.clearWatch(watchId);
+export const stopGpsMonitoring = (cleanup) => {
+    if (cleanup && typeof cleanup === 'function') {
+        cleanup();
     }
 };
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { addLogByUserId, getLogsByUserId } from '../utils/LogService';
-import { startGpsMonitoring, stopGpsMonitoring } from '../utils/GpsService';
+import { startGpsMonitoring, stopGpsMonitoring, requestMotionPermission } from '../utils/GpsService';
 import { AlertTriangle, X, MapPin, Search, Award } from 'lucide-react';
 import { STATE_CONFIG, APPLE_STATE_CONFIG } from './constants';
 import Header from './Header';
@@ -256,61 +256,67 @@ const Dashboard = () => {
         return () => clearInterval(interval);
     }, [isActive]);
 
-    // --- GPS Monitoring ---
+    // --- GPS + 가속도 센서 Monitoring ---
     useEffect(() => {
         if (isActive) {
-            // GPS 모니터링 시작
-            const watchId = startGpsMonitoring(
+            // GPS + 가속도 센서 모니터링 시작
+            // (권한은 toggleSession에서 사용자 상호작용 시 요청됨)
+            const cleanup = startGpsMonitoring(
                 (data) => {
-                    // 속도와 가속도 항상 업데이트
-                    setCurrentSpeed(data.speed);
-                    setGpsAcceleration(data.acceleration);
+                    if (data.type === 'GPS') {
+                        // GPS 데이터: 속도 업데이트
+                        setCurrentSpeed(data.speed);
+                        setGpsAcceleration(0); // GPS 기반 가속도는 사용 안 함
 
-                    // 급가속 감지 (3.0 m/s² 이상)
-                    if (data.isHardAccel) {
-                        console.log('🚀 급가속 감지!', {
-                            speed: data.speed.toFixed(1) + ' km/h',
-                            acceleration: data.acceleration.toFixed(2) + ' m/s²'
-                        });
-                        setGpsEvents(prev => ({
-                            ...prev,
-                            hardAccel: prev.hardAccel + 1
-                        }));
-                        setEventCount(prev => prev + 1);
-                        // 급가속 패널티: 2점
-                        scoreRef.current = Math.max(0, scoreRef.current - 2);
-                        setScore(scoreRef.current);
-                    }
+                        // 과속 감지 (시속 100km/h 이상, 5초마다 한 번만)
+                        if (data.isOverspeed) {
+                            console.log('⚠️ 과속 감지!', {
+                                speed: data.speed.toFixed(1) + ' km/h'
+                            });
+                            setGpsEvents(prev => ({
+                                ...prev,
+                                overspeed: prev.overspeed + 1
+                            }));
+                            setEventCount(prev => prev + 1);
+                            // 과속 패널티: 3점
+                            scoreRef.current = Math.max(0, scoreRef.current - 3);
+                            setScore(scoreRef.current);
+                        }
+                    } else if (data.type === 'MOTION') {
+                        // 가속도 센서 데이터: 급가속/급감속 감지
+                        setGpsAcceleration(data.accelValue);
 
-                    // 급감속 감지 (-4.0 m/s² 이하)
-                    if (data.isHardBrake) {
-                        console.log('🛑 급감속 감지!', {
-                            speed: data.speed.toFixed(1) + ' km/h',
-                            acceleration: data.acceleration.toFixed(2) + ' m/s²'
-                        });
-                        setGpsEvents(prev => ({
-                            ...prev,
-                            hardBrake: prev.hardBrake + 1
-                        }));
-                        setEventCount(prev => prev + 1);
-                        // 급감속 패널티: 2.5점
-                        scoreRef.current = Math.max(0, scoreRef.current - 2.5);
-                        setScore(scoreRef.current);
-                    }
+                        // 급가속 감지
+                        if (data.isHardAccel) {
+                            console.log('🚀 급가속 감지! (가속도 센서)', {
+                                speed: data.speed.toFixed(1) + ' km/h',
+                                acceleration: data.accelValue.toFixed(2) + ' m/s²'
+                            });
+                            setGpsEvents(prev => ({
+                                ...prev,
+                                hardAccel: prev.hardAccel + 1
+                            }));
+                            setEventCount(prev => prev + 1);
+                            // 급가속 패널티: 2점
+                            scoreRef.current = Math.max(0, scoreRef.current - 2);
+                            setScore(scoreRef.current);
+                        }
 
-                    // 과속 감지 (시속 100km/h 이상, 5초마다 한 번만)
-                    if (data.isOverspeed) {
-                        console.log('⚠️ 과속 감지!', {
-                            speed: data.speed.toFixed(1) + ' km/h'
-                        });
-                        setGpsEvents(prev => ({
-                            ...prev,
-                            overspeed: prev.overspeed + 1
-                        }));
-                        setEventCount(prev => prev + 1);
-                        // 과속 패널티: 3점
-                        scoreRef.current = Math.max(0, scoreRef.current - 3);
-                        setScore(scoreRef.current);
+                        // 급감속 감지
+                        if (data.isHardBrake) {
+                            console.log('🛑 급감속 감지! (가속도 센서)', {
+                                speed: data.speed.toFixed(1) + ' km/h',
+                                acceleration: data.accelValue.toFixed(2) + ' m/s²'
+                            });
+                            setGpsEvents(prev => ({
+                                ...prev,
+                                hardBrake: prev.hardBrake + 1
+                            }));
+                            setEventCount(prev => prev + 1);
+                            // 급감속 패널티: 2.5점
+                            scoreRef.current = Math.max(0, scoreRef.current - 2.5);
+                            setScore(scoreRef.current);
+                        }
                     }
                 },
                 (error) => {
@@ -319,7 +325,7 @@ const Dashboard = () => {
                 }
             );
 
-            gpsWatchIdRef.current = watchId;
+            gpsWatchIdRef.current = cleanup;
         } else {
             // GPS 모니터링 중지
             if (gpsWatchIdRef.current !== null) {
@@ -369,7 +375,12 @@ const Dashboard = () => {
     }, [isActive]);
 
     // --- Handlers ---
-    const toggleSession = () => {
+    const toggleSession = async () => {
+        if (!isActive) {
+            // 기록 시작 전: iOS 가속도 센서 권한 요청 (사용자 상호작용 이벤트 내에서만 가능)
+            await requestMotionPermission();
+        }
+
         if (isActive) {
             setIsActive(false);
             const finalScore = Math.floor(score);
