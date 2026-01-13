@@ -1,8 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { TrendingUp, DollarSign, CheckCircle2 } from 'lucide-react';
-import Header from './Header';
 import React, { useState, useEffect, useMemo } from 'react';
 import { ShieldCheck, TrendingUp, DollarSign, CheckCircle2, User } from 'lucide-react';
+import Header from './Header';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const InsurancePage = ({ score = 85, history = [] }) => {
