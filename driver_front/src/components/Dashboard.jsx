@@ -88,6 +88,8 @@ const Dashboard = () => {
     const [gpsAcceleration, setGpsAcceleration] = useState(0); // m/s²
     const [gpsEvents, setGpsEvents] = useState({ hardAccel: 0, hardBrake: 0, overspeed: 0 });
     const [sensorStatus, setSensorStatus] = useState({ gps: false, motion: false }); // 센서 작동 상태
+    const [gpsAccuracy, setGpsAccuracy] = useState(null); // GPS 정확도 (미터)
+    const [gpsStatus, setGpsStatus] = useState('GPS 검색중...'); // GPS 상태 메시지
     const gpsWatchIdRef = useRef(null);
 
     const scoreRef = useRef(100);
@@ -268,6 +270,8 @@ const Dashboard = () => {
                         // GPS 데이터: 속도 업데이트
                         setCurrentSpeed(data.speed);
                         setGpsAcceleration(0); // GPS 기반 가속도는 사용 안 함
+                        setGpsAccuracy(data.accuracy);
+                        setGpsStatus(data.status || 'GPS 검색중...');
 
                         // GPS 작동 상태 업데이트 (위치 정보가 있으면 작동 중)
                         if (data.latitude && data.longitude) {
@@ -592,6 +596,8 @@ const Dashboard = () => {
                                         gpsAcceleration={gpsAcceleration}
                                         gpsEvents={gpsEvents}
                                         sensorStatus={sensorStatus}
+                                        gpsAccuracy={gpsAccuracy}
+                                        gpsStatus={gpsStatus}
                                     />
                                 </>
                             )}

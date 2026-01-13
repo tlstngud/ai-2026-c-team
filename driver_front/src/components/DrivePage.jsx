@@ -21,7 +21,9 @@ const DrivePage = ({
     currentSpeed = 0,
     gpsAcceleration = 0,
     gpsEvents = { hardAccel: 0, hardBrake: 0, overspeed: 0 },
-    sensorStatus = { gps: false, motion: false }
+    sensorStatus = { gps: false, motion: false },
+    gpsAccuracy = null,
+    gpsStatus = 'GPS 검색중...'
 }) => {
     const videoContainerRef = useRef(null);
     const modalRef = useRef(null);
@@ -262,6 +264,11 @@ const DrivePage = ({
                                             </span>
                                             <span className="text-xs font-medium text-white/70">km/h</span>
                                         </div>
+                                        {gpsAccuracy !== null && (
+                                            <span className="text-[9px] text-white/60 font-medium">
+                                                정확도: {Math.round(gpsAccuracy)}m
+                                            </span>
+                                        )}
                                         {gpsAcceleration > 2 && (
                                             <span className="text-[10px] text-red-400 font-bold">급가속!</span>
                                         )}

@@ -161,10 +161,12 @@ export const startGpsMonitoring = (onUpdate, onError) => {
     }
 
     // --- [B] GPS (속도 및 위치 표시용) ---
+    // position.coords.speed를 직접 사용하는 것이 가장 정확 (도플러 효과 기반)
+    // 거리 기반 계산은 GPS 오차(Drift) 때문에 부정확하므로 사용하지 않음
     const options = {
-        enableHighAccuracy: true,
-        timeout: 5000,
-        maximumAge: 0 // 캐시 사용 안 함
+        enableHighAccuracy: true, // 배터리 더 쓰더라도 가장 정확한 모드 사용
+        timeout: 10000,
+        maximumAge: 0 // 캐시된 위치 절대 사용 안 함 (실시간성 중요)
     };
 
     gpsWatchId = navigator.geolocation.watchPosition(
@@ -172,16 +174,42 @@ export const startGpsMonitoring = (onUpdate, onError) => {
             const { latitude, longitude, speed: gpsSpeed, accuracy } = position.coords;
             const currentTime = Date.now();
 
-            // GPS 속도 (m/s -> km/h)
-            // speed가 null이면 0 처리 (거리 기반 계산은 오차가 크므로 사용 안 함)
-            // 노트북/데스크탑에서는 GPS speed가 null일 가능성이 높음
-            const currentSpeedKmh = (gpsSpeed !== null && gpsSpeed !== undefined && gpsSpeed >= 0)
-                ? gpsSpeed * 3.6
-                : 0;
+            // GPS 속도 직접 사용 (m/s -> km/h)
+            // speed가 null이면 0으로 처리 (정지 상태 또는 실내/지하)
+            let currentSpeedKmh = 0;
+            let gpsStatus = 'GPS 검색중...';
 
-            // 노트북에서 GPS speed가 없을 때 경고 (처음 한 번만)
-            if (isDesktop && currentSpeedKmh === 0 && lastSpeedKmh === 0 && gpsSpeed === null) {
-                console.log('💻 노트북 환경: GPS 속도 정보가 없습니다. 실제 운전은 모바일 기기에서 테스트해주세요.');
+            if (gpsSpeed !== null && gpsSpeed !== undefined && gpsSpeed >= 0) {
+                currentSpeedKmh = gpsSpeed * 3.6; // m/s -> km/h
+
+                // 정확도에 따른 상태 메시지
+                if (accuracy && accuracy < 20) {
+                    gpsStatus = 'GPS 신호 좋음';
+                } else if (accuracy && accuracy < 50) {
+                    gpsStatus = 'GPS 신호 보통';
+                } else if (accuracy && accuracy < 100) {
+                    gpsStatus = 'GPS 신호 약함';
+                } else {
+                    gpsStatus = 'GPS 신호 매우 약함 (실내/터널 가능)';
+                }
+            } else {
+                // speed가 null인 경우
+                if (accuracy && accuracy > 1000) {
+                    gpsStatus = 'Wi-Fi/기지국 위치 (속도 불가)';
+                } else if (accuracy && accuracy > 100) {
+                    gpsStatus = 'GPS 신호 약함 (속도 불가)';
+                } else {
+                    gpsStatus = '정지 상태 또는 실내';
+                }
+            }
+
+            // 디버깅: 정확도와 속도 로그 (처음 몇 번만)
+            if (Math.random() < 0.05) { // 5% 확률
+                console.log('📍 GPS 상태:', {
+                    speed: currentSpeedKmh.toFixed(1) + ' km/h',
+                    accuracy: accuracy ? accuracy.toFixed(0) + 'm' : 'N/A',
+                    status: gpsStatus
+                });
             }
 
             lastSpeedKmh = currentSpeedKmh;
@@ -199,9 +227,10 @@ export const startGpsMonitoring = (onUpdate, onError) => {
                 type: 'GPS',
                 latitude,
                 longitude,
-                speed: currentSpeedKmh,
-                accuracy,
-                isOverspeed
+                speed: Math.floor(currentSpeedKmh), // 정수로 변환
+                accuracy: accuracy ? Math.floor(accuracy) : null,
+                isOverspeed,
+                status: gpsStatus // GPS 상태 메시지
             });
         },
         (error) => {
