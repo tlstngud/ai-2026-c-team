@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { addLogByUserId, getLogsByUserId } from '../utils/LogService';
 import { AlertTriangle, X } from 'lucide-react';
 import { STATE_CONFIG, APPLE_STATE_CONFIG } from './constants';
 import Header from './Header';
@@ -10,6 +12,7 @@ import LogDetailPage from './LogDetailPage';
 
 const Dashboard = () => {
     // --- Refs & State ---
+    const { user, setUser } = useAuth();
     const videoRef = useRef(null);
     const videoRef2 = useRef(null);
     const streamRef = useRef(null);
@@ -30,10 +33,13 @@ const Dashboard = () => {
 
     // --- Initialize History ---
     useEffect(() => {
-        const saved = localStorage.getItem('drivingHistory');
-        if (saved) setHistory(JSON.parse(saved));
-    }, []);
-
+        if (user) {
+            const saved = getLogsByUserId(user.id);
+            setHistory(saved || []);
+        } else {
+            setHistory([]);
+        }
+    }, [user]);
 
     // --- Camera Setup ---
     const attachStreamToVideo = (stream) => {
@@ -192,9 +198,23 @@ const Dashboard = () => {
                 duration: Math.floor(sessionTime),
                 events: eventCount
             };
-            const newHistory = [newEntry, ...history].slice(0, 10);
-            setHistory(newHistory);
-            localStorage.setItem('drivingHistory', JSON.stringify(newHistory));
+
+            // Save log for specific user
+            if (user) {
+                const updatedLogs = addLogByUserId(user.id, newEntry);
+                setHistory(updatedLogs); // Update local state with returned logs
+
+                // Update user score in AuthContext
+                const updatedUser = { ...user, score: finalScore };
+                setUser(updatedUser);
+                localStorage.setItem('currentUser', JSON.stringify(updatedUser)); // Sync with Auth storage
+            } else {
+                // Fallback for no user context (though should be protected)
+                const newHistory = [newEntry, ...history].slice(0, 10);
+                setHistory(newHistory);
+                localStorage.setItem('drivingHistory', JSON.stringify(newHistory));
+            }
+
             setShowSummary(true);
         } else {
             setScore(100);
@@ -210,8 +230,9 @@ const Dashboard = () => {
 
     const getAverageScore = () => {
         if (history.length === 0) return 0;
-        const sum = history.reduce((acc, curr) => acc + curr.score, 0);
-        return Math.floor(sum / history.length);
+        const recentHistory = history.slice(0, 7);
+        const sum = recentHistory.reduce((acc, curr) => acc + curr.score, 0);
+        return Math.floor(sum / recentHistory.length);
     };
 
     const formatTime = (seconds) => {
@@ -230,7 +251,10 @@ const Dashboard = () => {
 
     // 페이지별 렌더링
     const renderPage = () => {
-        if (currentPage === 'insurance') return <InsurancePage score={score} history={history} />;
+        if (currentPage === 'insurance') {
+            const avgScore = history.length > 0 ? getAverageScore() : 100;
+            return <InsurancePage score={avgScore} history={history} />;
+        }
         if (currentPage === 'log') {
             if (selectedLog) return <LogDetailPage data={selectedLog} onBack={() => setSelectedLog(null)} />;
             return <DrivingLogPage onSelectLog={(log) => setSelectedLog(log)} history={history} />;
