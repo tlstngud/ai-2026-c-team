@@ -90,6 +90,8 @@ const Dashboard = () => {
     const [sensorStatus, setSensorStatus] = useState({ gps: false, motion: false }); // 센서 작동 상태
     const [gpsAccuracy, setGpsAccuracy] = useState(null); // GPS 정확도 (미터)
     const [gpsStatus, setGpsStatus] = useState('GPS 검색중...'); // GPS 상태 메시지
+    const [speedLimit, setSpeedLimit] = useState(null); // 도로 제한 속도 (km/h)
+    const [roadName, setRoadName] = useState(null); // 도로명
     const gpsWatchIdRef = useRef(null);
 
     const scoreRef = useRef(100);
@@ -273,15 +275,28 @@ const Dashboard = () => {
                         setGpsAccuracy(data.accuracy);
                         setGpsStatus(data.status || 'GPS 검색중...');
 
+                        // 제한 속도 및 도로명 업데이트
+                        if (data.speedLimit !== undefined) {
+                            setSpeedLimit(data.speedLimit);
+                        }
+                        if (data.roadName !== undefined) {
+                            setRoadName(data.roadName);
+                        }
+
                         // GPS 작동 상태 업데이트 (위치 정보가 있으면 작동 중)
                         if (data.latitude && data.longitude) {
                             setSensorStatus(prev => ({ ...prev, gps: true }));
                         }
 
-                        // 과속 감지 (시속 100km/h 이상, 5초마다 한 번만)
+                        // 과속 감지 (제한 속도 기준 또는 기본 100km/h)
                         if (data.isOverspeed) {
+                            const limitText = data.speedLimit
+                                ? `제한 속도 ${data.speedLimit}km/h 초과`
+                                : '100km/h 초과';
                             console.log('⚠️ 과속 감지!', {
-                                speed: data.speed.toFixed(1) + ' km/h'
+                                speed: data.speed.toFixed(1) + ' km/h',
+                                limit: limitText,
+                                road: data.roadName || '알 수 없음'
                             });
                             setGpsEvents(prev => ({
                                 ...prev,
@@ -291,6 +306,14 @@ const Dashboard = () => {
                             // 과속 패널티: 3점
                             scoreRef.current = Math.max(0, scoreRef.current - 3);
                             setScore(scoreRef.current);
+                        }
+                    } else if (data.type === 'SPEED_LIMIT') {
+                        // 제한 속도 업데이트 (TMAP API 응답)
+                        if (data.speedLimit !== undefined) {
+                            setSpeedLimit(data.speedLimit);
+                        }
+                        if (data.roadName !== undefined) {
+                            setRoadName(data.roadName);
                         }
                     } else if (data.type === 'MOTION') {
                         // 가속도 센서 데이터: 급가속/급감속 감지
@@ -359,6 +382,8 @@ const Dashboard = () => {
             setGpsAcceleration(0);
             setGpsEvents({ hardAccel: 0, hardBrake: 0, overspeed: 0 });
             setSensorStatus({ gps: false, motion: false });
+            setSpeedLimit(null);
+            setRoadName(null);
         }
 
         return () => {
@@ -598,6 +623,8 @@ const Dashboard = () => {
                                         sensorStatus={sensorStatus}
                                         gpsAccuracy={gpsAccuracy}
                                         gpsStatus={gpsStatus}
+                                        speedLimit={speedLimit}
+                                        roadName={roadName}
                                     />
                                 </>
                             )}

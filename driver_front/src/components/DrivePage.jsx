@@ -23,7 +23,9 @@ const DrivePage = ({
     gpsEvents = { hardAccel: 0, hardBrake: 0, overspeed: 0 },
     sensorStatus = { gps: false, motion: false },
     gpsAccuracy = null,
-    gpsStatus = 'GPS 검색중...'
+    gpsStatus = 'GPS 검색중...',
+    speedLimit = null,
+    roadName = null
 }) => {
     const videoContainerRef = useRef(null);
     const modalRef = useRef(null);
@@ -263,7 +265,17 @@ const DrivePage = ({
                                                 {currentSpeed > 0 ? Math.round(currentSpeed) : '--'}
                                             </span>
                                             <span className="text-xs font-medium text-white/70">km/h</span>
+                                            {speedLimit && (
+                                                <span className="text-xs font-medium text-white/50">
+                                                    / {speedLimit}km/h
+                                                </span>
+                                            )}
                                         </div>
+                                        {roadName && (
+                                            <span className="text-[9px] text-white/60 font-medium">
+                                                {roadName}
+                                            </span>
+                                        )}
                                         {gpsAccuracy !== null && (
                                             <span className="text-[9px] text-white/60 font-medium">
                                                 정확도: {Math.round(gpsAccuracy)}m
@@ -500,9 +512,21 @@ const DrivePage = ({
                 )}
 
                 {/* GPS 정보 표시 */}
-                {isActive && currentSpeed > 0 && (
+                {isActive && (
                     <div className={`mt-6 w-full max-w-xs ${hasPermission ? 'bg-white/90 backdrop-blur-md rounded-2xl p-4 shadow-lg' : 'bg-white/95 backdrop-blur-md rounded-2xl p-4 shadow-lg'}`}>
                         <p className="text-xs font-semibold uppercase text-gray-400 mb-3 text-center">주행 정보</p>
+                        {/* 제한 속도 및 도로명 표시 */}
+                        {speedLimit && (
+                            <div className="mb-3 pb-3 border-b border-gray-200">
+                                <p className="text-[10px] font-semibold text-gray-400 mb-1">도로 정보</p>
+                                <p className="text-sm font-bold text-blue-600">
+                                    제한 속도: {speedLimit}km/h
+                                </p>
+                                {roadName && (
+                                    <p className="text-[10px] text-gray-500 mt-1">{roadName}</p>
+                                )}
+                            </div>
+                        )}
                         <div className="grid grid-cols-3 gap-4 text-center">
                             <div>
                                 <p className="text-xs font-semibold uppercase text-gray-400">속도</p>
