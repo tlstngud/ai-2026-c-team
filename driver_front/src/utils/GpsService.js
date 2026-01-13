@@ -47,6 +47,7 @@ export const startGpsMonitoring = (onUpdate, onError) => {
     let lastPosition = null;
     let lastTime = null;
     let lastSpeed = 0;
+    let lastOverspeedCheck = 0; // 과속 체크 throttle
     const positionHistory = []; // 최근 위치 기록 (정확도 향상)
 
     const options = {
@@ -60,25 +61,21 @@ export const startGpsMonitoring = (onUpdate, onError) => {
             const { latitude, longitude, speed: gpsSpeed, accuracy } = position.coords;
             const currentTime = Date.now();
 
+            let speedKmh = 0;
+            let acceleration = 0;
+            let isHardAccel = false;
+            let isHardBrake = false;
+            let isOverspeed = false;
+
             // GPS 속도가 있으면 우선 사용 (더 정확)
             if (gpsSpeed !== null && gpsSpeed !== undefined && gpsSpeed >= 0) {
-                const speedKmh = gpsSpeed * 3.6; // m/s -> km/h
+                speedKmh = gpsSpeed * 3.6; // m/s -> km/h
                 const timeDiff = lastTime ? (currentTime - lastTime) / 1000 : 0;
 
-                if (timeDiff > 0 && lastSpeed > 0) {
-                    const acceleration = calculateAcceleration(lastSpeed, speedKmh, timeDiff);
-                    const isHardAccel = acceleration > 3.0; // 3 m/s² 이상 = 급가속
-                    const isHardBrake = acceleration < -4.0; // -4 m/s² 이하 = 급감속
-
-                    onUpdate({
-                        speed: speedKmh,
-                        acceleration: acceleration,
-                        isHardAccel,
-                        isHardBrake,
-                        latitude,
-                        longitude,
-                        accuracy
-                    });
+                if (timeDiff > 0 && timeDiff < 5 && lastSpeed >= 0) { // 5초 이내, 유효한 속도만
+                    acceleration = calculateAcceleration(lastSpeed, speedKmh, timeDiff);
+                    isHardAccel = acceleration > 3.0; // 3 m/s² 이상 = 급가속
+                    isHardBrake = acceleration < -4.0; // -4 m/s² 이하 = 급감속
                 }
 
                 lastSpeed = speedKmh;
@@ -92,25 +89,38 @@ export const startGpsMonitoring = (onUpdate, onError) => {
                 );
                 const timeDiff = (currentTime - lastTime) / 1000; // 초 단위
 
-                if (timeDiff > 0 && distance > 0) {
-                    const speedKmh = calculateSpeed(distance, timeDiff);
-                    const acceleration = calculateAcceleration(lastSpeed, speedKmh, timeDiff);
-                    const isHardAccel = acceleration > 3.0;
-                    const isHardBrake = acceleration < -4.0;
+                if (timeDiff > 0 && timeDiff < 5 && distance > 0) { // 5초 이내, 유효한 거리만
+                    speedKmh = calculateSpeed(distance, timeDiff);
 
-                    onUpdate({
-                        speed: speedKmh,
-                        acceleration: acceleration,
-                        isHardAccel,
-                        isHardBrake,
-                        latitude,
-                        longitude,
-                        accuracy
-                    });
+                    if (lastSpeed >= 0) {
+                        acceleration = calculateAcceleration(lastSpeed, speedKmh, timeDiff);
+                        isHardAccel = acceleration > 3.0;
+                        isHardBrake = acceleration < -4.0;
+                    }
 
                     lastSpeed = speedKmh;
                 }
             }
+
+            // 과속 감지 (5초마다 한 번만 체크하여 중복 방지)
+            if (speedKmh > 0 && (currentTime - lastOverspeedCheck) > 5000) {
+                isOverspeed = speedKmh > 100; // 100km/h 이상
+                if (isOverspeed) {
+                    lastOverspeedCheck = currentTime;
+                }
+            }
+
+            // 항상 속도는 업데이트 (가속도가 없어도)
+            onUpdate({
+                speed: speedKmh,
+                acceleration: acceleration,
+                isHardAccel,
+                isHardBrake,
+                isOverspeed,
+                latitude,
+                longitude,
+                accuracy
+            });
 
             // 위치 기록 저장
             positionHistory.push({

@@ -97,7 +97,7 @@ const Dashboard = () => {
         if (user) {
             const saved = getLogsByUserId(user.id);
             setHistory(saved || []);
-            
+
             // user에 region이 있으면 복원
             if (user.region && !userRegion) {
                 setUserRegion(user.region);
@@ -262,11 +262,16 @@ const Dashboard = () => {
             // GPS 모니터링 시작
             const watchId = startGpsMonitoring(
                 (data) => {
+                    // 속도와 가속도 항상 업데이트
                     setCurrentSpeed(data.speed);
                     setGpsAcceleration(data.acceleration);
 
-                    // 급가속 감지
+                    // 급가속 감지 (3.0 m/s² 이상)
                     if (data.isHardAccel) {
+                        console.log('🚀 급가속 감지!', {
+                            speed: data.speed.toFixed(1) + ' km/h',
+                            acceleration: data.acceleration.toFixed(2) + ' m/s²'
+                        });
                         setGpsEvents(prev => ({
                             ...prev,
                             hardAccel: prev.hardAccel + 1
@@ -277,8 +282,12 @@ const Dashboard = () => {
                         setScore(scoreRef.current);
                     }
 
-                    // 급감속 감지
+                    // 급감속 감지 (-4.0 m/s² 이하)
                     if (data.isHardBrake) {
+                        console.log('🛑 급감속 감지!', {
+                            speed: data.speed.toFixed(1) + ' km/h',
+                            acceleration: data.acceleration.toFixed(2) + ' m/s²'
+                        });
                         setGpsEvents(prev => ({
                             ...prev,
                             hardBrake: prev.hardBrake + 1
@@ -289,8 +298,11 @@ const Dashboard = () => {
                         setScore(scoreRef.current);
                     }
 
-                    // 과속 감지 (시속 100km/h 이상)
-                    if (data.speed > 100) {
+                    // 과속 감지 (시속 100km/h 이상, 5초마다 한 번만)
+                    if (data.isOverspeed) {
+                        console.log('⚠️ 과속 감지!', {
+                            speed: data.speed.toFixed(1) + ' km/h'
+                        });
                         setGpsEvents(prev => ({
                             ...prev,
                             overspeed: prev.overspeed + 1

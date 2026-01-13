@@ -253,10 +253,12 @@ const DrivePage = ({
                                     </span>
                                     <span className="text-xs font-medium text-white/60">Score</span>
                                 </div>
-                                {isActive && currentSpeed > 0 && (
+                                {isActive && (
                                     <div className="bg-black/30 backdrop-blur-md px-4 py-2 rounded-full border border-white/10">
                                         <div className="flex items-center gap-2">
-                                            <span className="text-lg font-bold text-white">{Math.round(currentSpeed)}</span>
+                                            <span className="text-lg font-bold text-white">
+                                                {currentSpeed > 0 ? Math.round(currentSpeed) : '--'}
+                                            </span>
                                             <span className="text-xs font-medium text-white/70">km/h</span>
                                         </div>
                                         {gpsAcceleration > 2 && (
@@ -346,12 +348,12 @@ const DrivePage = ({
                                 </p>
                             </div>
                         </div>
-                        {isActive && currentSpeed > 0 && (
+                        {isActive && (
                             <div className="grid grid-cols-3 gap-3 pt-3 border-t border-gray-100">
                                 <div>
                                     <p className="text-gray-500 text-xs font-bold uppercase">속도</p>
                                     <p className="text-lg font-bold text-black">
-                                        {Math.round(currentSpeed)}<span className="text-xs text-gray-400">km/h</span>
+                                        {currentSpeed > 0 ? Math.round(currentSpeed) : '--'}<span className="text-xs text-gray-400">km/h</span>
                                     </p>
                                 </div>
                                 <div>
