@@ -1,7 +1,9 @@
 import React from 'react';
-import { ShieldCheck, User, Car, History } from 'lucide-react';
+import { ShieldCheck, User, Car, History, LogOut } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 const Header = ({ type = 'drive', isActive, averageScore, discountRate }) => {
+    const { logout } = useAuth();
     // Added h-[88px] to fix the height, and flex items-center for vertical alignment
     const commonClasses = "px-6 bg-white/90 backdrop-blur-xl z-30 sticky top-0 border-b border-gray-100 shadow-sm h-[88px] flex items-center";
 
@@ -45,12 +47,15 @@ const Header = ({ type = 'drive', isActive, averageScore, discountRate }) => {
     if (type === 'log') {
         return (
             <header className={commonClasses}>
-                <div className="w-full">
+                <div className="w-full flex justify-between items-center">
                     <HeaderTitle
                         icon={History}
                         title="Driving Log"
                         subtitle="Recent History"
                     />
+                    <button onClick={logout} className="p-2 bg-red-50 rounded-xl text-red-500 hover:bg-red-100 transition-colors">
+                        <LogOut size={20} />
+                    </button>
                 </div>
             </header>
         );
