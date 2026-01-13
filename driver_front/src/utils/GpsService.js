@@ -45,58 +45,103 @@ export const startGpsMonitoring = (onUpdate, onError) => {
         return null;
     }
 
+    // 데스크탑/노트북 환경 감지
+    const isDesktop = !('ontouchstart' in window) || window.innerWidth > 1024;
+    if (isDesktop) {
+        console.log('💻 데스크탑 환경 감지: GPS 속도는 0으로 표시될 수 있습니다.');
+    }
+
     let lastSpeedKmh = 0;
     let lastOverspeedCheck = 0;
     let motionHandler = null;
     let gpsWatchId = null;
 
     // --- [A] 가속도 센서 (급가속/급감속 감지용) ---
+    let motionEventCount = 0;
     const handleMotion = (event) => {
-        const { acceleration } = event;
-        if (!acceleration) return;
+        motionEventCount++;
 
-        // 차량 진행 방향의 가속도 (y축 기준, 폰을 세워뒀을 때)
-        // iOS와 Android 간 좌표계 차이 고려 필요
-        const accelY = acceleration.y || 0;
-        const accelX = acceleration.x || 0;
+        // iOS는 accelerationIncludingGravity를 사용해야 할 수 있음
+        const { acceleration, accelerationIncludingGravity } = event;
+        const accel = acceleration || accelerationIncludingGravity;
 
-        // 벡터 크기 계산 (x, y축 모두 고려)
-        const accelMagnitude = Math.sqrt(accelX * accelX + accelY * accelY);
+        if (!accel) {
+            // 처음 몇 번만 로그
+            if (motionEventCount <= 3) {
+                console.log('⚠️ 가속도 데이터 없음', { event });
+            }
+            return;
+        }
+
+        // 디버깅: 가속도 값 확인 (처음 5번 + 이후 1% 확률)
+        if (motionEventCount <= 5 || Math.random() < 0.01) {
+            console.log('📱 가속도 센서 데이터:', {
+                x: accel.x?.toFixed(2),
+                y: accel.y?.toFixed(2),
+                z: accel.z?.toFixed(2),
+                speed: lastSpeedKmh.toFixed(1) + ' km/h',
+                count: motionEventCount
+            });
+        }
+
+        const accelY = accel.y || 0;
+        const accelX = accel.x || 0;
+        const accelZ = accel.z || 0;
+
+        // 벡터 크기 계산 (x, y, z축 모두 고려)
+        const accelMagnitude = Math.sqrt(accelX * accelX + accelY * accelY + accelZ * accelZ);
 
         // 필터링: 작은 진동 무시 (1.0 m/s² 미만)
         if (accelMagnitude < 1.0) return;
 
-        // 속도가 10km/h 이상일 때만 판단 (정지 상태에서의 노이즈 제거)
-        if (lastSpeedKmh < MIN_SPEED_FOR_MOTION) return;
+        // 테스트 모드: 속도 제한 완화 (정지 상태에서도 테스트 가능)
+        // 실제 운전 시에는 아래 주석을 해제하고 테스트 모드 로직 제거
+        const isTestMode = lastSpeedKmh < MIN_SPEED_FOR_MOTION;
+        // if (lastSpeedKmh < MIN_SPEED_FOR_MOTION) return; // 실제 운전 시 활성화
 
         let isHardAccel = false;
         let isHardBrake = false;
 
-        // y축이 주축 (세로 방향, 일반적인 차량 거치 상태)
-        // 양수 = 가속, 음수 = 감속 (기기 방향에 따라 반대일 수 있음)
-        // 안전하게 절댓값이 큰 쪽을 사용
-        if (Math.abs(accelY) > Math.abs(accelX)) {
-            if (accelY > HARD_ACCEL_THRESHOLD) {
-                isHardAccel = true;
-            } else if (accelY < HARD_BRAKE_THRESHOLD) {
-                isHardBrake = true;
-            }
+        // 가장 큰 가속도 축 찾기 (절댓값 기준)
+        const absX = Math.abs(accelX);
+        const absY = Math.abs(accelY);
+        const absZ = Math.abs(accelZ);
+
+        let mainAccel = 0;
+        if (absX >= absY && absX >= absZ) {
+            mainAccel = accelX;
+        } else if (absY >= absX && absY >= absZ) {
+            mainAccel = accelY;
         } else {
-            // x축이 주축인 경우
-            if (accelX > HARD_ACCEL_THRESHOLD) {
-                isHardAccel = true;
-            } else if (accelX < HARD_BRAKE_THRESHOLD) {
-                isHardBrake = true;
-            }
+            mainAccel = accelZ;
+        }
+
+        // 임계값 체크
+        if (mainAccel > HARD_ACCEL_THRESHOLD) {
+            isHardAccel = true;
+            console.log('🚀 급가속 감지!', {
+                accel: mainAccel.toFixed(2) + ' m/s²',
+                speed: lastSpeedKmh.toFixed(1) + ' km/h',
+                testMode: isTestMode,
+                axis: absX >= absY && absX >= absZ ? 'X' : (absY >= absX && absY >= absZ ? 'Y' : 'Z')
+            });
+        } else if (mainAccel < HARD_BRAKE_THRESHOLD) {
+            isHardBrake = true;
+            console.log('🛑 급감속 감지!', {
+                accel: mainAccel.toFixed(2) + ' m/s²',
+                speed: lastSpeedKmh.toFixed(1) + ' km/h',
+                testMode: isTestMode,
+                axis: absX >= absY && absX >= absZ ? 'X' : (absY >= absX && absY >= absZ ? 'Y' : 'Z')
+            });
         }
 
         if (isHardAccel || isHardBrake) {
             onUpdate({
                 type: 'MOTION',
-                accelValue: Math.abs(accelY) > Math.abs(accelX) ? accelY : accelX,
+                accelValue: mainAccel,
                 isHardAccel,
                 isHardBrake,
-                speed: lastSpeedKmh // 현재 속도 정보도 함께 전달
+                speed: lastSpeedKmh
             });
         }
     };
@@ -105,6 +150,14 @@ export const startGpsMonitoring = (onUpdate, onError) => {
     if (typeof DeviceMotionEvent !== 'undefined') {
         motionHandler = handleMotion;
         window.addEventListener('devicemotion', motionHandler);
+        console.log('✅ 가속도 센서 이벤트 리스너 등록됨');
+
+        // 노트북/데스크탑에서는 가속도 센서가 없을 수 있음
+        if (isDesktop) {
+            console.log('💻 노트북/데스크탑: 가속도 센서가 없을 수 있습니다. 모바일 기기에서 테스트해주세요.');
+        }
+    } else {
+        console.warn('⚠️ DeviceMotionEvent를 지원하지 않는 브라우저입니다.');
     }
 
     // --- [B] GPS (속도 및 위치 표시용) ---
@@ -121,9 +174,15 @@ export const startGpsMonitoring = (onUpdate, onError) => {
 
             // GPS 속도 (m/s -> km/h)
             // speed가 null이면 0 처리 (거리 기반 계산은 오차가 크므로 사용 안 함)
+            // 노트북/데스크탑에서는 GPS speed가 null일 가능성이 높음
             const currentSpeedKmh = (gpsSpeed !== null && gpsSpeed !== undefined && gpsSpeed >= 0)
                 ? gpsSpeed * 3.6
                 : 0;
+
+            // 노트북에서 GPS speed가 없을 때 경고 (처음 한 번만)
+            if (isDesktop && currentSpeedKmh === 0 && lastSpeedKmh === 0 && gpsSpeed === null) {
+                console.log('💻 노트북 환경: GPS 속도 정보가 없습니다. 실제 운전은 모바일 기기에서 테스트해주세요.');
+            }
 
             lastSpeedKmh = currentSpeedKmh;
 
@@ -146,8 +205,39 @@ export const startGpsMonitoring = (onUpdate, onError) => {
             });
         },
         (error) => {
-            console.error('GPS Error:', error);
-            onError(error);
+            // GPS 오류 코드별 상세 메시지
+            let errorMessage = 'GPS 오류가 발생했습니다.';
+            let errorType = 'unknown';
+
+            switch (error.code) {
+                case 1: // PERMISSION_DENIED
+                    errorMessage = '위치 권한이 거부되었습니다. 설정에서 위치 권한을 허용해주세요.';
+                    errorType = 'permission_denied';
+                    console.warn('🚫 위치 권한 거부됨');
+                    break;
+                case 2: // POSITION_UNAVAILABLE
+                    errorMessage = '위치 정보를 사용할 수 없습니다. 위치 서비스가 활성화되어 있는지 확인해주세요.';
+                    errorType = 'position_unavailable';
+                    console.warn('⚠️ 위치 정보 사용 불가:', {
+                        message: error.message,
+                        note: 'iOS에서는 설정 > 개인정보 보호 및 보안 > 위치 서비스가 켜져 있어야 합니다.'
+                    });
+                    break;
+                case 3: // TIMEOUT
+                    errorMessage = '위치 정보 요청 시간이 초과되었습니다. 다시 시도해주세요.';
+                    errorType = 'timeout';
+                    console.warn('⏱️ 위치 요청 시간 초과');
+                    break;
+                default:
+                    console.error('GPS Error:', error);
+            }
+
+            // 오류 정보를 콜백에 전달
+            onError({
+                ...error,
+                userMessage: errorMessage,
+                errorType: errorType
+            });
         },
         options
     );

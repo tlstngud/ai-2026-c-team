@@ -20,7 +20,8 @@ const DrivePage = ({
     userRegion = null,
     currentSpeed = 0,
     gpsAcceleration = 0,
-    gpsEvents = { hardAccel: 0, hardBrake: 0, overspeed: 0 }
+    gpsEvents = { hardAccel: 0, hardBrake: 0, overspeed: 0 },
+    sensorStatus = { gps: false, motion: false }
 }) => {
     const videoContainerRef = useRef(null);
     const modalRef = useRef(null);
@@ -480,6 +481,16 @@ const DrivePage = ({
                         </p>
                     </div>
                 </div>
+
+                {/* 센서 작동 상태 뱃지 (메인 뷰) */}
+                {isActive && (sensorStatus.gps || sensorStatus.motion) && (
+                    <div className="mt-6 w-full max-w-xs bg-green-500/90 backdrop-blur-md rounded-2xl p-3 shadow-lg border-2 border-green-400/50">
+                        <div className="flex items-center justify-center gap-2">
+                            <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+                            <p className="text-xs font-bold text-white uppercase tracking-tight">센서 정상 작동 중</p>
+                        </div>
+                    </div>
+                )}
 
                 {/* GPS 정보 표시 */}
                 {isActive && currentSpeed > 0 && (

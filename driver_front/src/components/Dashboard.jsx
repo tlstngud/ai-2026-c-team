@@ -87,6 +87,7 @@ const Dashboard = () => {
     const [currentSpeed, setCurrentSpeed] = useState(0); // km/h
     const [gpsAcceleration, setGpsAcceleration] = useState(0); // m/s²
     const [gpsEvents, setGpsEvents] = useState({ hardAccel: 0, hardBrake: 0, overspeed: 0 });
+    const [sensorStatus, setSensorStatus] = useState({ gps: false, motion: false }); // 센서 작동 상태
     const gpsWatchIdRef = useRef(null);
 
     const scoreRef = useRef(100);
@@ -268,6 +269,11 @@ const Dashboard = () => {
                         setCurrentSpeed(data.speed);
                         setGpsAcceleration(0); // GPS 기반 가속도는 사용 안 함
 
+                        // GPS 작동 상태 업데이트 (위치 정보가 있으면 작동 중)
+                        if (data.latitude && data.longitude) {
+                            setSensorStatus(prev => ({ ...prev, gps: true }));
+                        }
+
                         // 과속 감지 (시속 100km/h 이상, 5초마다 한 번만)
                         if (data.isOverspeed) {
                             console.log('⚠️ 과속 감지!', {
@@ -285,6 +291,9 @@ const Dashboard = () => {
                     } else if (data.type === 'MOTION') {
                         // 가속도 센서 데이터: 급가속/급감속 감지
                         setGpsAcceleration(data.accelValue);
+
+                        // 가속도 센서 작동 상태 업데이트
+                        setSensorStatus(prev => ({ ...prev, motion: true }));
 
                         // 급가속 감지
                         if (data.isHardAccel) {
@@ -320,8 +329,17 @@ const Dashboard = () => {
                     }
                 },
                 (error) => {
-                    console.error('GPS 모니터링 오류:', error);
-                    // GPS 오류 시에도 계속 진행 (선택적)
+                    // GPS 오류 처리
+                    if (error.errorType === 'permission_denied') {
+                        console.warn('📍 위치 권한이 필요합니다. 설정에서 권한을 허용해주세요.');
+                        // 권한 거부 시 센서 상태 업데이트 안 함
+                    } else if (error.errorType === 'position_unavailable') {
+                        console.warn('📍 위치 서비스를 사용할 수 없습니다.');
+                        // 위치 정보 없이도 가속도 센서는 작동 가능
+                    } else {
+                        console.error('GPS 모니터링 오류:', error);
+                    }
+                    // GPS 오류 시에도 계속 진행 (가속도 센서는 작동 가능)
                 }
             );
 
@@ -336,6 +354,7 @@ const Dashboard = () => {
             setCurrentSpeed(0);
             setGpsAcceleration(0);
             setGpsEvents({ hardAccel: 0, hardBrake: 0, overspeed: 0 });
+            setSensorStatus({ gps: false, motion: false });
         }
 
         return () => {
@@ -572,6 +591,7 @@ const Dashboard = () => {
                                         currentSpeed={currentSpeed}
                                         gpsAcceleration={gpsAcceleration}
                                         gpsEvents={gpsEvents}
+                                        sensorStatus={sensorStatus}
                                     />
                                 </>
                             )}
