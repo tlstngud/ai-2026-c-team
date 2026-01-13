@@ -8,11 +8,15 @@ const NavButton = ({ active, onClick, icon, label }) => (
     </button>
 );
 
-const BottomNav = ({ currentPage, onPageChange, selectedLog }) => {
+const BottomNav = ({ currentPage, onPageChange, selectedLog, showCameraView }) => {
     if (selectedLog) return null;
 
     return (
-        <div className="fixed bottom-0 left-0 right-0 flex justify-center py-3 px-4 z-50 pointer-events-none sm:pointer-events-auto">
+        <div 
+            className={`fixed bottom-0 left-0 right-0 flex justify-center py-3 px-4 z-50 pointer-events-none sm:pointer-events-auto transition-transform duration-300 ease-in-out ${
+                showCameraView ? 'translate-y-full' : 'translate-y-0'
+            }`}
+        >
             <nav className="pointer-events-auto bg-white/80 backdrop-blur-xl border border-slate-200 rounded-3xl shadow-2xl flex justify-around items-center h-20 px-6 py-3 w-[90%] max-w-[360px] sm:max-w-[360px]">
                 <NavButton
                     active={currentPage === 'drive'}

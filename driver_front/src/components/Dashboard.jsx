@@ -78,9 +78,9 @@ const Dashboard = () => {
             const constraints = {
                 video: {
                     facingMode: "user",
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 },
-                    frameRate: { ideal: 30 }
+                    width: { ideal: 1280, min: 640 }, // 기본 720p, 최소 480p
+                    height: { ideal: 720, min: 480 },
+                    frameRate: { ideal: 30, max: 30 } // FPS 30 고정
                 },
                 audio: false
             };
@@ -230,7 +230,7 @@ const Dashboard = () => {
 
     // 페이지별 렌더링
     const renderPage = () => {
-        if (currentPage === 'insurance') return <InsurancePage score={score} />;
+        if (currentPage === 'insurance') return <InsurancePage score={score} history={history} />;
         if (currentPage === 'log') {
             if (selectedLog) return <LogDetailPage data={selectedLog} onBack={() => setSelectedLog(null)} />;
             return <DrivingLogPage onSelectLog={(log) => setSelectedLog(log)} history={history} />;
@@ -343,6 +343,7 @@ const Dashboard = () => {
                 currentPage={currentPage}
                 onPageChange={handlePageChange}
                 selectedLog={selectedLog}
+                showCameraView={showCameraView}
             />
         </div>
     );
