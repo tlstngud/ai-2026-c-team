@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { ShieldCheck, TrendingUp, DollarSign, CheckCircle2, User } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
-const InsurancePage = ({ score = 85 }) => {
+const InsurancePage = ({ score = 85, history = [] }) => {
     const [discountRate, setDiscountRate] = useState(0);
 
     useEffect(() => {
@@ -9,6 +10,22 @@ const InsurancePage = ({ score = 85 }) => {
         else if (score >= 100) setDiscountRate(5);
         else setDiscountRate(0);
     }, [score]);
+
+    // 그래프 데이터 준비 (최근 10개 기록, 최신순)
+    const chartData = useMemo(() => {
+        if (history.length === 0) return [];
+        
+        const sortedHistory = [...history].slice(0, 10).reverse(); // 최신이 마지막에 오도록
+        return sortedHistory.map((item, index) => {
+            const date = new Date(item.date);
+            const dateLabel = `${date.getMonth() + 1}/${date.getDate()}`;
+            return {
+                name: dateLabel,
+                score: item.score,
+                index: index + 1
+            };
+        });
+    }, [history]);
 
     return (
         <div className="min-h-full bg-[#F8FAFC] text-slate-800 p-4 sm:p-6 font-sans">
@@ -36,13 +53,64 @@ const InsurancePage = ({ score = 85 }) => {
             <main className="grid grid-cols-1 gap-4">
                 <div className="relative aspect-[16/9] bg-slate-900 rounded-2xl overflow-hidden shadow-xl border-4 border-white">
                     <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/40"></div>
-                    <div className="absolute inset-0 flex items-center justify-center text-slate-600 font-medium">
-                        <span className="text-xs">[ 실시간 모니터링 피드 ]</span>
-                    </div>
-                    <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-md px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-sm">
-                        <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-ping"></div>
-                        <span className="text-[10px] font-bold text-slate-700 font-mono italic">Live</span>
-                    </div>
+                    {chartData.length > 0 ? (
+                        <div className="absolute inset-0 p-4 flex flex-col">
+                            <div className="flex justify-between items-center mb-2">
+                                <span className="text-xs text-slate-400 font-medium">점수 추이</span>
+                                <div className="bg-white/90 backdrop-blur-md px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-sm">
+                                    <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-ping"></div>
+                                    <span className="text-[10px] font-bold text-slate-700 font-mono italic">Live</span>
+                                </div>
+                            </div>
+                            <ResponsiveContainer width="100%" height="100%">
+                                <LineChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff" opacity={0.1} />
+                                    <XAxis 
+                                        dataKey="name" 
+                                        stroke="#94a3b8"
+                                        fontSize={10}
+                                        tick={{ fill: '#cbd5e1' }}
+                                    />
+                                    <YAxis 
+                                        domain={[0, 100]}
+                                        stroke="#94a3b8"
+                                        fontSize={10}
+                                        tick={{ fill: '#cbd5e1' }}
+                                    />
+                                    <Tooltip 
+                                        contentStyle={{
+                                            backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                                            border: '1px solid #334155',
+                                            borderRadius: '8px',
+                                            padding: '8px 12px',
+                                            fontSize: '12px',
+                                            color: '#e2e8f0'
+                                        }}
+                                        labelStyle={{ color: '#cbd5e1', fontWeight: 'bold' }}
+                                        formatter={(value) => [`${value}점`, '점수']}
+                                    />
+                                    <Line 
+                                        type="monotone" 
+                                        dataKey="score" 
+                                        stroke="#3b82f6" 
+                                        strokeWidth={2}
+                                        dot={{ fill: '#3b82f6', r: 4 }}
+                                        activeDot={{ r: 6, fill: '#60a5fa' }}
+                                    />
+                                </LineChart>
+                            </ResponsiveContainer>
+                        </div>
+                    ) : (
+                        <>
+                            <div className="absolute inset-0 flex items-center justify-center text-slate-600 font-medium">
+                                <span className="text-xs">[ 실시간 모니터링 피드 ]</span>
+                            </div>
+                            <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-md px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-sm">
+                                <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-ping"></div>
+                                <span className="text-[10px] font-bold text-slate-700 font-mono italic">Live</span>
+                            </div>
+                        </>
+                    )}
                 </div>
 
                 <section className="bg-white rounded-2xl p-6 shadow-lg shadow-blue-900/5 border border-blue-50 border-b-4 border-b-blue-600">

@@ -230,7 +230,7 @@ const Dashboard = () => {
 
     // 페이지별 렌더링
     const renderPage = () => {
-        if (currentPage === 'insurance') return <InsurancePage score={score} />;
+        if (currentPage === 'insurance') return <InsurancePage score={score} history={history} />;
         if (currentPage === 'log') {
             if (selectedLog) return <LogDetailPage data={selectedLog} onBack={() => setSelectedLog(null)} />;
             return <DrivingLogPage onSelectLog={(log) => setSelectedLog(log)} history={history} />;
@@ -283,7 +283,6 @@ const Dashboard = () => {
                                 formatTime={formatTime}
                                 currentConfig={currentConfig}
                                 CurrentIcon={CurrentIcon}
-                                history={history}
                             />
                         </>
                     )}
