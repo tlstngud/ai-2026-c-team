@@ -51,63 +51,62 @@ const InsurancePage = ({ score = 85, history = [] }) => {
             </header>
 
             <main className="grid grid-cols-1 gap-4">
-                <div className="relative aspect-[16/9] bg-slate-900 rounded-2xl overflow-hidden shadow-xl border-4 border-white">
-                    <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/40"></div>
+                <div className="relative aspect-[16/9] bg-white rounded-2xl overflow-hidden shadow-xl border-4 border-white">
                     {chartData.length > 0 ? (
-                        <div className="absolute inset-0 p-4 flex flex-col">
+                        <div className="absolute inset-0 p-4 flex flex-col bg-white/95 backdrop-blur-md">
                             <div className="flex justify-between items-center mb-2">
-                                <span className="text-xs text-slate-400 font-medium">점수 추이</span>
-                                <div className="bg-white/90 backdrop-blur-md px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-sm">
+                                <span className="text-xs text-gray-400 font-medium uppercase">점수 추이</span>
+                                <div className="bg-green-50 px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-sm border border-green-100">
                                     <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-ping"></div>
-                                    <span className="text-[10px] font-bold text-slate-700 font-mono italic">Live</span>
+                                    <span className="text-[10px] font-bold text-green-700 font-mono italic">Live</span>
                                 </div>
                             </div>
                             <ResponsiveContainer width="100%" height="100%">
                                 <LineChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff" opacity={0.1} />
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.3} />
                                     <XAxis 
                                         dataKey="name" 
-                                        stroke="#94a3b8"
+                                        stroke="#9ca3af"
                                         fontSize={10}
-                                        tick={{ fill: '#cbd5e1' }}
+                                        tick={{ fill: '#6b7280' }}
                                     />
                                     <YAxis 
                                         domain={[0, 100]}
-                                        stroke="#94a3b8"
+                                        stroke="#9ca3af"
                                         fontSize={10}
-                                        tick={{ fill: '#cbd5e1' }}
+                                        tick={{ fill: '#6b7280' }}
                                     />
                                     <Tooltip 
                                         contentStyle={{
-                                            backgroundColor: 'rgba(15, 23, 42, 0.95)',
-                                            border: '1px solid #334155',
+                                            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                                            border: '1px solid #e5e7eb',
                                             borderRadius: '8px',
                                             padding: '8px 12px',
                                             fontSize: '12px',
-                                            color: '#e2e8f0'
+                                            color: '#374151'
                                         }}
-                                        labelStyle={{ color: '#cbd5e1', fontWeight: 'bold' }}
+                                        labelStyle={{ color: '#374151', fontWeight: 'bold' }}
                                         formatter={(value) => [`${value}점`, '점수']}
                                     />
                                     <Line 
                                         type="monotone" 
                                         dataKey="score" 
-                                        stroke="#3b82f6" 
+                                        stroke="#6366f1" 
                                         strokeWidth={2}
-                                        dot={{ fill: '#3b82f6', r: 4 }}
-                                        activeDot={{ r: 6, fill: '#60a5fa' }}
+                                        dot={{ fill: '#6366f1', r: 4 }}
+                                        activeDot={{ r: 6, fill: '#4f46e5' }}
                                     />
                                 </LineChart>
                             </ResponsiveContainer>
                         </div>
                     ) : (
                         <>
-                            <div className="absolute inset-0 flex items-center justify-center text-slate-600 font-medium">
+                            <div className="absolute inset-0 flex items-center justify-center text-gray-400 font-medium bg-white/95 backdrop-blur-md">
                                 <span className="text-xs">[ 실시간 모니터링 피드 ]</span>
                             </div>
-                            <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-md px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-sm">
+                            <div className="absolute top-3 right-3 bg-green-50 px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-sm border border-green-100">
                                 <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-ping"></div>
-                                <span className="text-[10px] font-bold text-slate-700 font-mono italic">Live</span>
+                                <span className="text-[10px] font-bold text-green-700 font-mono italic">Live</span>
                             </div>
                         </>
                     )}
