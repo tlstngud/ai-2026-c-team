@@ -14,7 +14,7 @@ const InsurancePage = ({ score = 85, history = [] }) => {
     // 그래프 데이터 준비 (최근 10개 기록, 최신순)
     const chartData = useMemo(() => {
         if (history.length === 0) return [];
-        
+
         const sortedHistory = [...history].slice(0, 10).reverse(); // 최신이 마지막에 오도록
         return sortedHistory.map((item, index) => {
             const totalRecords = sortedHistory.length;
@@ -64,19 +64,19 @@ const InsurancePage = ({ score = 85, history = [] }) => {
                             <ResponsiveContainer width="100%" height="100%">
                                 <LineChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.3} />
-                                    <XAxis 
-                                        dataKey="name" 
+                                    <XAxis
+                                        dataKey="name"
                                         stroke="#9ca3af"
                                         fontSize={10}
                                         tick={{ fill: '#6b7280' }}
                                     />
-                                    <YAxis 
+                                    <YAxis
                                         domain={[0, 100]}
                                         stroke="#9ca3af"
                                         fontSize={10}
                                         tick={{ fill: '#6b7280' }}
                                     />
-                                    <Tooltip 
+                                    <Tooltip
                                         contentStyle={{
                                             backgroundColor: 'rgba(255, 255, 255, 0.95)',
                                             border: '1px solid #e5e7eb',
@@ -88,10 +88,10 @@ const InsurancePage = ({ score = 85, history = [] }) => {
                                         labelStyle={{ color: '#374151', fontWeight: 'bold' }}
                                         formatter={(value) => [`${value}점`, '점수']}
                                     />
-                                    <Line 
-                                        type="monotone" 
-                                        dataKey="score" 
-                                        stroke="#6366f1" 
+                                    <Line
+                                        type="monotone"
+                                        dataKey="score"
+                                        stroke="#6366f1"
                                         strokeWidth={2}
                                         dot={{ fill: '#6366f1', r: 4 }}
                                         activeDot={{ r: 6, fill: '#4f46e5' }}
@@ -112,7 +112,7 @@ const InsurancePage = ({ score = 85, history = [] }) => {
                     )}
                 </div>
 
-                <section className="bg-white rounded-2xl p-6 shadow-lg shadow-blue-900/5 border border-blue-50 border-b-4 border-b-blue-600">
+                <section className="bg-white rounded-2xl p-6 shadow-xl border-4 border-white overflow-hidden">
                     <div className="flex justify-between items-start mb-4">
                         <div>
                             <p className="text-[10px] font-bold text-blue-500 uppercase tracking-wider mb-1">Safety Score</p>
