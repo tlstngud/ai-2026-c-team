@@ -1,3 +1,6 @@
+import React, { useState, useEffect } from 'react';
+import { TrendingUp, DollarSign, CheckCircle2 } from 'lucide-react';
+import Header from './Header';
 import React, { useState, useEffect, useMemo } from 'react';
 import { ShieldCheck, TrendingUp, DollarSign, CheckCircle2, User } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -28,27 +31,8 @@ const InsurancePage = ({ score = 85, history = [] }) => {
     }, [history]);
 
     return (
-        <div className="min-h-full bg-[#F8FAFC] text-slate-800 p-4 sm:p-6 font-sans">
-            <header className="flex justify-between items-center gap-4 mb-6 pb-4 border-b border-slate-200">
-                <div className="flex items-center gap-2">
-                    <div className="bg-blue-600 p-1.5 rounded-lg shadow-blue-200 shadow-md">
-                        <ShieldCheck className="text-white" size={20} />
-                    </div>
-                    <div>
-                        <h1 className="text-lg font-black text-slate-900 leading-none">Smart Mobility</h1>
-                        <p className="text-[10px] text-slate-400 font-bold mt-0.5 uppercase tracking-tighter">UBI System</p>
-                    </div>
-                </div>
-                <div className="flex items-center gap-2 bg-white p-2 rounded-xl shadow-sm border border-slate-100">
-                    <div className="px-2 border-r border-slate-100">
-                        <p className="text-[9px] font-bold text-slate-400">적용 할인율</p>
-                        <p className="text-base font-black text-blue-600">{discountRate}%</p>
-                    </div>
-                    <div className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center">
-                        <User size={16} className="text-slate-400" />
-                    </div>
-                </div>
-            </header>
+        <div className="min-h-full bg-[#F8FAFC] text-slate-800 font-sans">
+            <Header type="insurance" discountRate={discountRate} />
 
             <main className="grid grid-cols-1 gap-4">
                 <section className="bg-slate-900 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden">
