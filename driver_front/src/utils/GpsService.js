@@ -5,8 +5,9 @@
  */
 
 // G-Force 임계값 (1G ≈ 9.8m/s²)
-const HARD_ACCEL_THRESHOLD = 3.5; // m/s² (급가속)
-const HARD_BRAKE_THRESHOLD = -4.5; // m/s² (급감속, 브레이크가 더 강함)
+// 실제 자동차 운전 기준으로 조정 (더 엄격한 기준)
+const HARD_ACCEL_THRESHOLD = 4.5; // m/s² (급가속) - 기존 3.5에서 상향
+const HARD_BRAKE_THRESHOLD = -5.5; // m/s² (급감속) - 기존 -4.5에서 상향 (브레이크가 더 강함)
 const MIN_SPEED_FOR_MOTION = 10; // km/h (이 속도 이상일 때만 가속도 센서 판단)
 
 /**
