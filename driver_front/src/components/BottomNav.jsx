@@ -1,5 +1,5 @@
 import React from 'react';
-import { Video, ShieldCheck, History } from 'lucide-react';
+import { Video, ShieldCheck, History, Award } from 'lucide-react';
 
 const NavButton = ({ active, onClick, icon, label }) => (
     <button onClick={onClick} className={`flex flex-col items-center justify-center gap-1.5 transition-all duration-300 w-14 ${active ? 'text-indigo-600 scale-110' : 'text-slate-400'}`}>
@@ -27,8 +27,8 @@ const BottomNav = ({ currentPage, onPageChange, selectedLog, showCameraView }) =
                 <NavButton
                     active={currentPage === 'insurance'}
                     onClick={() => onPageChange('insurance')}
-                    icon={<ShieldCheck size={22} />}
-                    label="보험혜택"
+                    icon={<Award size={22} />}
+                    label="우리동네"
                 />
                 <NavButton
                     active={currentPage === 'log'}

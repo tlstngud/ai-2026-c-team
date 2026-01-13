@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Play, Square, Camera, CameraOff } from 'lucide-react';
+import { Play, Square, Camera, CameraOff, MapPin } from 'lucide-react';
 import { STATE_CONFIG, APPLE_STATE_CONFIG } from './constants';
 
 const DrivePage = ({
@@ -16,7 +16,8 @@ const DrivePage = ({
     toggleSession,
     formatTime,
     currentConfig,
-    CurrentIcon
+    CurrentIcon,
+    userRegion = null
 }) => {
     const videoContainerRef = useRef(null);
     const modalRef = useRef(null);
@@ -225,11 +226,21 @@ const DrivePage = ({
 
                     <div className="absolute inset-0 pointer-events-none z-20 flex flex-col justify-between p-6 pb-28">
                         <div className="flex justify-between items-start">
-                            <div className="bg-black/30 backdrop-blur-md px-4 py-2 rounded-full border border-white/10">
-                                <span className="text-xs font-bold text-white/80 uppercase tracking-wider flex items-center gap-2">
-                                    <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                                    Live Cam.
-                                </span>
+                            <div className="flex flex-col gap-2">
+                                {userRegion && (
+                                    <div className="bg-black/30 backdrop-blur-md px-4 py-2 rounded-full border border-white/10">
+                                        <span className="text-xs font-bold text-white/90 uppercase tracking-tight flex items-center gap-2">
+                                            <MapPin size={12} />
+                                            {userRegion.name} Resident
+                                        </span>
+                                    </div>
+                                )}
+                                <div className="bg-black/30 backdrop-blur-md px-4 py-2 rounded-full border border-white/10">
+                                    <span className="text-xs font-bold text-white/80 uppercase tracking-wider flex items-center gap-2">
+                                        <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                                        Live Cam.
+                                    </span>
+                                </div>
                             </div>
 
                             <div className="flex flex-col items-end">
