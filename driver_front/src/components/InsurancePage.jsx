@@ -93,12 +93,8 @@ const InsurancePage = ({ score = 85, history = [] }) => {
                 <div className="relative aspect-[16/9] bg-white rounded-2xl overflow-hidden shadow-xl border-4 border-white">
                     {chartData.length > 0 ? (
                         <div className="absolute inset-0 p-4 flex flex-col bg-white/95 backdrop-blur-md">
-                            <div className="flex justify-between items-center mb-2">
+                            <div className="mb-2">
                                 <span className="text-xs text-gray-400 font-medium uppercase">점수 추이</span>
-                                <div className="bg-green-50 px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-sm border border-green-100">
-                                    <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-ping"></div>
-                                    <span className="text-[10px] font-bold text-green-700 font-mono italic">Live</span>
-                                </div>
                             </div>
                             <ResponsiveContainer width="100%" height="100%">
                                 <LineChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
@@ -139,15 +135,9 @@ const InsurancePage = ({ score = 85, history = [] }) => {
                             </ResponsiveContainer>
                         </div>
                     ) : (
-                        <>
-                            <div className="absolute inset-0 flex items-center justify-center text-gray-400 font-medium bg-white/95 backdrop-blur-md">
-                                <span className="text-xs">[ 실시간 모니터링 피드 ]</span>
-                            </div>
-                            <div className="absolute top-3 right-3 bg-green-50 px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-sm border border-green-100">
-                                <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-ping"></div>
-                                <span className="text-[10px] font-bold text-green-700 font-mono italic">Live</span>
-                            </div>
-                        </>
+                        <div className="absolute inset-0 flex items-center justify-center text-gray-400 font-medium bg-white/95 backdrop-blur-md">
+                            <span className="text-xs">[ 실시간 모니터링 피드 ]</span>
+                        </div>
                     )}
                 </div>
             </main>
