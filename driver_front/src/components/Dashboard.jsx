@@ -283,6 +283,7 @@ const Dashboard = () => {
                                 formatTime={formatTime}
                                 currentConfig={currentConfig}
                                 CurrentIcon={CurrentIcon}
+                                history={history}
                             />
                         </>
                     )}

@@ -1,5 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { Play, Square, Camera, CameraOff } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { STATE_CONFIG, APPLE_STATE_CONFIG } from './constants';
 
 const DrivePage = ({
@@ -16,7 +17,8 @@ const DrivePage = ({
     toggleSession,
     formatTime,
     currentConfig,
-    CurrentIcon
+    CurrentIcon,
+    history = []
 }) => {
     const videoContainerRef = useRef(null);
     const modalRef = useRef(null);
@@ -24,6 +26,22 @@ const DrivePage = ({
     const [isDragging, setIsDragging] = useState(false);
     const dragStartY = useRef(0);
     const dragStartHeight = useRef(0);
+
+    // 그래프 데이터 준비 (최근 10개 기록, 최신순)
+    const chartData = useMemo(() => {
+        if (history.length === 0) return [];
+        
+        const sortedHistory = [...history].slice(0, 10).reverse(); // 최신이 마지막에 오도록
+        return sortedHistory.map((item, index) => {
+            const date = new Date(item.date);
+            const dateLabel = `${date.getMonth() + 1}/${date.getDate()}`;
+            return {
+                name: dateLabel,
+                score: item.score,
+                index: index + 1
+            };
+        });
+    }, [history]);
 
     // 모달 드래그 핸들러
     const handleTouchStart = (e) => {
@@ -424,6 +442,49 @@ const DrivePage = ({
                         </p>
                     </div>
                 </div>
+
+                {/* 점수 추이 그래프 */}
+                {chartData.length > 0 && (
+                    <div className={`mt-6 w-full max-w-xs ${hasPermission ? 'bg-white/90 backdrop-blur-md rounded-2xl p-4 shadow-lg' : 'bg-white/95 backdrop-blur-md rounded-2xl p-4 shadow-lg'}`}>
+                        <p className="text-xs font-semibold uppercase text-gray-400 mb-3 text-center">점수 추이</p>
+                        <ResponsiveContainer width="100%" height={180}>
+                            <LineChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.3} />
+                                <XAxis 
+                                    dataKey="name" 
+                                    stroke="#9ca3af"
+                                    fontSize={10}
+                                    tick={{ fill: '#6b7280' }}
+                                />
+                                <YAxis 
+                                    domain={[0, 100]}
+                                    stroke="#9ca3af"
+                                    fontSize={10}
+                                    tick={{ fill: '#6b7280' }}
+                                />
+                                <Tooltip 
+                                    contentStyle={{
+                                        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                                        border: '1px solid #e5e7eb',
+                                        borderRadius: '8px',
+                                        padding: '8px 12px',
+                                        fontSize: '12px'
+                                    }}
+                                    labelStyle={{ color: '#374151', fontWeight: 'bold' }}
+                                    formatter={(value) => [`${value}점`, '점수']}
+                                />
+                                <Line 
+                                    type="monotone" 
+                                    dataKey="score" 
+                                    stroke="#6366f1" 
+                                    strokeWidth={2}
+                                    dot={{ fill: '#6366f1', r: 4 }}
+                                    activeDot={{ r: 6, fill: '#4f46e5' }}
+                                />
+                            </LineChart>
+                        </ResponsiveContainer>
+                    </div>
+                )}
 
             </main>
 
