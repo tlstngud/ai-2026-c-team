@@ -15,13 +15,13 @@ const DetailItem = ({ icon, title, count, desc }) => (
 );
 
 const LogDetailPage = ({ data, onBack }) => (
-    <div className="p-6 animate-in slide-in-from-right duration-500">
-        <button onClick={onBack} className="flex items-center gap-2 text-slate-400 font-bold mb-6 hover:text-slate-900 transition-colors">
-            <ChevronLeft size={20} />
-            <span className="text-sm">뒤로가기</span>
-        </button>
+    <div className="animate-in slide-in-from-right duration-500 bg-white min-h-full">
+        <div className="px-6 pt-6 pb-4 bg-white/90 backdrop-blur-xl z-30 sticky top-0 border-b border-gray-100 shadow-sm">
+            <button onClick={onBack} className="flex items-center gap-2 text-slate-400 font-bold mb-4 hover:text-slate-900 transition-colors">
+                <ChevronLeft size={20} />
+                <span className="text-sm">뒤로가기</span>
+            </button>
 
-        <header className="mb-8">
             <div className="flex justify-between items-start mb-2">
                 <h1 className="text-2xl font-black text-slate-900">
                     {data.date} <span className="text-base font-normal text-slate-400 italic">Report</span>
@@ -34,9 +34,9 @@ const LogDetailPage = ({ data, onBack }) => (
                 <span className="flex items-center gap-1"><Clock size={12} /> {data.time}</span>
                 <span className="flex items-center gap-1"><MapPin size={12} /> {data.distance}</span>
             </div>
-        </header>
+        </div>
 
-        <div className="grid grid-cols-1 gap-4 mb-8">
+        <div className="p-6 pt-6 grid grid-cols-1 gap-4 mb-8">
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
                 <p className="text-[10px] font-bold text-slate-400 mb-2 uppercase">운행 평가</p>
                 <p className="text-lg font-black leading-tight text-slate-800">{data.msg}</p>
@@ -45,15 +45,15 @@ const LogDetailPage = ({ data, onBack }) => (
                 <p className="text-[10px] font-bold text-blue-400 mb-2 uppercase">보험료 변동</p>
                 <p className="text-xl font-black">{data.score >= 90 ? "-₩1,200" : "+₩0"}</p>
             </div>
-        </div>
 
-        <section className="space-y-4">
-            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Detection Details</h3>
-            <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 space-y-6">
-                <DetailItem icon={<Coffee className="text-orange-500" size={18} />} title="졸음운전" count={data.status === 'warning' ? "2회" : "0회"} desc="눈 감음 지속 감지" />
-                <DetailItem icon={<Smartphone className="text-blue-500" size={18} />} title="휴대폰 조작" count={data.status === 'normal' ? "1회" : "0회"} desc="전방 주시 태만" />
-            </div>
-        </section>
+            <section className="space-y-4 mt-4">
+                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Detection Details</h3>
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 space-y-6">
+                    <DetailItem icon={<Coffee className="text-orange-500" size={18} />} title="졸음운전" count={data.status === 'warning' ? "2회" : "0회"} desc="눈 감음 지속 감지" />
+                    <DetailItem icon={<Smartphone className="text-blue-500" size={18} />} title="휴대폰 조작" count={data.status === 'normal' ? "1회" : "0회"} desc="전방 주시 태만" />
+                </div>
+            </section>
+        </div>
     </div>
 );
 

@@ -1,5 +1,6 @@
 import React from 'react';
 import { ChevronRight } from 'lucide-react';
+import Header from './Header';
 
 const LogEntry = ({ date, score, msg, status }) => (
     <div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-slate-100 flex justify-between items-center group hover:border-indigo-200 transition-colors">
@@ -34,12 +35,9 @@ const DrivingLogPage = ({ onSelectLog, history = [] }) => {
     const logs = [...historyLogs, ...defaultLogs].slice(0, 10);
 
     return (
-        <div className="p-6 animate-in fade-in duration-500">
-            <header className="mb-6">
-                <h1 className="text-2xl font-black">주행 로그</h1>
-                <p className="text-xs text-slate-400 font-medium italic uppercase tracking-tighter">Recent History</p>
-            </header>
-            <div className="space-y-3">
+        <div className="animate-in fade-in duration-500">
+            <Header type="log" />
+            <div className="space-y-3 p-6">
                 {logs.map(log => (
                     <div key={log.id} onClick={() => onSelectLog(log)} className="cursor-pointer">
                         <LogEntry date={log.date} score={log.score} msg={log.msg} status={log.status} />
