@@ -437,14 +437,19 @@ export const startGpsMonitoring = (onUpdate, onError) => {
 
             // TMAP API로 제한 속도 조회 (5초마다 한 번만)
             if ((currentTime - lastSpeedLimitCheck) > SPEED_LIMIT_CHECK_INTERVAL &&
-                latitude && longitude && accuracy && accuracy < 50) {
-                // 정확도가 좋을 때만 조회 (50m 이내)
+                latitude && longitude && accuracy && accuracy < 100) {
+                // 정확도가 좋을 때만 조회 (100m 이내로 완화)
                 lastSpeedLimitCheck = currentTime;
 
                 console.log('🔄 제한 속도 조회 시작 (5초 간격):', {
                     위도: latitude.toFixed(6),
                     경도: longitude.toFixed(6),
                     정확도: accuracy.toFixed(0) + 'm'
+                });
+
+                // 조회 시작 알림
+                onUpdate({
+                    type: 'SPEED_LIMIT_LOADING'
                 });
 
                 // 비동기로 제한 속도 조회 (블로킹 방지)
@@ -471,6 +476,12 @@ export const startGpsMonitoring = (onUpdate, onError) => {
                     });
                 }).catch(error => {
                     console.error('❌ 제한 속도 조회 중 오류:', error);
+                    // 오류 발생 시에도 로딩 상태 해제
+                    onUpdate({
+                        type: 'SPEED_LIMIT',
+                        speedLimit: null,
+                        roadName: null
+                    });
                 });
             }
 

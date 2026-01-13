@@ -25,7 +25,8 @@ const DrivePage = ({
     gpsAccuracy = null,
     gpsStatus = 'GPS 검색중...',
     speedLimit = null,
-    roadName = null
+    roadName = null,
+    speedLimitLoading = false
 }) => {
     const videoContainerRef = useRef(null);
     const modalRef = useRef(null);
@@ -259,38 +260,123 @@ const DrivePage = ({
                                     <span className="text-xs font-medium text-white/60">Score</span>
                                 </div>
                                 {isActive && (
-                                    <div className="bg-black/30 backdrop-blur-md px-4 py-2 rounded-full border border-white/10">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-lg font-bold text-white">
-                                                {currentSpeed > 0 ? Math.round(currentSpeed) : '--'}
-                                            </span>
-                                            <span className="text-xs font-medium text-white/70">km/h</span>
-                                            {speedLimit && (
-                                                <span className="text-xs font-medium text-white/50">
-                                                    / {speedLimit}km/h
+                                    <div className="flex flex-col items-end gap-2">
+                                        {/* 현재 속도 */}
+                                        <div className="bg-black/30 backdrop-blur-md px-4 py-2 rounded-full border border-white/10">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-lg font-bold text-white">
+                                                    {currentSpeed > 0 ? Math.round(currentSpeed) : '--'}
                                                 </span>
-                                            )}
+                                                <span className="text-xs font-medium text-white/70">km/h</span>
+                                            </div>
                                         </div>
-                                        {roadName && (
-                                            <span className="text-[9px] text-white/60 font-medium">
-                                                {roadName}
-                                            </span>
+                                        {/* 제한 속도 카드 */}
+                                        {(speedLimitLoading || speedLimit) && (
+                                            <div className="bg-blue-500/80 backdrop-blur-md px-4 py-3 rounded-xl border-2 border-blue-400/50 shadow-lg">
+                                                <div className="flex flex-col items-end">
+                                                    <span className="text-[10px] font-semibold text-white/80 uppercase tracking-wide mb-1">
+                                                        제한 속도
+                                                    </span>
+                                                    {speedLimitLoading ? (
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                                            <span className="text-lg font-bold text-white animate-pulse">
+                                                                조회중...
+                                                            </span>
+                                                        </div>
+                                                    ) : speedLimit ? (
+                                                        <span className="text-2xl font-bold text-white">
+                                                            {speedLimit}
+                                                            <span className="text-sm font-medium text-white/80 ml-1">km/h</span>
+                                                        </span>
+                                                    ) : null}
+                                                </div>
+                                            </div>
                                         )}
+                                        {/* 도로 정보 카드 */}
+                                        {(speedLimitLoading || roadName) && (
+                                            <div className="bg-black/40 backdrop-blur-md px-4 py-2 rounded-xl border border-white/20">
+                                                <div className="flex flex-col items-end">
+                                                    {speedLimitLoading ? (
+                                                        <span className="text-[10px] text-white/70 font-medium animate-pulse">
+                                                            도로 정보 조회 중...
+                                                        </span>
+                                                    ) : roadName ? (
+                                                        <>
+                                                            <span className="text-[9px] font-semibold text-white/60 uppercase tracking-wide mb-1">
+                                                                도로
+                                                            </span>
+                                                            <span className="text-sm font-bold text-white">
+                                                                {roadName}
+                                                            </span>
+                                                        </>
+                                                    ) : null}
+                                                </div>
+                                            </div>
+                                        )}
+                                        {/* GPS 정확도 (작은 텍스트) */}
                                         {gpsAccuracy !== null && (
-                                            <span className="text-[9px] text-white/60 font-medium">
-                                                정확도: {Math.round(gpsAccuracy)}m
+                                            <span className="text-[9px] text-white/50 font-medium">
+                                                GPS: {Math.round(gpsAccuracy)}m
                                             </span>
                                         )}
+                                        {/* 급가속/급감속 알림 */}
                                         {gpsAcceleration > 2 && (
-                                            <span className="text-[10px] text-red-400 font-bold">급가속!</span>
+                                            <div className="bg-red-500/90 backdrop-blur-md px-3 py-2 rounded-lg border-2 border-red-400/50 shadow-lg animate-pulse">
+                                                <span className="text-xs font-bold text-white">⚠️ 급가속!</span>
+                                            </div>
                                         )}
                                         {gpsAcceleration < -3 && (
-                                            <span className="text-[10px] text-orange-400 font-bold">급감속!</span>
+                                            <div className="bg-orange-500/90 backdrop-blur-md px-3 py-2 rounded-lg border-2 border-orange-400/50 shadow-lg animate-pulse">
+                                                <span className="text-xs font-bold text-white">⚠️ 급감속!</span>
+                                            </div>
                                         )}
                                     </div>
                                 )}
                             </div>
                         </div>
+
+                        {/* 하단 중앙: 제한 속도 및 도로 정보 (큰 카드) */}
+                        {isActive && (speedLimitLoading || speedLimit || roadName) && (
+                            <div className="self-center mb-20">
+                                <div className="bg-black/50 backdrop-blur-xl px-6 py-4 rounded-2xl border-2 border-white/20 shadow-2xl">
+                                    <div className="flex flex-col items-center gap-2">
+                                        {speedLimitLoading ? (
+                                            <>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
+                                                    <span className="text-sm font-semibold text-white/80 animate-pulse">
+                                                        도로 정보 조회 중...
+                                                    </span>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <>
+                                                {speedLimit && (
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="text-xs font-semibold text-white/70 uppercase tracking-wide">
+                                                            제한 속도
+                                                        </span>
+                                                        <span className="text-3xl font-bold text-blue-400">
+                                                            {speedLimit}
+                                                            <span className="text-lg font-medium text-white/70 ml-1">km/h</span>
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                {roadName && (
+                                                    <div className="flex items-center gap-2">
+                                                        <MapPin size={14} className="text-white/60" />
+                                                        <span className="text-sm font-bold text-white">
+                                                            {roadName}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
                         {isActive && (
                             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-64 transition-all duration-300">
@@ -516,17 +602,30 @@ const DrivePage = ({
                     <div className={`mt-6 w-full max-w-xs ${hasPermission ? 'bg-white/90 backdrop-blur-md rounded-2xl p-4 shadow-lg' : 'bg-white/95 backdrop-blur-md rounded-2xl p-4 shadow-lg'}`}>
                         <p className="text-xs font-semibold uppercase text-gray-400 mb-3 text-center">주행 정보</p>
                         {/* 제한 속도 및 도로명 표시 */}
-                        {speedLimit && (
-                            <div className="mb-3 pb-3 border-b border-gray-200">
-                                <p className="text-[10px] font-semibold text-gray-400 mb-1">도로 정보</p>
-                                <p className="text-sm font-bold text-blue-600">
-                                    제한 속도: {speedLimit}km/h
+                        <div className="mb-3 pb-3 border-b border-gray-200">
+                            <p className="text-[10px] font-semibold text-gray-400 mb-1">도로 정보</p>
+                            {speedLimitLoading ? (
+                                <div className="flex items-center gap-2">
+                                    <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                                    <p className="text-sm font-bold text-blue-500 animate-pulse">
+                                        조회 중...
+                                    </p>
+                                </div>
+                            ) : speedLimit ? (
+                                <>
+                                    <p className="text-sm font-bold text-blue-600">
+                                        제한 속도: {speedLimit}km/h
+                                    </p>
+                                    {roadName && (
+                                        <p className="text-[10px] text-gray-500 mt-1">{roadName}</p>
+                                    )}
+                                </>
+                            ) : (
+                                <p className="text-sm font-medium text-gray-400">
+                                    도로 정보 없음
                                 </p>
-                                {roadName && (
-                                    <p className="text-[10px] text-gray-500 mt-1">{roadName}</p>
-                                )}
-                            </div>
-                        )}
+                            )}
+                        </div>
                         <div className="grid grid-cols-3 gap-4 text-center">
                             <div>
                                 <p className="text-xs font-semibold uppercase text-gray-400">속도</p>
@@ -547,8 +646,25 @@ const DrivePage = ({
                                 </p>
                             </div>
                         </div>
+                        {/* GPS 상태 정보 */}
+                        <div className="mt-3 pt-3 border-t border-gray-200">
+                            <div className="flex items-center justify-between mb-1">
+                                <p className="text-[10px] font-semibold text-gray-400">GPS 상태</p>
+                                <p className={`text-[10px] font-bold ${gpsAccuracy && gpsAccuracy < 50 ? 'text-green-600' : gpsAccuracy && gpsAccuracy < 100 ? 'text-yellow-600' : 'text-red-600'}`}>
+                                    {gpsStatus}
+                                </p>
+                            </div>
+                            {gpsAccuracy !== null && (
+                                <div className="flex items-center justify-between">
+                                    <p className="text-[10px] font-semibold text-gray-400">정확도</p>
+                                    <p className={`text-[10px] font-bold ${gpsAccuracy < 50 ? 'text-green-600' : gpsAccuracy < 100 ? 'text-yellow-600' : 'text-red-600'}`}>
+                                        {Math.round(gpsAccuracy)}m
+                                    </p>
+                                </div>
+                            )}
+                        </div>
                         {gpsEvents.overspeed > 0 && (
-                            <div className="mt-3 pt-3 border-t border-gray-200">
+                            <div className="mt-3 pt-3 border-t border-red-200">
                                 <p className="text-xs font-semibold text-red-500 text-center">
                                     ⚠️ 과속 감지: {gpsEvents.overspeed}회
                                 </p>
@@ -560,8 +676,8 @@ const DrivePage = ({
             </main>
 
             <div className="p-6 bg-white/95 backdrop-blur-xl border-t border-gray-100 z-10 relative mt-4">
-                <button 
-                    onClick={() => setShowCameraView(true)} 
+                <button
+                    onClick={() => setShowCameraView(true)}
                     className="w-full h-16 rounded-2xl flex items-center justify-center gap-3 text-lg font-bold shadow-lg transition-all active:scale-95 bg-black text-white hover:bg-gray-800 shadow-black/20"
                 >
                     <Camera size={20} /> Start Driving
