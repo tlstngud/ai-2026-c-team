@@ -17,10 +17,10 @@ const InsurancePage = ({ score = 85, history = [] }) => {
         
         const sortedHistory = [...history].slice(0, 10).reverse(); // 최신이 마지막에 오도록
         return sortedHistory.map((item, index) => {
-            const date = new Date(item.date);
-            const dateLabel = `${date.getMonth() + 1}/${date.getDate()}`;
+            const totalRecords = sortedHistory.length;
+            const recordNumber = totalRecords - index; // 최신이 가장 큰 번호
             return {
-                name: dateLabel,
+                name: `#${recordNumber}`,
                 score: item.score,
                 index: index + 1
             };
