@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { addLogByUserId, getLogsByUserId } from '../utils/LogService';
+import { startGpsMonitoring, stopGpsMonitoring } from '../utils/GpsService';
 import { AlertTriangle, X, MapPin, Search, Award } from 'lucide-react';
 import { STATE_CONFIG, APPLE_STATE_CONFIG } from './constants';
 import Header from './Header';
@@ -70,6 +71,12 @@ const Dashboard = () => {
     const [eventCount, setEventCount] = useState(0);
     const [showSummary, setShowSummary] = useState(false);
     const [history, setHistory] = useState([]);
+    
+    // GPS 관련 상태
+    const [currentSpeed, setCurrentSpeed] = useState(0); // km/h
+    const [gpsAcceleration, setGpsAcceleration] = useState(0); // m/s²
+    const [gpsEvents, setGpsEvents] = useState({ hardAccel: 0, hardBrake: 0, overspeed: 0 });
+    const gpsWatchIdRef = useRef(null);
 
     const scoreRef = useRef(100);
     const sessionTimeRef = useRef(0);
@@ -80,8 +87,8 @@ const Dashboard = () => {
             const saved = getLogsByUserId(user.id);
             setHistory(saved || []);
         } else {
-            const saved = localStorage.getItem('drivingHistory');
-            if (saved) setHistory(JSON.parse(saved));
+        const saved = localStorage.getItem('drivingHistory');
+        if (saved) setHistory(JSON.parse(saved));
         }
     }, [user]);
 
@@ -229,6 +236,77 @@ const Dashboard = () => {
         return () => clearInterval(interval);
     }, [isActive]);
 
+    // --- GPS Monitoring ---
+    useEffect(() => {
+        if (isActive) {
+            // GPS 모니터링 시작
+            const watchId = startGpsMonitoring(
+                (data) => {
+                    setCurrentSpeed(data.speed);
+                    setGpsAcceleration(data.acceleration);
+
+                    // 급가속 감지
+                    if (data.isHardAccel) {
+                        setGpsEvents(prev => ({
+                            ...prev,
+                            hardAccel: prev.hardAccel + 1
+                        }));
+                        setEventCount(prev => prev + 1);
+                        // 급가속 패널티: 2점
+                        scoreRef.current = Math.max(0, scoreRef.current - 2);
+                        setScore(scoreRef.current);
+                    }
+
+                    // 급감속 감지
+                    if (data.isHardBrake) {
+                        setGpsEvents(prev => ({
+                            ...prev,
+                            hardBrake: prev.hardBrake + 1
+                        }));
+                        setEventCount(prev => prev + 1);
+                        // 급감속 패널티: 2.5점
+                        scoreRef.current = Math.max(0, scoreRef.current - 2.5);
+                        setScore(scoreRef.current);
+                    }
+
+                    // 과속 감지 (시속 100km/h 이상)
+                    if (data.speed > 100) {
+                        setGpsEvents(prev => ({
+                            ...prev,
+                            overspeed: prev.overspeed + 1
+                        }));
+                        setEventCount(prev => prev + 1);
+                        // 과속 패널티: 3점
+                        scoreRef.current = Math.max(0, scoreRef.current - 3);
+                        setScore(scoreRef.current);
+                    }
+                },
+                (error) => {
+                    console.error('GPS 모니터링 오류:', error);
+                    // GPS 오류 시에도 계속 진행 (선택적)
+                }
+            );
+
+            gpsWatchIdRef.current = watchId;
+        } else {
+            // GPS 모니터링 중지
+            if (gpsWatchIdRef.current !== null) {
+                stopGpsMonitoring(gpsWatchIdRef.current);
+                gpsWatchIdRef.current = null;
+            }
+            // 상태 초기화
+            setCurrentSpeed(0);
+            setGpsAcceleration(0);
+            setGpsEvents({ hardAccel: 0, hardBrake: 0, overspeed: 0 });
+        }
+
+        return () => {
+            if (gpsWatchIdRef.current !== null) {
+                stopGpsMonitoring(gpsWatchIdRef.current);
+            }
+        };
+    }, [isActive]);
+
     // --- Simulation Logic (Scoring) ---
     useEffect(() => {
         let interval = null;
@@ -267,7 +345,13 @@ const Dashboard = () => {
                 date: new Date().toLocaleString(),
                 score: finalScore,
                 duration: Math.floor(sessionTime),
-                events: eventCount
+                events: eventCount,
+                gpsEvents: {
+                    hardAccel: gpsEvents.hardAccel,
+                    hardBrake: gpsEvents.hardBrake,
+                    overspeed: gpsEvents.overspeed
+                },
+                maxSpeed: Math.round(currentSpeed)
             };
 
             // Save log for specific user
@@ -281,9 +365,9 @@ const Dashboard = () => {
                 localStorage.setItem('currentUser', JSON.stringify(updatedUser)); // Sync with Auth storage
             } else {
                 // Fallback for no user context (though should be protected)
-                const newHistory = [newEntry, ...history].slice(0, 10);
-                setHistory(newHistory);
-                localStorage.setItem('drivingHistory', JSON.stringify(newHistory));
+            const newHistory = [newEntry, ...history].slice(0, 10);
+            setHistory(newHistory);
+            localStorage.setItem('drivingHistory', JSON.stringify(newHistory));
             }
 
             setShowSummary(true);
@@ -392,15 +476,15 @@ const Dashboard = () => {
                         </div>
 
                         <div className="mt-auto">
-                            <button
+                                    <button
                                 onClick={handleAddressSubmit}
                                 className="w-full h-16 bg-black text-white rounded-2xl font-bold text-lg shadow-xl shadow-black/10 active:scale-95 transition-all"
-                            >
+                                    >
                                 내 지자체 확인하기
-                            </button>
-                        </div>
-                    </div>
-                )}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
 
                 {/* --- CASE 2: LOADING (지자체 배정 중) --- */}
                 {step === 'loading' && (
@@ -437,14 +521,17 @@ const Dashboard = () => {
                                         sessionTime={sessionTime}
                                         currentState={currentState}
                                         eventCount={eventCount}
-                                        toggleSession={toggleSession}
-                                        formatTime={formatTime}
-                                        currentConfig={currentConfig}
-                                        CurrentIcon={CurrentIcon}
-                                        userRegion={userRegion}
-                                    />
-                                </>
-                            )}
+                                toggleSession={toggleSession}
+                                formatTime={formatTime}
+                                currentConfig={currentConfig}
+                                CurrentIcon={CurrentIcon}
+                                userRegion={userRegion}
+                                currentSpeed={currentSpeed}
+                                gpsAcceleration={gpsAcceleration}
+                                gpsEvents={gpsEvents}
+                            />
+                                    </>
+                                )}
 
                             {/* 다른 페이지 렌더링 */}
                             {renderPage()}

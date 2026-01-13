@@ -57,14 +57,14 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null }) => {
                             </span>
                         </div>
                         <h1 className="text-2xl font-black text-white leading-tight mb-2">
-                            {region.name}<br/>안전운전 챌린지
+                            {region.name}<br />안전운전 챌린지
                         </h1>
                         {region.address && (
                             <p className="text-xs text-white/70 font-medium mt-2 flex items-center gap-1">
                                 <MapPin size={12} /> {region.address}
                             </p>
                         )}
-                        
+
                         <div className="flex justify-between items-start mt-6 mb-4">
                             <div>
                                 <h3 className="text-xs font-bold text-white/60 uppercase tracking-wider mb-1">Current Score</h3>
@@ -85,8 +85,8 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null }) => {
                                 <span>{isCompleted ? 'Target Reached!' : `${Math.floor((score / region.target) * 100)}%`}</span>
                             </div>
                             <div className="w-full bg-black/20 h-2 rounded-full overflow-hidden">
-                                <div 
-                                    className="bg-white h-full transition-all duration-1000" 
+                                <div
+                                    className="bg-white h-full transition-all duration-1000"
                                     style={{ width: `${Math.min(100, (score / region.target) * 100)}%` }}
                                 ></div>
                             </div>
@@ -97,7 +97,7 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null }) => {
                 {/* Reward Card */}
                 <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
                     <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Challenge Reward</h3>
-                    
+
                     <div className="flex gap-4 items-center">
                         <div className={`w-12 h-12 rounded-full ${region.color.replace('bg-', 'bg-').replace('500', '100').replace('600', '100')} flex items-center justify-center ${region.accent}`}>
                             <Ticket size={24} />
@@ -107,9 +107,9 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null }) => {
                             <p className="text-[10px] text-slate-500 mt-1">지자체 인증 완료 시 자동 발급</p>
                         </div>
                         {isCompleted ? (
-                             <button className={`${region.color} text-white text-xs font-bold px-3 py-2 rounded-xl shadow-lg active:scale-95 transition-transform`}>
-                                 받기
-                             </button>
+                            <button className={`${region.color} text-white text-xs font-bold px-3 py-2 rounded-xl shadow-lg active:scale-95 transition-transform`}>
+                                받기
+                            </button>
                         ) : (
                             <div className="text-[10px] font-bold text-slate-300 bg-slate-100 px-2 py-1 rounded">
                                 미달성
@@ -227,7 +227,7 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null }) => {
                             <div className="space-y-1">
                                 <p className="text-xs font-bold text-slate-700">인증 및 할인 안내</p>
                                 <p className="text-[10px] text-slate-500 leading-relaxed">
-                                    {region.name} 주민센터 및 협약 보험사를 통해 혜택을 받으실 수 있습니다. 
+                                    {region.name} 주민센터 및 협약 보험사를 통해 혜택을 받으실 수 있습니다.
                                     목표 점수 달성 후 '받기' 버튼을 눌러 인증서를 발급받으세요.
                                 </p>
                             </div>

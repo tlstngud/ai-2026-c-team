@@ -17,7 +17,10 @@ const DrivePage = ({
     formatTime,
     currentConfig,
     CurrentIcon,
-    userRegion = null
+    userRegion = null,
+    currentSpeed = 0,
+    gpsAcceleration = 0,
+    gpsEvents = { hardAccel: 0, hardBrake: 0, overspeed: 0 }
 }) => {
     const videoContainerRef = useRef(null);
     const modalRef = useRef(null);
@@ -243,11 +246,27 @@ const DrivePage = ({
                                 </div>
                             </div>
 
-                            <div className="flex flex-col items-end">
-                                <span className="text-5xl font-bold tracking-tighter drop-shadow-md text-white">
-                                    {Math.floor(score)}
-                                </span>
-                                <span className="text-xs font-medium text-white/60">Score</span>
+                            <div className="flex flex-col items-end gap-3">
+                                <div className="flex flex-col items-end">
+                                    <span className="text-5xl font-bold tracking-tighter drop-shadow-md text-white">
+                                        {Math.floor(score)}
+                                    </span>
+                                    <span className="text-xs font-medium text-white/60">Score</span>
+                                </div>
+                                {isActive && currentSpeed > 0 && (
+                                    <div className="bg-black/30 backdrop-blur-md px-4 py-2 rounded-full border border-white/10">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-lg font-bold text-white">{Math.round(currentSpeed)}</span>
+                                            <span className="text-xs font-medium text-white/70">km/h</span>
+                                        </div>
+                                        {gpsAcceleration > 2 && (
+                                            <span className="text-[10px] text-red-400 font-bold">급가속!</span>
+                                        )}
+                                        {gpsAcceleration < -3 && (
+                                            <span className="text-[10px] text-orange-400 font-bold">급감속!</span>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -312,19 +331,43 @@ const DrivePage = ({
                         <div className="w-12 h-1 bg-gray-200 rounded-full"></div>
                     </div>
 
-                    <div className="flex items-center justify-between mb-10">
-                        <div>
-                            <p className="text-gray-500 text-xs font-bold uppercase">Session Time</p>
-                            <p className="text-2xl font-bold text-black font-mono">
-                                {isActive ? formatTime(sessionTime) : "Ready"}
-                            </p>
+                    <div className="space-y-4 mb-10">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-gray-500 text-xs font-bold uppercase">Session Time</p>
+                                <p className="text-2xl font-bold text-black font-mono">
+                                    {isActive ? formatTime(sessionTime) : "Ready"}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-gray-500 text-xs font-bold uppercase text-right">Event Log</p>
+                                <p className="text-2xl font-bold text-black text-right">
+                                    {isActive ? eventCount : "-"}
+                                </p>
+                            </div>
                         </div>
-                        <div>
-                            <p className="text-gray-500 text-xs font-bold uppercase text-right">Event Log</p>
-                            <p className="text-2xl font-bold text-black text-right">
-                                {isActive ? eventCount : "-"}
-                            </p>
-                        </div>
+                        {isActive && currentSpeed > 0 && (
+                            <div className="grid grid-cols-3 gap-3 pt-3 border-t border-gray-100">
+                                <div>
+                                    <p className="text-gray-500 text-xs font-bold uppercase">속도</p>
+                                    <p className="text-lg font-bold text-black">
+                                        {Math.round(currentSpeed)}<span className="text-xs text-gray-400">km/h</span>
+                                    </p>
+                                </div>
+                                <div>
+                                    <p className="text-gray-500 text-xs font-bold uppercase">급가속</p>
+                                    <p className={`text-lg font-bold ${gpsEvents.hardAccel > 0 ? 'text-red-500' : 'text-black'}`}>
+                                        {gpsEvents.hardAccel}
+                                    </p>
+                                </div>
+                                <div>
+                                    <p className="text-gray-500 text-xs font-bold uppercase">급감속</p>
+                                    <p className={`text-lg font-bold ${gpsEvents.hardBrake > 0 ? 'text-orange-500' : 'text-black'}`}>
+                                        {gpsEvents.hardBrake}
+                                    </p>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     <div className={`flex gap-3 mb-6 ${isActive ? 'justify-center' : ''}`}>
@@ -435,6 +478,40 @@ const DrivePage = ({
                         </p>
                     </div>
                 </div>
+
+                {/* GPS 정보 표시 */}
+                {isActive && currentSpeed > 0 && (
+                    <div className={`mt-6 w-full max-w-xs ${hasPermission ? 'bg-white/90 backdrop-blur-md rounded-2xl p-4 shadow-lg' : 'bg-white/95 backdrop-blur-md rounded-2xl p-4 shadow-lg'}`}>
+                        <p className="text-xs font-semibold uppercase text-gray-400 mb-3 text-center">주행 정보</p>
+                        <div className="grid grid-cols-3 gap-4 text-center">
+                            <div>
+                                <p className="text-xs font-semibold uppercase text-gray-400">속도</p>
+                                <p className="text-xl font-bold mt-1 text-gray-900">
+                                    {Math.round(currentSpeed)}<span className="text-xs text-gray-500">km/h</span>
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-xs font-semibold uppercase text-gray-400">급가속</p>
+                                <p className={`text-xl font-bold mt-1 ${gpsEvents.hardAccel > 0 ? 'text-red-500' : 'text-gray-900'}`}>
+                                    {gpsEvents.hardAccel}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-xs font-semibold uppercase text-gray-400">급감속</p>
+                                <p className={`text-xl font-bold mt-1 ${gpsEvents.hardBrake > 0 ? 'text-orange-500' : 'text-gray-900'}`}>
+                                    {gpsEvents.hardBrake}
+                                </p>
+                            </div>
+                        </div>
+                        {gpsEvents.overspeed > 0 && (
+                            <div className="mt-3 pt-3 border-t border-gray-200">
+                                <p className="text-xs font-semibold text-red-500 text-center">
+                                    ⚠️ 과속 감지: {gpsEvents.overspeed}회
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                )}
 
             </main>
 
