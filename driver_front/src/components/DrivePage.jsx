@@ -291,8 +291,8 @@ const DrivePage = ({
                                 e.stopPropagation();
                             }
                         }}
-                        style={{ 
-                            userSelect: 'none', 
+                        style={{
+                            userSelect: 'none',
                             WebkitUserSelect: 'none',
                             touchAction: 'none',
                             WebkitTouchCallout: 'none'
@@ -316,16 +316,18 @@ const DrivePage = ({
                         </div>
                     </div>
 
-                    <div className="flex gap-3 mb-6">
-                        <button
-                            onClick={() => setShowCameraView(false)}
-                            className="flex-1 h-14 rounded-xl bg-gray-100 text-black font-bold flex items-center justify-center gap-2 transition-all active:scale-95"
-                        >
-                            <CameraOff size={18} /> Back
-                        </button>
+                    <div className={`flex gap-3 mb-6 ${isActive ? 'justify-center' : ''}`}>
+                        {!isActive && (
+                            <button
+                                onClick={() => setShowCameraView(false)}
+                                className="flex-1 h-14 rounded-xl bg-gray-100 text-black font-bold flex items-center justify-center gap-2 transition-all active:scale-95"
+                            >
+                                <CameraOff size={18} /> Back
+                            </button>
+                        )}
                         <button
                             onClick={toggleSession}
-                            className={`flex-1 h-14 rounded-xl flex items-center justify-center gap-2 font-bold shadow-lg transition-all active:scale-95 ${isActive
+                            className={`${isActive ? 'w-full' : 'flex-1'} h-14 rounded-xl flex items-center justify-center gap-2 font-bold shadow-lg transition-all active:scale-95 ${isActive
                                 ? 'bg-gray-100 text-black border border-gray-200'
                                 : 'bg-black text-white shadow-black/30'
                                 }`}
@@ -423,16 +425,14 @@ const DrivePage = ({
                     </div>
                 </div>
 
-                <div className="mt-6 flex items-center gap-3">
-                    <button onClick={() => setShowCameraView(true)} className="w-12 h-12 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-all shadow-md text-gray-700">
-                        <Camera size={18} />
-                    </button>
-                </div>
             </main>
 
             <div className="p-6 bg-white/95 backdrop-blur-xl border-t border-gray-100 z-10 relative mt-4">
-                <button onClick={toggleSession} className={`w-full h-16 rounded-2xl flex items-center justify-center gap-3 text-lg font-bold shadow-lg transition-all active:scale-95 ${isActive ? 'bg-gray-100 text-black hover:bg-gray-200' : 'bg-black text-white hover:bg-gray-800 shadow-black/20'}`}>
-                    {isActive ? <><Square fill="currentColor" size={20} /> End Session</> : <><Play fill="currentColor" size={20} /> Start Driving</>}
+                <button 
+                    onClick={() => setShowCameraView(true)} 
+                    className="w-full h-16 rounded-2xl flex items-center justify-center gap-3 text-lg font-bold shadow-lg transition-all active:scale-95 bg-black text-white hover:bg-gray-800 shadow-black/20"
+                >
+                    <Camera size={20} /> Start Driving
                 </button>
             </div>
         </div>

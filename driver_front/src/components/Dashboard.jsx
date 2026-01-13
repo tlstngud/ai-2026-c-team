@@ -343,6 +343,7 @@ const Dashboard = () => {
                 currentPage={currentPage}
                 onPageChange={handlePageChange}
                 selectedLog={selectedLog}
+                showCameraView={showCameraView}
             />
         </div>
     );
