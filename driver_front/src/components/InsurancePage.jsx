@@ -72,8 +72,8 @@ const InsurancePage = ({ score = 85, history = [] }) => {
                     <div className="flex justify-between items-start mb-4">
                         <div>
                             <p className="text-[10px] font-bold text-blue-500 uppercase tracking-wider mb-1">Safety Score</p>
-                            <h2 className="text-5xl font-black text-slate-900 tracking-tighter">
-                                {parseFloat(score).toFixed(2)}<span className="text-lg text-slate-300 ml-1 font-normal">pts</span>
+                            <h2 className="text-4xl font-black text-slate-900 tracking-tighter">
+                                {parseFloat(score).toFixed(2)}<span className="text-base text-slate-300 ml-1 font-normal">pts</span>
                             </h2>
                         </div>
                         <div className="bg-blue-50 p-2 rounded-xl">
