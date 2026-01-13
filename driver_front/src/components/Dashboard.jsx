@@ -44,6 +44,7 @@ const MUNICIPALITY_DB = {
 
 const Dashboard = () => {
     // --- Onboarding & User Region State ---
+    const { user, setUser } = useAuth();
     const [step, setStep] = useState(() => {
         // 저장된 주소가 있으면 바로 대시보드로
         const savedRegion = localStorage.getItem('userRegion');
@@ -51,12 +52,22 @@ const Dashboard = () => {
     });
     const [inputAddress, setInputAddress] = useState('');
     const [userRegion, setUserRegion] = useState(() => {
+        // 1. localStorage에서 먼저 확인
         const saved = localStorage.getItem('userRegion');
-        return saved ? JSON.parse(saved) : null;
+        if (saved) return JSON.parse(saved);
+        // 2. user 객체에 region이 있으면 사용
+        const savedUser = localStorage.getItem('currentUser');
+        if (savedUser) {
+            const userData = JSON.parse(savedUser);
+            if (userData.region) {
+                localStorage.setItem('userRegion', JSON.stringify(userData.region));
+                return userData.region;
+            }
+        }
+        return null;
     });
 
     // --- Refs & State ---
-    const { user, setUser } = useAuth();
     const videoRef = useRef(null);
     const videoRef2 = useRef(null);
     const streamRef = useRef(null);
@@ -71,7 +82,7 @@ const Dashboard = () => {
     const [eventCount, setEventCount] = useState(0);
     const [showSummary, setShowSummary] = useState(false);
     const [history, setHistory] = useState([]);
-    
+
     // GPS 관련 상태
     const [currentSpeed, setCurrentSpeed] = useState(0); // km/h
     const [gpsAcceleration, setGpsAcceleration] = useState(0); // m/s²
@@ -81,14 +92,23 @@ const Dashboard = () => {
     const scoreRef = useRef(100);
     const sessionTimeRef = useRef(0);
 
-    // --- Initialize History ---
+    // --- Initialize History & User Region ---
     useEffect(() => {
         if (user) {
             const saved = getLogsByUserId(user.id);
             setHistory(saved || []);
+            
+            // user에 region이 있으면 복원
+            if (user.region && !userRegion) {
+                setUserRegion(user.region);
+                localStorage.setItem('userRegion', JSON.stringify(user.region));
+                if (step === 'onboarding') {
+                    setStep('dashboard');
+                }
+            }
         } else {
-        const saved = localStorage.getItem('drivingHistory');
-        if (saved) setHistory(JSON.parse(saved));
+            const saved = localStorage.getItem('drivingHistory');
+            if (saved) setHistory(JSON.parse(saved));
         }
     }, [user]);
 
@@ -365,9 +385,9 @@ const Dashboard = () => {
                 localStorage.setItem('currentUser', JSON.stringify(updatedUser)); // Sync with Auth storage
             } else {
                 // Fallback for no user context (though should be protected)
-            const newHistory = [newEntry, ...history].slice(0, 10);
-            setHistory(newHistory);
-            localStorage.setItem('drivingHistory', JSON.stringify(newHistory));
+                const newHistory = [newEntry, ...history].slice(0, 10);
+                setHistory(newHistory);
+                localStorage.setItem('drivingHistory', JSON.stringify(newHistory));
             }
 
             setShowSummary(true);
@@ -476,15 +496,15 @@ const Dashboard = () => {
                         </div>
 
                         <div className="mt-auto">
-                                    <button
+                            <button
                                 onClick={handleAddressSubmit}
                                 className="w-full h-16 bg-black text-white rounded-2xl font-bold text-lg shadow-xl shadow-black/10 active:scale-95 transition-all"
-                                    >
+                            >
                                 내 지자체 확인하기
-                                    </button>
-                                </div>
-                            </div>
-                        )}
+                            </button>
+                        </div>
+                    </div>
+                )}
 
                 {/* --- CASE 2: LOADING (지자체 배정 중) --- */}
                 {step === 'loading' && (
@@ -521,17 +541,17 @@ const Dashboard = () => {
                                         sessionTime={sessionTime}
                                         currentState={currentState}
                                         eventCount={eventCount}
-                                toggleSession={toggleSession}
-                                formatTime={formatTime}
-                                currentConfig={currentConfig}
-                                CurrentIcon={CurrentIcon}
-                                userRegion={userRegion}
-                                currentSpeed={currentSpeed}
-                                gpsAcceleration={gpsAcceleration}
-                                gpsEvents={gpsEvents}
-                            />
-                                    </>
-                                )}
+                                        toggleSession={toggleSession}
+                                        formatTime={formatTime}
+                                        currentConfig={currentConfig}
+                                        CurrentIcon={CurrentIcon}
+                                        userRegion={userRegion}
+                                        currentSpeed={currentSpeed}
+                                        gpsAcceleration={gpsAcceleration}
+                                        gpsEvents={gpsEvents}
+                                    />
+                                </>
+                            )}
 
                             {/* 다른 페이지 렌더링 */}
                             {renderPage()}

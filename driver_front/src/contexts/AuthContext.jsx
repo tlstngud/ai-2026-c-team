@@ -13,7 +13,7 @@ export const AuthProvider = ({ children }) => {
     }, []);
 
     // 1. 회원가입 함수
-    const signUp = (id, name, password) => {
+    const signUp = (id, name, password, regionData = null) => {
         const allUsers = JSON.parse(localStorage.getItem('allUsers') || '[]');
 
         // 중복 아이디 체크
@@ -27,7 +27,8 @@ export const AuthProvider = ({ children }) => {
             password, // 해커톤용이므로 평문 저장 (실제 서비스는 암호화 필요)
             score: 80, // 초기 점수
             discount: 0,
-            violations: { drowsy: 0, phone: 0, assault: 0 }
+            violations: { drowsy: 0, phone: 0, assault: 0 },
+            region: regionData // 지자체 정보 저장
         };
 
         const updatedUsers = [...allUsers, newUser];
@@ -43,6 +44,10 @@ export const AuthProvider = ({ children }) => {
         if (foundUser) {
             setUser(foundUser);
             localStorage.setItem('currentUser', JSON.stringify(foundUser));
+            // user에 region이 있으면 localStorage에도 저장
+            if (foundUser.region) {
+                localStorage.setItem('userRegion', JSON.stringify(foundUser.region));
+            }
             return { success: true };
         }
         return { success: false, message: '아이디 또는 비밀번호가 틀렸습니다.' };

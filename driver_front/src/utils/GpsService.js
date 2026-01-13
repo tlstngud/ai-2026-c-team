@@ -11,8 +11,8 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
     const Δλ = (lon2 - lon1) * Math.PI / 180;
 
     const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-              Math.cos(φ1) * Math.cos(φ2) *
-              Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+        Math.cos(φ1) * Math.cos(φ2) *
+        Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
     return R * c; // 미터 단위
@@ -64,7 +64,7 @@ export const startGpsMonitoring = (onUpdate, onError) => {
             if (gpsSpeed !== null && gpsSpeed !== undefined && gpsSpeed >= 0) {
                 const speedKmh = gpsSpeed * 3.6; // m/s -> km/h
                 const timeDiff = lastTime ? (currentTime - lastTime) / 1000 : 0;
-                
+
                 if (timeDiff > 0 && lastSpeed > 0) {
                     const acceleration = calculateAcceleration(lastSpeed, speedKmh, timeDiff);
                     const isHardAccel = acceleration > 3.0; // 3 m/s² 이상 = 급가속
