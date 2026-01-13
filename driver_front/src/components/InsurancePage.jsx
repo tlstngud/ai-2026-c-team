@@ -32,8 +32,8 @@ const InsurancePage = ({ score = 85, history = [] }) => {
         <div className="min-h-full bg-[#F8FAFC] text-slate-800 font-sans">
             <Header type="insurance" discountRate={discountRate} />
 
-            <main className="grid grid-cols-1 gap-4">
-                <section className="bg-slate-900 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden">
+            <main className="grid grid-cols-1 gap-4 px-4 pb-4">
+                <section className="bg-slate-900 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden mt-6 max-w-[calc(100%-2rem)] mx-auto">
                     <DollarSign className="absolute -right-4 -bottom-4 text-white/5" size={80} />
                     <h3 className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-4">Economic Benefit</h3>
                     <div className="space-y-3 relative z-10">
@@ -50,7 +50,7 @@ const InsurancePage = ({ score = 85, history = [] }) => {
                     </div>
                 </section>
 
-                <section className="bg-white rounded-2xl p-6 shadow-xl border-4 border-white overflow-hidden">
+                <section className="bg-white rounded-2xl p-6 shadow-xl border-4 border-white overflow-hidden max-w-[calc(100%-2rem)] mx-auto">
                     <div className="flex justify-between items-start mb-4">
                         <div>
                             <p className="text-[10px] font-bold text-blue-500 uppercase tracking-wider mb-1">Safety Score</p>
@@ -72,7 +72,7 @@ const InsurancePage = ({ score = 85, history = [] }) => {
                     </div>
                 </section>
 
-                <div className="relative aspect-[16/9] bg-white rounded-2xl overflow-hidden shadow-xl border-4 border-white">
+                <div className="relative aspect-[16/9] bg-white rounded-2xl overflow-hidden shadow-xl border-4 border-white max-w-[calc(100%-2rem)] mx-auto">
                     {chartData.length > 0 ? (
                         <div className="absolute inset-0 p-4 flex flex-col bg-white/95 backdrop-blur-md">
                             <div className="mb-2">
