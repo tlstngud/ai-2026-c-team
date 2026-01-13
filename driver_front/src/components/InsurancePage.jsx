@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { TrendingUp, DollarSign, CheckCircle2 } from 'lucide-react';
-import Header from './Header';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import Header from './Header';
 
 const InsurancePage = ({ score = 85, history = [] }) => {
     const [discountRate, setDiscountRate] = useState(0);
 
     useEffect(() => {
-        if (score >= 110) setDiscountRate(10);
-        else if (score >= 100) setDiscountRate(5);
+        if (score >= 99) setDiscountRate(7);
+        else if (score >= 95) setDiscountRate(4);
+        else if (score >= 90) setDiscountRate(2);
         else setDiscountRate(0);
     }, [score]);
 

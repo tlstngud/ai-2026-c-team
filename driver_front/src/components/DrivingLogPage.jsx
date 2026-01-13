@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { ChevronRight } from 'lucide-react';
 import Header from './Header';
+import { useAuth } from '../contexts/AuthContext';
+import { getLogsByUserId } from '../utils/LogService';
 
 const LogEntry = ({ date, score, msg, status }) => (
     <div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-slate-100 flex justify-between items-center group hover:border-indigo-200 transition-colors">
@@ -15,34 +17,39 @@ const LogEntry = ({ date, score, msg, status }) => (
     </div>
 );
 
-const DrivingLogPage = ({ onSelectLog, history = [] }) => {
-    const defaultLogs = [
-        { id: 1, date: "2024.05.20", score: 95, msg: "완벽한 주행", status: "perfect", time: "08:30 - 09:45", distance: "24km" },
-        { id: 2, date: "2024.05.19", score: 72, msg: "졸음 부주의", status: "warning", time: "14:20 - 15:10", distance: "12km" },
-        { id: 3, date: "2024.05.18", score: 84, msg: "휴대폰 조작", status: "normal", time: "18:00 - 19:30", distance: "35km" },
-    ];
+const DrivingLogPage = ({ onSelectLog }) => {
+    const { user } = useAuth();
+    const [userLogs, setUserLogs] = useState([]);
 
-    const historyLogs = history.map((item, idx) => ({
-        id: `history-${idx}`,
-        date: new Date(item.date).toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\./g, '.').replace(/\s/g, ''),
-        score: item.score,
-        msg: item.score >= 90 ? "완벽한 주행" : item.events > 0 ? "이상 행동 감지" : "정상 주행",
-        status: item.score >= 90 ? "perfect" : item.score >= 70 ? "normal" : "warning",
-        time: `${Math.floor(item.duration / 60)}분 주행`,
-        distance: `${Math.floor(item.duration * 0.5)}km`
-    }));
-
-    const logs = [...historyLogs, ...defaultLogs].slice(0, 10);
+    useEffect(() => {
+        if (user) {
+            const logs = getLogsByUserId(user.id);
+            setUserLogs(logs);
+        }
+    }, [user]);
 
     return (
         <div className="animate-in fade-in duration-500">
             <Header type="log" />
-            <div className="space-y-3 p-6">
-                {logs.map(log => (
-                    <div key={log.id} onClick={() => onSelectLog(log)} className="cursor-pointer">
-                        <LogEntry date={log.date} score={log.score} msg={log.msg} status={log.status} />
-                    </div>
-                ))}
+            <div className="p-6 pt-2">
+                <div className="mb-4">
+                    <h2 className="text-lg font-bold text-slate-800">{user?.name}님의 기록</h2>
+                    <p className="text-xs text-slate-400">Total {userLogs.length} sessions</p>
+                </div>
+                <div className="space-y-3">
+                    {userLogs.length > 0 ? (
+                        userLogs.map(log => (
+                            <div key={log.id} onClick={() => onSelectLog(log)} className="cursor-pointer">
+                                <LogEntry date={log.date} score={log.score} msg={log.msg} status={log.status} />
+                            </div>
+                        ))
+                    ) : (
+                        <div className="text-center py-10 text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                            <p className="text-sm">아직 주행 기록이 없습니다.</p>
+                            <p className="text-xs mt-1">안전 운전을 시작해보세요!</p>
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );
