@@ -11,6 +11,7 @@ import InsurancePage from './InsurancePage';
 import DrivingLogPage from './DrivingLogPage';
 import LogDetailPage from './LogDetailPage';
 import MyPage from './MyPage';
+import Toast from './Toast';
 
 // 지자체별 챌린지 데이터베이스
 const MUNICIPALITY_DB = {
@@ -102,6 +103,61 @@ const Dashboard = () => {
     const [speedLimitLoading, setSpeedLimitLoading] = useState(false); // 제한 속도 조회 중 상태
     const [speedLimitDebug, setSpeedLimitDebug] = useState(null); // 디버깅 정보 (모바일용)
     const [showChallengeDetail, setShowChallengeDetail] = useState(false); // 챌린지 상세 페이지 표시 여부
+    const [coupons, setCoupons] = useState(() => {
+        // localStorage에서 쿠폰 목록 불러오기
+        const saved = localStorage.getItem('userCoupons');
+        if (saved) {
+            try {
+                return JSON.parse(saved);
+            } catch (e) {
+                return [];
+            }
+        }
+        // 기본 쿠폰 데이터
+        return [
+            {
+                id: 1,
+                type: 'VOUCHER',
+                name: '춘천사랑 상품권',
+                amount: '10,000원',
+                provider: '춘천시청',
+                status: 'AVAILABLE',
+                expiry: '2026.12.31',
+                theme: 'emerald'
+            },
+            {
+                id: 2,
+                type: 'PARKING',
+                name: '공영주차장 50% 할인권',
+                amount: '50% 할인',
+                provider: '시설관리공단',
+                status: 'AVAILABLE',
+                expiry: '2026.06.30',
+                theme: 'indigo'
+            },
+            {
+                id: 3,
+                type: 'OIL',
+                name: 'SK엔크린 주유 할인권',
+                amount: '3,000원',
+                provider: 'SK에너지',
+                status: 'USED',
+                expiry: '2025.12.31',
+                theme: 'orange'
+            },
+            {
+                id: 4,
+                type: 'VOUCHER',
+                name: '스타벅스 아메리카노',
+                amount: '1잔',
+                provider: '안전운전 캠페인',
+                status: 'EXPIRED',
+                expiry: '2025.11.30',
+                theme: 'green'
+            }
+        ];
+    });
+    const [toast, setToast] = useState({ isVisible: false, message: '' });
     const gpsWatchIdRef = useRef(null);
 
     // 가중치 상수
@@ -587,6 +643,28 @@ const Dashboard = () => {
     const CurrentIcon = showCameraView ? STATE_CONFIG[currentState].icon : APPLE_STATE_CONFIG[currentState].icon;
     const currentConfig = showCameraView ? STATE_CONFIG : APPLE_STATE_CONFIG;
 
+    // 쿠폰 목록 localStorage에 저장
+    useEffect(() => {
+        localStorage.setItem('userCoupons', JSON.stringify(coupons));
+    }, [coupons]);
+
+    // 쿠폰 추가 함수
+    const addCoupon = (couponData) => {
+        const newCoupon = {
+            id: Date.now(), // 고유 ID 생성
+            ...couponData,
+            status: 'AVAILABLE',
+            expiry: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0].replace(/-/g, '.') // 90일 후 만료
+        };
+        setCoupons(prev => [newCoupon, ...prev]);
+        setToast({ isVisible: true, message: '쿠폰이 쿠폰함에 추가되었습니다!' });
+    };
+
+    // 토스트 닫기 함수
+    const closeToast = () => {
+        setToast({ isVisible: false, message: '' });
+    };
+
     const handlePageChange = (page) => {
         setCurrentPage(page);
         setSelectedLog(null);
@@ -596,7 +674,7 @@ const Dashboard = () => {
     const renderPage = () => {
         if (currentPage === 'insurance') {
             const avgScore = history.length > 0 ? getAverageScore() : score;
-            return <InsurancePage score={avgScore} history={history} userRegion={userRegion} onShowChallengeDetail={setShowChallengeDetail} />;
+            return <InsurancePage score={avgScore} history={history} userRegion={userRegion} onShowChallengeDetail={setShowChallengeDetail} onClaimReward={addCoupon} />;
         }
         if (currentPage === 'log') {
             if (selectedLog) return <LogDetailPage data={selectedLog} onBack={() => setSelectedLog(null)} />;
@@ -604,7 +682,7 @@ const Dashboard = () => {
         }
         if (currentPage === 'mypage') {
             const avgScore = history.length > 0 ? getAverageScore() : score;
-            return <MyPage user={user} score={avgScore} history={history} userRegion={userRegion} />;
+            return <MyPage user={user} score={avgScore} history={history} userRegion={userRegion} coupons={coupons} />;
         }
         return null;
     };
@@ -801,6 +879,13 @@ const Dashboard = () => {
                             selectedLog={selectedLog}
                             showCameraView={showCameraView}
                             showChallengeDetail={showChallengeDetail}
+                        />
+
+                        {/* Toast Notification */}
+                        <Toast
+                            message={toast.message}
+                            isVisible={toast.isVisible}
+                            onClose={closeToast}
                         />
                     </>
                 )}

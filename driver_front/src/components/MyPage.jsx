@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { User, Wallet, Calculator, QrCode, X, Search, Filter, AlertCircle, Car, Shield, Gift, Award, TrendingUp, Calendar } from 'lucide-react';
 import Header from './Header';
 
-const MyPage = ({ user, score, history, userRegion }) => {
+const MyPage = ({ user, score, history, userRegion, coupons = [] }) => {
     // --- State ---
     const [activeTab, setActiveTab] = useState('ALL'); // ALL, VOUCHER, PARKING, OIL
     const [selectedCoupon, setSelectedCoupon] = useState(null);
@@ -54,8 +54,8 @@ const MyPage = ({ user, score, history, userRegion }) => {
 
     const monthlyProgress = Math.min((currentMonthData.driveTime / 10) * 100, 100);
 
-    // 쿠폰 더미 데이터
-    const coupons = [
+    // 쿠폰 데이터 (prop으로 받거나 기본값 사용)
+    const defaultCoupons = coupons.length > 0 ? coupons : [
         {
             id: 1,
             type: 'VOUCHER',
@@ -99,8 +99,8 @@ const MyPage = ({ user, score, history, userRegion }) => {
     ];
 
     const filteredCoupons = activeTab === 'ALL'
-        ? coupons
-        : coupons.filter(c => c.type === activeTab);
+        ? defaultCoupons
+        : defaultCoupons.filter(c => c.type === activeTab);
 
     // --- Styles Helpers ---
     const getStatusStyle = (status) => {

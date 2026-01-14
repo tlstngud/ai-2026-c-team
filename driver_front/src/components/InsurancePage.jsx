@@ -4,9 +4,11 @@ import Header from './Header';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import ChallengeDetail from './ChallengeDetail';
 
-const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChallengeDetail = null }) => {
+const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChallengeDetail = null, onClaimReward = null }) => {
     const [discountRate, setDiscountRate] = useState(0);
     const [showChallengeDetail, setShowChallengeDetail] = useState(false);
+    const [isRewardClaimed, setIsRewardClaimed] = useState(false);
+    const [showRewardCard, setShowRewardCard] = useState(true);
     
     // showChallengeDetail 상태 변경 시 부모 컴포넌트에 알림
     useEffect(() => {
@@ -85,7 +87,7 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
         <div className="min-h-full bg-[#F8FAFC] text-slate-800 font-sans">
             <Header type="insurance" discountRate={discountRate} />
 
-            <main className="grid grid-cols-1 gap-4 p-4 sm:p-6">
+            <main className="grid grid-cols-1 gap-4 p-4 sm:p-6 transition-all duration-500 ease-in-out">
                 {/* 지자체 챌린지 Hero Card */}
                 <div 
                     className={`relative bg-gradient-to-br ${region.bgImage} rounded-[2rem] p-6 text-white overflow-hidden shadow-xl cursor-pointer active:scale-[0.98] transition-transform`}
@@ -137,31 +139,78 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
                 </div>
 
                 {/* Reward Card */}
-                <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
-                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Challenge Reward</h3>
+                {showRewardCard && (
+                    <div 
+                        className={`bg-white rounded-2xl shadow-sm border border-slate-100 transition-all duration-500 ease-in-out overflow-hidden ${
+                            isRewardClaimed 
+                                ? 'opacity-0 -translate-y-4 max-h-0 p-0 mb-0' 
+                                : 'opacity-100 translate-y-0 max-h-[200px] p-6'
+                        }`}
+                        onTransitionEnd={() => {
+                            if (isRewardClaimed) {
+                                setShowRewardCard(false);
+                            }
+                        }}
+                    >
+                        <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Challenge Reward</h3>
 
-                    <div className="flex gap-4 items-center">
-                        <div className={`w-12 h-12 rounded-full ${region.color.replace('bg-', 'bg-').replace('500', '100').replace('600', '100')} flex items-center justify-center ${region.accent}`}>
-                            <Ticket size={24} />
-                        </div>
-                        <div className="flex-1">
-                            <h4 className="font-bold text-slate-900 text-sm">{region.reward}</h4>
-                            <p className="text-[10px] text-slate-500 mt-1">지자체 인증 완료 시 자동 발급</p>
-                        </div>
-                        {isCompleted ? (
-                            <button className={`${region.color} text-white text-xs font-bold px-3 py-2 rounded-xl shadow-lg active:scale-95 transition-transform`}>
-                                받기
-                            </button>
-                        ) : (
-                            <div className="text-[10px] font-bold text-slate-300 bg-slate-100 px-2 py-1 rounded">
-                                미달성
+                        <div className="flex gap-4 items-center">
+                            <div className={`w-12 h-12 rounded-full ${region.color.replace('bg-', 'bg-').replace('500', '100').replace('600', '100')} flex items-center justify-center ${region.accent}`}>
+                                <Ticket size={24} />
                             </div>
-                        )}
+                            <div className="flex-1">
+                                <h4 className="font-bold text-slate-900 text-sm">{region.reward}</h4>
+                                <p className="text-[10px] text-slate-500 mt-1">지자체 인증 완료 시 자동 발급</p>
+                            </div>
+                            {isCompleted ? (
+                                isRewardClaimed ? (
+                                    <button 
+                                        disabled
+                                        className="bg-slate-200 text-slate-400 text-xs font-bold px-3 py-2 rounded-xl cursor-not-allowed"
+                                    >
+                                        발급완료
+                                    </button>
+                                ) : (
+                                    <button 
+                                        onClick={() => {
+                                            if (onClaimReward) {
+                                                // 쿠폰 데이터 생성
+                                                const couponData = {
+                                                    type: 'VOUCHER',
+                                                    name: region.reward,
+                                                    amount: region.reward.includes('상품권') 
+                                                        ? region.reward.match(/\d+만?원/)?.[0] || '10,000원'
+                                                        : region.reward.includes('할인') 
+                                                        ? '50% 할인'
+                                                        : region.reward,
+                                                    provider: region.name,
+                                                    theme: region.color.includes('emerald') ? 'emerald' 
+                                                        : region.color.includes('indigo') ? 'indigo' 
+                                                        : 'blue'
+                                                };
+                                                onClaimReward(couponData);
+                                                // 2초 후에 카드가 사라지도록 설정
+                                                setTimeout(() => {
+                                                    setIsRewardClaimed(true);
+                                                }, 2000);
+                                            }
+                                        }}
+                                        className={`${region.color} text-white text-xs font-bold px-3 py-2 rounded-xl shadow-lg active:scale-95 transition-transform`}
+                                    >
+                                        받기
+                                    </button>
+                                )
+                            ) : (
+                                <div className="text-[10px] font-bold text-slate-300 bg-slate-100 px-2 py-1 rounded">
+                                    미달성
+                                </div>
+                            )}
+                        </div>
                     </div>
-                </div>
+                )}
 
                 {/* Economic Benefit Card */}
-                <section className="bg-slate-900 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden">
+                <section className="bg-slate-900 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden transition-all duration-500 ease-in-out">
                     <DollarSign className="absolute -right-4 -bottom-4 text-white/5" size={80} />
                     <h3 className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-4">Economic Benefit</h3>
                     <div className="space-y-3 relative z-10">
