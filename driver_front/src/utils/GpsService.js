@@ -17,6 +17,13 @@ const TMAP_API_VERSION = '1'; // API 버전
 const TMAP_SNAP_API_URL = `https://apis.openapi.sk.com/tmap/road/matchToRoads?version=${TMAP_API_VERSION}&appKey=${TMAP_API_KEY}`;
 const SPEED_LIMIT_CHECK_INTERVAL = 5000; // 5초마다 제한 속도 조회
 
+// 테스트 좌표 (고속도로 - 올림픽대로)
+const TEST_COORDINATES = {
+    latitude: 37.4244,
+    longitude: 127.1345,
+    enabled: true // true로 설정하면 실제 GPS 대신 이 좌표 사용 (테스트용)
+};
+
 /**
  * TMAP Snap API로 도로 제한 속도 조회
  * @param {number} latitude - 위도
@@ -420,9 +427,9 @@ const getSpeedLimitFromTmap = async (latitude, longitude) => {
                 stack: error.stack
             });
         }
-        return { 
-            speedLimit: null, 
-            roadName: null, 
+        return {
+            speedLimit: null,
+            roadName: null,
             roadId: null,
             error: error.message || '알 수 없는 오류',
             errorCode: 'UNKNOWN_ERROR',
@@ -641,15 +648,22 @@ export const startGpsMonitoring = (onUpdate, onError) => {
             lastSpeedKmh = currentSpeedKmh;
 
             // TMAP API로 제한 속도 조회 (5초마다 한 번만)
+            // 테스트 모드: TEST_COORDINATES.enabled가 true이면 테스트 좌표 사용
+            const useTestCoords = TEST_COORDINATES.enabled;
+            const testLat = useTestCoords ? TEST_COORDINATES.latitude : latitude;
+            const testLon = useTestCoords ? TEST_COORDINATES.longitude : longitude;
+            const testAccuracy = useTestCoords ? 10 : accuracy; // 테스트 모드에서는 정확도 10m로 가정
+
             if ((currentTime - lastSpeedLimitCheck) > SPEED_LIMIT_CHECK_INTERVAL &&
-                latitude && longitude && accuracy && accuracy < 100) {
+                testLat && testLon && testAccuracy && testAccuracy < 100) {
                 // 정확도가 좋을 때만 조회 (100m 이내로 완화)
                 lastSpeedLimitCheck = currentTime;
 
                 console.log('🔄 제한 속도 조회 시작 (5초 간격):', {
-                    위도: latitude.toFixed(6),
-                    경도: longitude.toFixed(6),
-                    정확도: accuracy.toFixed(0) + 'm'
+                    위도: testLat.toFixed(6),
+                    경도: testLon.toFixed(6),
+                    정확도: testAccuracy.toFixed(0) + 'm',
+                    테스트모드: useTestCoords ? '✅ 테스트 좌표 사용 (올림픽대로)' : '❌ 실제 GPS 사용'
                 });
 
                 // 조회 시작 알림
@@ -658,7 +672,7 @@ export const startGpsMonitoring = (onUpdate, onError) => {
                 });
 
                 // 비동기로 제한 속도 조회 (블로킹 방지)
-                getSpeedLimitFromTmap(latitude, longitude).then(result => {
+                getSpeedLimitFromTmap(testLat, testLon).then(result => {
                     const prevLimit = currentSpeedLimit;
                     const prevRoad = currentRoadName;
 
