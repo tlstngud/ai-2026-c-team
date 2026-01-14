@@ -22,7 +22,7 @@ const SPEED_LIMIT_CHECK_INTERVAL = 5000; // 5초마다 제한 속도 조회
 const TEST_COORDINATES = {
     latitude: 37.5162,
     longitude: 126.9226,
-    enabled: true // true로 설정하면 실제 GPS 대신 이 좌표 사용 (테스트용)
+    enabled: false // true로 설정하면 실제 GPS 대신 이 좌표 사용 (테스트용)
 };
 
 /**
@@ -691,11 +691,11 @@ export const startGpsMonitoring = (onUpdate, onError) => {
                             type: 'SPEED_LIMIT',
                             speedLimit: currentSpeedLimit,
                             roadName: currentRoadName,
-                        rawResponse: result.rawResponse, // 디버깅용
-                        headerKeys: result.headerKeys, // 디버깅용: header의 모든 키
-                        headerRaw: result.headerRaw, // 디버깅용: header 원본 데이터
-                        matchedPointKeys: result.headerKeys, // 호환성을 위해 유지
-                        matchedPointRaw: result.headerRaw, // 호환성을 위해 유지
+                            rawResponse: result.rawResponse, // 디버깅용
+                            headerKeys: result.headerKeys, // 디버깅용: header의 모든 키
+                            headerRaw: result.headerRaw, // 디버깅용: header 원본 데이터
+                            matchedPointKeys: result.headerKeys, // 호환성을 위해 유지
+                            matchedPointRaw: result.headerRaw, // 호환성을 위해 유지
                             error: result.error, // 디버깅용
                             errorCode: result.errorCode, // 에러 코드 (있는 경우)
                             responseKeys: result.responseKeys, // 디버깅용
@@ -788,11 +788,11 @@ export const startGpsMonitoring = (onUpdate, onError) => {
                             type: 'SPEED_LIMIT',
                             speedLimit: currentSpeedLimit,
                             roadName: currentRoadName,
-                        rawResponse: result.rawResponse, // 디버깅용
-                        headerKeys: result.headerKeys, // 디버깅용: header의 모든 키
-                        headerRaw: result.headerRaw, // 디버깅용: header 원본 데이터
-                        matchedPointKeys: result.headerKeys, // 호환성을 위해 유지
-                        matchedPointRaw: result.headerRaw, // 호환성을 위해 유지
+                            rawResponse: result.rawResponse, // 디버깅용
+                            headerKeys: result.headerKeys, // 디버깅용: header의 모든 키
+                            headerRaw: result.headerRaw, // 디버깅용: header 원본 데이터
+                            matchedPointKeys: result.headerKeys, // 호환성을 위해 유지
+                            matchedPointRaw: result.headerRaw, // 호환성을 위해 유지
                             error: result.error, // 디버깅용
                             errorCode: result.errorCode, // 에러 코드 (있는 경우)
                             responseKeys: result.responseKeys, // 디버깅용
