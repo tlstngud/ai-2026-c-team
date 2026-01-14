@@ -235,87 +235,93 @@ const DrivePage = ({
                     />
 
                     <div className="absolute inset-0 pointer-events-none z-20 flex flex-col justify-between p-6 pb-28">
+                        {/* 1. Top Header Area */}
                         <div className="flex justify-between items-start">
+                            {/* Left: Location Badge */}
                             <div className="flex flex-col gap-2">
                                 {userRegion && (
-                                    <div className="bg-black/30 backdrop-blur-md px-4 py-2 rounded-full border border-white/10">
-                                        <span className="text-xs font-bold text-white/90 uppercase tracking-tight flex items-center gap-2">
-                                            <MapPin size={12} />
+                                    <div className="bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 flex items-center gap-1.5 shadow-sm">
+                                        <MapPin size={12} className={userRegion.accent || "text-emerald-400"} />
+                                        <span className="text-[11px] font-bold text-white/90 uppercase tracking-tight">
                                             {userRegion.name} Resident
                                         </span>
                                     </div>
                                 )}
-                                <div className="bg-black/30 backdrop-blur-md px-4 py-2 rounded-full border border-white/10">
-                                    <span className="text-xs font-bold text-white/80 uppercase tracking-wider flex items-center gap-2">
-                                        <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                                        Live Cam.
-                                    </span>
-                                </div>
+                                {/* GPS Accuracy (Tiny) */}
+                                {gpsAccuracy !== null && (
+                                    <div className="px-2">
+                                        <span className={`text-[9px] font-medium ${gpsAccuracy < 20 ? 'text-green-400' : 'text-orange-400'}`}>
+                                            GPS Signal: {Math.round(gpsAccuracy)}m
+                                        </span>
+                                    </div>
+                                )}
                             </div>
 
-                            <div className="flex flex-col items-end gap-3">
-                                <div className="flex flex-col items-end">
-                                    <span className="text-5xl font-bold tracking-tighter drop-shadow-md text-white">
+                            {/* Right: Score & Driving Stats */}
+                            <div className="flex flex-col items-end gap-2">
+                                {/* Score Big Display */}
+                                <div className="flex flex-col items-end leading-none">
+                                    <span className="text-6xl font-black tracking-tighter drop-shadow-xl text-white">
                                         {Math.floor(score)}
                                     </span>
-                                    <span className="text-xs font-medium text-white/60">Score</span>
+                                    <span className="text-[10px] font-bold text-white/60 uppercase tracking-widest mr-1">
+                                        Safety Score
+                                    </span>
                                 </div>
+
                                 {isActive && (
-                                    <div className="flex flex-col items-end gap-2">
-                                        {/* 현재 속도 / 제한 속도 비교 */}
-                                        <div className="bg-black/30 backdrop-blur-md px-4 py-2 rounded-full border border-white/10">
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-lg font-bold text-white">
-                                                    {Math.round(currentSpeed || 0)}
-                                                </span>
-                                                <span className="text-xs font-medium text-white/70">km/h</span>
-                                                {speedLimit && !speedLimitLoading && (
-                                                    <>
-                                                        <span className="text-xs font-medium text-white/50">/</span>
-                                                        <span className={`text-lg font-bold ${currentSpeed > speedLimit ? 'text-red-400' : 'text-blue-400'}`}>
-                                                            {speedLimit}
-                                                        </span>
-                                                        <span className="text-xs font-medium text-white/50">km/h</span>
-                                                    </>
-                                                )}
-                                            </div>
-                                        </div>
-                                        {/* 도로 정보 카드 */}
-                                        {(speedLimitLoading || roadName) && (
-                                            <div className="bg-black/40 backdrop-blur-md px-4 py-2 rounded-xl border border-white/20">
-                                                <div className="flex flex-col items-end">
-                                                    {speedLimitLoading ? (
-                                                        <span className="text-[10px] text-white/70 font-medium animate-pulse">
-                                                            도로 정보 조회 중...
-                                                        </span>
-                                                    ) : roadName ? (
-                                                        <>
-                                                            <span className="text-[9px] font-semibold text-white/60 uppercase tracking-wide mb-1">
-                                                                도로
-                                                            </span>
-                                                            <span className="text-sm font-bold text-white">
-                                                                {roadName}
-                                                            </span>
-                                                        </>
-                                                    ) : null}
+                                    <div className="flex flex-col items-end gap-2 mt-2">
+                                        {/* Speedometer Pill */}
+                                        <div className="bg-black/40 backdrop-blur-xl pl-5 pr-4 py-2 rounded-2xl border border-white/10 shadow-lg flex items-center gap-3">
+                                            <div className="flex flex-col items-end leading-tight">
+                                                <div className="flex items-baseline gap-1">
+                                                    <span className="text-2xl font-bold text-white font-mono tracking-tight">
+                                                        {Math.round(currentSpeed || 0)}
+                                                    </span>
+                                                    <span className="text-[10px] font-medium text-white/50">km/h</span>
                                                 </div>
                                             </div>
-                                        )}
-                                        {/* GPS 정확도 (작은 텍스트) */}
-                                        {gpsAccuracy !== null && (
-                                            <span className="text-[9px] text-white/50 font-medium">
-                                                GPS: {Math.round(gpsAccuracy)}m
-                                            </span>
-                                        )}
-                                        {/* 급가속/급감속 알림 */}
-                                        {gpsAcceleration > 2 && (
-                                            <div className="bg-red-500/90 backdrop-blur-md px-3 py-2 rounded-lg border-2 border-red-400/50 shadow-lg animate-pulse">
-                                                <span className="text-xs font-bold text-white">⚠️ 급가속!</span>
+
+                                            {/* Divider */}
+                                            <div className="w-[1px] h-6 bg-white/10"></div>
+
+                                            {/* Speed Limit */}
+                                            <div className="flex flex-col items-start leading-tight">
+                                                <span className="text-[9px] font-bold text-white/40 uppercase">Limit</span>
+                                                <div className="flex items-baseline gap-0.5">
+                                                    {speedLimitLoading ? (
+                                                        <span className="text-sm font-bold text-white/30 animate-pulse">--</span>
+                                                    ) : (
+                                                        <span className={`text-lg font-bold font-mono ${currentSpeed > speedLimit ? 'text-red-400' : 'text-white/80'}`}>
+                                                            {speedLimit || 60}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Road Name Badge */}
+                                        {(roadName || speedLimitLoading) && (
+                                            <div className="bg-black/20 backdrop-blur-md px-3 py-1 rounded-lg border border-white/5">
+                                                <span className="text-[10px] font-medium text-white/80 truncate max-w-[120px]">
+                                                    {speedLimitLoading ? "도로 정보 스캔중..." : roadName}
+                                                </span>
                                             </div>
                                         )}
-                                        {gpsAcceleration < -3 && (
-                                            <div className="bg-orange-500/90 backdrop-blur-md px-3 py-2 rounded-lg border-2 border-orange-400/50 shadow-lg animate-pulse">
-                                                <span className="text-xs font-bold text-white">⚠️ 급감속!</span>
+
+                                        {/* Alerts (Hard Accel/Brake) */}
+                                        {(gpsEvents.hardAccel > 0 || gpsEvents.hardBrake > 0) && (
+                                            <div className="mt-1 flex flex-col gap-1 items-end">
+                                                {gpsEvents.hardAccel > 0 && (
+                                                    <div className="bg-red-500/90 backdrop-blur-md px-3 py-1 rounded-md border border-red-400/30 shadow-lg animate-pulse">
+                                                        <span className="text-[10px] font-bold text-white">⚠️ 급가속 감지</span>
+                                                    </div>
+                                                )}
+                                                {gpsEvents.hardBrake > 0 && (
+                                                    <div className="bg-orange-500/90 backdrop-blur-md px-3 py-1 rounded-md border border-orange-400/30 shadow-lg animate-pulse">
+                                                        <span className="text-[10px] font-bold text-white">⚠️ 급감속 감지</span>
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
                                     </div>
@@ -324,26 +330,32 @@ const DrivePage = ({
                         </div>
 
 
+                        {/* 2. Center Overlay: Face Bounding Box & Status */}
                         {isActive && (
-                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-64 transition-all duration-300">
-                                <div className={`absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 rounded-tl-xl transition-colors ${currentState === 0 ? 'border-white/50' : 'border-red-500'}`}></div>
-                                <div className={`absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 rounded-tr-xl transition-colors ${currentState === 0 ? 'border-white/50' : 'border-red-500'}`}></div>
-                                <div className={`absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 rounded-bl-xl transition-colors ${currentState === 0 ? 'border-white/50' : 'border-red-500'}`}></div>
-                                <div className={`absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 rounded-br-xl transition-colors ${currentState === 0 ? 'border-white/50' : 'border-red-500'}`}></div>
+                            <>
+                                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-56 h-72 transition-all duration-300">
+                                    {/* Corner Brackets */}
+                                    <div className={`absolute top-0 left-0 w-6 h-6 border-t-2 border-l-2 rounded-tl-lg transition-colors duration-300 ${currentState === 0 ? 'border-white/40' : 'border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]'}`}></div>
+                                    <div className={`absolute top-0 right-0 w-6 h-6 border-t-2 border-r-2 rounded-tr-lg transition-colors duration-300 ${currentState === 0 ? 'border-white/40' : 'border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]'}`}></div>
+                                    <div className={`absolute bottom-0 left-0 w-6 h-6 border-b-2 border-l-2 rounded-bl-lg transition-colors duration-300 ${currentState === 0 ? 'border-white/40' : 'border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]'}`}></div>
+                                    <div className={`absolute bottom-0 right-0 w-6 h-6 border-b-2 border-r-2 rounded-br-lg transition-colors duration-300 ${currentState === 0 ? 'border-white/40' : 'border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]'}`}></div>
 
-                                {currentState === 0 && (
-                                    <div className="w-full h-[2px] bg-green-400/50 shadow-[0_0_10px_#4ade80] animate-[scan_2s_ease-in-out_infinite]"></div>
-                                )}
-                            </div>
+                                    {/* Scanning Laser Effect (Only on Normal) */}
+                                    {currentState === 0 && (
+                                        <div className="w-full h-[1px] bg-green-400/40 shadow-[0_0_8px_#4ade80] animate-[scan_2.5s_ease-in-out_infinite]"></div>
+                                    )}
+                                </div>
+                            </>
                         )}
 
-                        <div className="self-center">
+                        {/* 3. Floating Status Pill (Center Bottom) */}
+                        <div className="self-center mb-2">
                             <div className={`
-                                flex items-center gap-3 px-6 py-3 rounded-full backdrop-blur-xl border shadow-lg transition-all duration-300
+                                flex items-center gap-2.5 px-5 py-2.5 rounded-full backdrop-blur-xl border shadow-xl transition-all duration-300
                                 ${currentConfig[currentState].bg}
                                 ${currentConfig[currentState].border}
                             `}>
-                                <CurrentIcon size={20} className={currentConfig[currentState].color} />
+                                <CurrentIcon size={18} className={currentConfig[currentState].color} />
                                 <span className={`text-sm font-bold ${currentConfig[currentState].color} tracking-tight`}>
                                     {currentConfig[currentState].label}
                                 </span>
@@ -352,21 +364,22 @@ const DrivePage = ({
                     </div>
                 </div>
 
+                {/* --- Bottom Modal Sheet (Interactive) --- */}
                 <div
                     ref={modalRef}
-                    className="bg-white pb-14 pt-11 px-6 rounded-t-[32px] z-30 shadow-[0_-10px_40px_rgba(0,0,0,0.2)] relative flex-shrink-0"
+                    className="bg-white rounded-t-[32px] z-30 shadow-[0_-8px_30px_rgba(0,0,0,0.15)] relative flex-shrink-0 flex flex-col"
                     style={{
-                        marginTop: '-20px',
+                        marginTop: '-24px',
                         height: `${modalHeight}px`,
                         minHeight: `${modalHeight}px`,
                         maxHeight: `${modalHeight}px`,
-                        transition: isDragging ? 'none' : 'height 0.2s ease-out',
-                        touchAction: 'pan-y',
-                        WebkitOverflowScrolling: 'touch'
+                        transition: isDragging ? 'none' : 'height 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)',
+                        touchAction: 'pan-y'
                     }}
                 >
+                    {/* Drag Handle */}
                     <div
-                        className="flex flex-col items-center gap-2 mb-10 cursor-grab active:cursor-grabbing touch-none"
+                        className="w-full flex items-center justify-center pt-3 pb-6 cursor-grab active:cursor-grabbing touch-none"
                         onTouchStart={handleTouchStart}
                         onMouseDown={handleMouseDown}
                         onTouchMove={(e) => {
@@ -382,82 +395,72 @@ const DrivePage = ({
                             WebkitTouchCallout: 'none'
                         }}
                     >
-                        <div className="w-12 h-1 bg-gray-200 rounded-full"></div>
+                        <div className="w-10 h-1 bg-gray-300 rounded-full"></div>
                     </div>
 
-                    <div className="space-y-4 mb-10">
-                        <div className="flex items-center justify-between">
+                    {/* Modal Content */}
+                    <div className="px-6 pb-8 flex-1 flex flex-col justify-between">
+
+                        {/* Top Row: Session Time & Total Events */}
+                        <div className="flex items-center justify-between mb-6">
                             <div>
-                                <p className="text-gray-500 text-xs font-bold uppercase">Session Time</p>
-                                <p className="text-2xl font-bold text-black font-mono">
-                                    {isActive ? formatTime(sessionTime) : "Ready"}
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Session Time</p>
+                                <p className="text-2xl font-bold text-gray-900 font-mono tracking-tight">
+                                    {isActive ? formatTime(sessionTime) : "00:00"}
                                 </p>
                             </div>
-                            <div>
-                                <p className="text-gray-500 text-xs font-bold uppercase text-right">Event Log</p>
-                                <p className="text-2xl font-bold text-black text-right">
+                            <div className="text-right">
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Total Events</p>
+                                <p className={`text-2xl font-bold font-mono tracking-tight ${eventCount > 0 ? 'text-red-500' : 'text-gray-900'}`}>
                                     {isActive ? eventCount : "-"}
                                 </p>
                             </div>
                         </div>
+
+                        {/* Grid Stats: Accel / Brake Counts */}
                         {isActive && (
-                            <div className="grid grid-cols-3 gap-3 pt-3 border-t border-gray-100">
-                                <div>
-                                    <p className="text-gray-500 text-xs font-bold uppercase">속도</p>
-                                    <p className="text-lg font-bold text-black">
-                                        {Math.round(currentSpeed || 0)}<span className="text-xs text-gray-400">km/h</span>
-                                    </p>
+                            <div className="grid grid-cols-2 gap-3 mb-6">
+                                <div className="bg-slate-50 rounded-2xl p-3 border border-slate-100 flex flex-col items-center">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase">급가속</span>
+                                    <span className={`text-xl font-bold mt-1 ${gpsEvents.hardAccel > 0 ? 'text-red-500' : 'text-slate-800'}`}>
+                                        {gpsEvents.hardAccel} <span className="text-xs font-medium text-slate-400">회</span>
+                                    </span>
                                 </div>
-                                <div>
-                                    <p className="text-gray-500 text-xs font-bold uppercase">급가속</p>
-                                    <p className={`text-lg font-bold ${gpsEvents.hardAccel > 0 ? 'text-red-500' : 'text-black'}`}>
-                                        {gpsEvents.hardAccel}
-                                    </p>
-                                </div>
-                                <div>
-                                    <p className="text-gray-500 text-xs font-bold uppercase">급감속</p>
-                                    <p className={`text-lg font-bold ${gpsEvents.hardBrake > 0 ? 'text-orange-500' : 'text-black'}`}>
-                                        {gpsEvents.hardBrake}
-                                    </p>
+                                <div className="bg-slate-50 rounded-2xl p-3 border border-slate-100 flex flex-col items-center">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase">급감속</span>
+                                    <span className={`text-xl font-bold mt-1 ${gpsEvents.hardBrake > 0 ? 'text-orange-500' : 'text-slate-800'}`}>
+                                        {gpsEvents.hardBrake} <span className="text-xs font-medium text-slate-400">회</span>
+                                    </span>
                                 </div>
                             </div>
                         )}
-                    </div>
 
-                    <div className={`flex gap-3 mb-6 ${isActive ? 'justify-center' : ''}`}>
-                        {!isActive && (
+                        {/* Action Button */}
+                        <div className="mt-auto">
                             <button
-                                onClick={() => setShowCameraView(false)}
-                                className="flex-1 h-14 rounded-xl bg-gray-100 text-black font-bold flex items-center justify-center gap-2 transition-all active:scale-95"
+                                onClick={isActive ? toggleSession : toggleSession}
+                                className={`w-full h-14 rounded-2xl flex items-center justify-center gap-2 font-bold text-lg shadow-lg active:scale-95 transition-all
+                                    ${isActive 
+                                        ? 'bg-black text-white shadow-black/20' 
+                                        : 'bg-black text-white shadow-black/20'
+                                    }`}
                             >
-                                <CameraOff size={18} /> Back
+                                {isActive ? (
+                                    <> <Square fill="currentColor" size={18} /> End Driving </>
+                                ) : (
+                                    <> <Play fill="currentColor" size={18} /> Start Driving </>
+                                )}
                             </button>
-                        )}
-                        <button
-                            onClick={toggleSession}
-                            className={`${isActive ? 'w-full' : 'flex-1'} h-14 rounded-xl flex items-center justify-center gap-2 font-bold shadow-lg transition-all active:scale-95 ${isActive
-                                ? 'bg-gray-100 text-black border border-gray-200'
-                                : 'bg-black text-white shadow-black/30'
-                                }`}
-                        >
-                            {isActive ? (
-                                <>
-                                    <Square fill="currentColor" size={18} /> Stop
-                                </>
-                            ) : (
-                                <>
-                                    <Play fill="currentColor" size={18} /> Start
-                                </>
-                            )}
-                        </button>
+                        </div>
                     </div>
                 </div>
+                {/* CSS Animations */}
                 <style>{`
                     @keyframes scan {
-                        0% { transform: translateY(0); opacity: 0; }
+                        0%, 100% { transform: translateY(0); opacity: 0; }
                         10% { opacity: 1; }
                         90% { opacity: 1; }
-                        100% { transform: translateY(250px); opacity: 0; }
+                        100% { transform: translateY(280px); opacity: 0; }
                     }
                 `}</style>
             </div>
