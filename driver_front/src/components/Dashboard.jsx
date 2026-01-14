@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { addLogByUserId, getLogsByUserId } from '../utils/LogService';
 import { startGpsMonitoring, stopGpsMonitoring, requestMotionPermission } from '../utils/GpsService';
+import { couponAPI } from '../utils/api';
 import { AlertTriangle, X, MapPin, Search, Award } from 'lucide-react';
 import { STATE_CONFIG, APPLE_STATE_CONFIG } from './constants';
 import Header from './Header';
@@ -54,18 +55,9 @@ const Dashboard = () => {
     });
     const [inputAddress, setInputAddress] = useState('');
     const [userRegion, setUserRegion] = useState(() => {
-        // 1. localStorage에서 먼저 확인
+        // localStorage에서 지역 정보 확인
         const saved = localStorage.getItem('userRegion');
         if (saved) return JSON.parse(saved);
-        // 2. user 객체에 region이 있으면 사용
-        const savedUser = localStorage.getItem('currentUser');
-        if (savedUser) {
-            const userData = JSON.parse(savedUser);
-            if (userData.region) {
-                localStorage.setItem('userRegion', JSON.stringify(userData.region));
-                return userData.region;
-            }
-        }
         return null;
     });
 
@@ -103,60 +95,7 @@ const Dashboard = () => {
     const [speedLimitLoading, setSpeedLimitLoading] = useState(false); // 제한 속도 조회 중 상태
     const [speedLimitDebug, setSpeedLimitDebug] = useState(null); // 디버깅 정보 (모바일용)
     const [showChallengeDetail, setShowChallengeDetail] = useState(false); // 챌린지 상세 페이지 표시 여부
-    const [coupons, setCoupons] = useState(() => {
-        // localStorage에서 쿠폰 목록 불러오기
-        const saved = localStorage.getItem('userCoupons');
-        if (saved) {
-            try {
-                return JSON.parse(saved);
-            } catch (e) {
-                return [];
-            }
-        }
-        // 기본 쿠폰 데이터
-        return [
-            {
-                id: 1,
-                type: 'VOUCHER',
-                name: '춘천사랑 상품권',
-                amount: '10,000원',
-                provider: '춘천시청',
-                status: 'AVAILABLE',
-                expiry: '2026.12.31',
-                theme: 'emerald'
-            },
-            {
-                id: 2,
-                type: 'PARKING',
-                name: '공영주차장 50% 할인권',
-                amount: '50% 할인',
-                provider: '시설관리공단',
-                status: 'AVAILABLE',
-                expiry: '2026.06.30',
-                theme: 'indigo'
-            },
-            {
-                id: 3,
-                type: 'OIL',
-                name: 'SK엔크린 주유 할인권',
-                amount: '3,000원',
-                provider: 'SK에너지',
-                status: 'USED',
-                expiry: '2025.12.31',
-                theme: 'orange'
-            },
-            {
-                id: 4,
-                type: 'VOUCHER',
-                name: '스타벅스 아메리카노',
-                amount: '1잔',
-                provider: '안전운전 캠페인',
-                status: 'EXPIRED',
-                expiry: '2025.11.30',
-                theme: 'green'
-            }
-        ];
-    });
+    const [coupons, setCoupons] = useState([]);
     const [toast, setToast] = useState({ isVisible: false, message: '' });
     const gpsWatchIdRef = useRef(null);
 
@@ -185,22 +124,30 @@ const Dashboard = () => {
 
     // --- Initialize History & User Region ---
     useEffect(() => {
-        if (user) {
-            const saved = getLogsByUserId(user.id);
-            setHistory(saved || []);
-
-            // user에 region이 있으면 복원
-            if (user.region && !userRegion) {
-                setUserRegion(user.region);
-                localStorage.setItem('userRegion', JSON.stringify(user.region));
-                if (step === 'onboarding') {
-                    setStep('dashboard');
+        const loadHistory = async () => {
+            if (user) {
+                try {
+                    const saved = await getLogsByUserId(user.id);
+                    setHistory(saved || []);
+                } catch (error) {
+                    console.error('주행 기록 로드 오류:', error);
+                    setHistory([]);
                 }
+
+                // user에 region이 있으면 복원
+                if (user.region && !userRegion) {
+                    setUserRegion(user.region);
+                    localStorage.setItem('userRegion', JSON.stringify(user.region));
+                    if (step === 'onboarding') {
+                        setStep('dashboard');
+                    }
+                }
+            } else {
+                // 로그인하지 않은 경우 빈 배열
+                setHistory([]);
             }
-        } else {
-            const saved = localStorage.getItem('drivingHistory');
-            if (saved) setHistory(JSON.parse(saved));
-        }
+        };
+        loadHistory();
     }, [user]);
 
     // --- 주소 입력 및 지자체 배정 로직 ---
@@ -593,13 +540,15 @@ const Dashboard = () => {
 
             // Save log for specific user
             if (user) {
-                const updatedLogs = addLogByUserId(user.id, newEntry);
-                setHistory(updatedLogs); // Update local state with returned logs
+                addLogByUserId(user.id, newEntry).then(updatedLogs => {
+                    setHistory(updatedLogs); // Update local state with returned logs
+                }).catch(error => {
+                    console.error('주행 기록 저장 오류:', error);
+                });
 
                 // Update user score in AuthContext
                 const updatedUser = { ...user, score: finalScore };
                 setUser(updatedUser);
-                localStorage.setItem('currentUser', JSON.stringify(updatedUser)); // Sync with Auth storage
             } else {
                 // Fallback for no user context (though should be protected)
                 const newHistory = [newEntry, ...history].slice(0, 10);
@@ -643,21 +592,64 @@ const Dashboard = () => {
     const CurrentIcon = showCameraView ? STATE_CONFIG[currentState].icon : APPLE_STATE_CONFIG[currentState].icon;
     const currentConfig = showCameraView ? STATE_CONFIG : APPLE_STATE_CONFIG;
 
-    // 쿠폰 목록 localStorage에 저장
+    // 쿠폰 목록 API에서 불러오기
     useEffect(() => {
-        localStorage.setItem('userCoupons', JSON.stringify(coupons));
-    }, [coupons]);
+        const loadCoupons = async () => {
+            if (user) {
+                try {
+                    const response = await couponAPI.getAll();
+                    if (response.success) {
+                        // API 응답을 기존 형식으로 변환
+                        const formattedCoupons = response.data.coupons.map(coupon => ({
+                            id: coupon.couponId,
+                            type: coupon.type,
+                            name: coupon.name,
+                            amount: coupon.amount,
+                            provider: coupon.provider,
+                            status: coupon.status,
+                            expiry: coupon.expiry.split('T')[0].replace(/-/g, '.'),
+                            theme: coupon.theme
+                        }));
+                        setCoupons(formattedCoupons);
+                    }
+                } catch (error) {
+                    console.error('쿠폰 목록 로드 오류:', error);
+                }
+            }
+        };
+        loadCoupons();
+    }, [user]);
 
     // 쿠폰 추가 함수
-    const addCoupon = (couponData) => {
-        const newCoupon = {
-            id: Date.now(), // 고유 ID 생성
-            ...couponData,
-            status: 'AVAILABLE',
-            expiry: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0].replace(/-/g, '.') // 90일 후 만료
-        };
-        setCoupons(prev => [newCoupon, ...prev]);
-        setToast({ isVisible: true, message: '쿠폰이 쿠폰함에 추가되었습니다!' });
+    const addCoupon = async (couponData) => {
+        try {
+            const response = await couponAPI.issue({
+                challengeId: null,
+                region: couponData.provider
+            });
+
+            if (response.success) {
+                // API에서 받은 쿠폰을 상태에 추가
+                const newCoupon = {
+                    id: response.data.couponId,
+                    type: response.data.type,
+                    name: response.data.name,
+                    amount: response.data.amount,
+                    provider: response.data.provider,
+                    status: response.data.status,
+                    expiry: response.data.expiry,
+                    theme: response.data.theme,
+                    issuedAt: response.data.issuedAt
+                };
+                setCoupons(prev => [newCoupon, ...prev]);
+                setToast({ isVisible: true, message: '쿠폰이 쿠폰함에 추가되었습니다!' });
+            } else {
+                setToast({ isVisible: true, message: response.error?.message || '쿠폰 발급에 실패했습니다.' });
+            }
+        } catch (error) {
+            console.error('쿠폰 발급 오류:', error);
+            setToast({ isVisible: true, message: '쿠폰 발급 중 오류가 발생했습니다.' });
+        }
     };
 
     // 토스트 닫기 함수

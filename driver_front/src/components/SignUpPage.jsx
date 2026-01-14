@@ -77,7 +77,7 @@ const SignUpPage = () => {
         }).open();
     };
 
-    const handleSignUp = (e) => {
+    const handleSignUp = async (e) => {
         e.preventDefault();
         if (!formData.id || !formData.name || !formData.password || !formData.address) {
             setError('모든 필드를 입력해주세요.');
@@ -100,10 +100,9 @@ const SignUpPage = () => {
             address: formData.address
         };
 
-        const result = signUp(formData.id, formData.name, formData.password, regionData);
+        const result = await signUp(formData.id, formData.name, formData.password, regionData);
         if (result.success) {
-            // 지자체 정보 저장
-            localStorage.setItem('userRegion', JSON.stringify(regionData));
+            // 지자체 정보 저장 (API에서 이미 저장됨)
             alert('회원가입이 완료되었습니다! 로그인해주세요.');
             navigate('/login');
         } else {

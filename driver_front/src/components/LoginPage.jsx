@@ -10,7 +10,7 @@ const LoginPage = () => {
     const { login } = useAuth();
     const navigate = useNavigate();
 
-    const handleLogin = (e) => {
+    const handleLogin = async (e) => {
         e.preventDefault();
         setError('');
 
@@ -19,7 +19,7 @@ const LoginPage = () => {
             return;
         }
 
-        const result = login(id, password);
+        const result = await login(id, password);
 
         if (result.success) {
             navigate('/');

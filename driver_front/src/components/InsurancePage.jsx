@@ -3,12 +3,15 @@ import { TrendingUp, DollarSign, CheckCircle2, MapPin, Ticket, Award, Map } from
 import Header from './Header';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import ChallengeDetail from './ChallengeDetail';
+import { challengeAPI } from '../utils/api';
 
 const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChallengeDetail = null, onClaimReward = null }) => {
     const [discountRate, setDiscountRate] = useState(0);
     const [showChallengeDetail, setShowChallengeDetail] = useState(false);
     const [isRewardClaimed, setIsRewardClaimed] = useState(false);
     const [showRewardCard, setShowRewardCard] = useState(true);
+    const [challenge, setChallenge] = useState(null);
+    const [loading, setLoading] = useState(true);
     
     // showChallengeDetail 상태 변경 시 부모 컴포넌트에 알림
     useEffect(() => {
@@ -23,8 +26,38 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
         else setDiscountRate(0);
     }, [score]);
 
+    // 챌린지 정보 API에서 불러오기
+    useEffect(() => {
+        const loadChallenge = async () => {
+            if (userRegion?.name) {
+                try {
+                    const response = await challengeAPI.getAll(userRegion.name);
+                    if (response.success && response.data.challenges.length > 0) {
+                        setChallenge(response.data.challenges[0]);
+                    }
+                } catch (error) {
+                    console.error('챌린지 정보 로드 오류:', error);
+                } finally {
+                    setLoading(false);
+                }
+            } else {
+                setLoading(false);
+            }
+        };
+        loadChallenge();
+    }, [userRegion]);
+
     // 지자체 정보가 없으면 기본값 사용
-    const region = userRegion || {
+    const region = challenge ? {
+        name: challenge.region,
+        campaign: challenge.name,
+        color: challenge.region.includes('춘천') ? 'bg-emerald-500' : challenge.region.includes('서울') ? 'bg-indigo-600' : 'bg-blue-600',
+        accent: challenge.region.includes('춘천') ? 'text-emerald-600' : challenge.region.includes('서울') ? 'text-indigo-600' : 'text-blue-600',
+        target: challenge.targetScore,
+        reward: challenge.reward,
+        bgImage: challenge.region.includes('춘천') ? 'from-emerald-900 to-slate-900' : challenge.region.includes('서울') ? 'from-indigo-900 to-slate-900' : 'from-blue-900 to-slate-900',
+        address: userRegion?.address || ''
+    } : (userRegion || {
         name: '전국 공통',
         campaign: '대한민국 안전운전 챌린지',
         color: 'bg-blue-600',
@@ -33,7 +66,7 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
         reward: '안전운전 인증서 발급',
         bgImage: 'from-blue-900 to-slate-900',
         address: ''
-    };
+    });
 
     const isCompleted = score >= region.target;
 
@@ -54,28 +87,20 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
     }, [history]);
 
     // 챌린지 상세 페이지 표시 (조건부 렌더링)
-    if (showChallengeDetail) {
+    if (showChallengeDetail && challenge) {
         return (
             <ChallengeDetail
                 challenge={{
-                    region: region.name,
-                    title: region.campaign || `${region.name} 안전운전 챌린지`,
-                    targetScore: region.target,
+                    region: challenge.region,
+                    title: challenge.name,
+                    targetScore: challenge.targetScore,
                     myScore: score,
-                    reward: region.reward,
-                    participants: 1243,
-                    period: '2026.01.15 ~ 2026.01.29 (2주)',
-                    description: `${region.name}에서 안전운전을 실천해주세요. 목표 점수 달성 시 혜택을 드립니다.`,
-                    rules: [
-                        '지정된 기간 동안 100km 이상 주행',
-                        `안전운전 점수 ${region.target}점 이상 유지`,
-                        '급가속/급감속 최소화'
-                    ],
-                    conditions: [
-                        `${region.name} 거주자 또는 주 활동 운전자`,
-                        '최근 1년 내 중과실 사고 이력 없음',
-                        '마케팅 활용 동의 필수'
-                    ]
+                    reward: challenge.reward,
+                    participants: challenge.participants || 0,
+                    period: `${challenge.period.start.split('T')[0]} ~ ${challenge.period.end.split('T')[0]}`,
+                    description: challenge.description,
+                    rules: challenge.rules || [],
+                    conditions: challenge.conditions || []
                 }}
                 currentScore={score}
                 onBack={() => setShowChallengeDetail(false)}
