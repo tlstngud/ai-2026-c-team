@@ -379,7 +379,10 @@ const DrivePage = ({
                                                             <span>업데이트: {speedLimitDebug.timestamp}</span>
                                                             <span>속도: {speedLimitDebug.speedLimit ?? 'null'} | 도로: {speedLimitDebug.roadName ?? 'null'}</span>
                                                             {speedLimitDebug.error && (
-                                                                <span className="text-red-300">오류: {speedLimitDebug.error}</span>
+                                                                <span className="text-red-300">
+                                                                    오류: {speedLimitDebug.error}
+                                                                    {speedLimitDebug.errorCode && ` (코드: ${speedLimitDebug.errorCode})`}
+                                                                </span>
                                                             )}
                                                             {speedLimitDebug.matchedPointKeys && (
                                                                 <span className="text-white/40">필드: {speedLimitDebug.matchedPointKeys.join(', ')}</span>
@@ -416,7 +419,10 @@ const DrivePage = ({
                                                             <span>{speedLimitDebug.timestamp}</span>
                                                             <span>속도: {speedLimitDebug.speedLimit ?? 'null'} | 도로: {speedLimitDebug.roadName ?? 'null'}</span>
                                                             {speedLimitDebug.error && (
-                                                                <span className="text-red-300">오류: {speedLimitDebug.error}</span>
+                                                                <span className="text-red-300">
+                                                                    오류: {speedLimitDebug.error}
+                                                                    {speedLimitDebug.errorCode && ` (코드: ${speedLimitDebug.errorCode})`}
+                                                                </span>
                                                             )}
                                                             {speedLimitDebug.matchedPointKeys && (
                                                                 <span className="text-white/40">필드: {speedLimitDebug.matchedPointKeys.join(', ')}</span>

@@ -71,6 +71,87 @@ const getSpeedLimitFromTmap = async (latitude, longitude) => {
             ok: response.ok
         });
 
+        // 204 No Content 처리 (검색 결과가 없는 경우)
+        if (response.status === 204) {
+            console.warn('⚠️ TMAP API: 204 No Content - 검색 결과가 없습니다', {
+                가능한원인: [
+                    '요청한 좌표가 도로가 아닌 곳 (실내, 건물, 공원 등)',
+                    '검색 결과 자체가 없음',
+                    '잘못된 좌표 또는 대한민국을 벗어난 좌표',
+                    '리버스 지오코딩 사용 시 좌표 오류'
+                ]
+            });
+            return { 
+                speedLimit: null, 
+                roadName: null, 
+                roadId: null,
+                error: '204 No Content - 검색 결과 없음',
+                errorCode: '204'
+            };
+        }
+
+        // 400 Bad Request 처리
+        if (response.status === 400) {
+            const errorText = await response.text();
+            let errorData = null;
+            let errorMessage = '요청 데이터 오류입니다. 파라미터를 확인해주세요.';
+            let errorCode = '400';
+
+            try {
+                errorData = JSON.parse(errorText);
+                errorMessage = errorData.error?.message || errorData.message || errorMessage;
+                errorCode = errorData.error?.code || errorData.errorCode || errorCode;
+            } catch (e) {
+                // JSON 파싱 실패 시 텍스트 그대로 사용
+                errorMessage = errorText || errorMessage;
+            }
+
+            console.error('❌ TMAP API 400 오류:', {
+                status: response.status,
+                statusText: response.statusText,
+                errorMessage: errorMessage,
+                errorCode: errorCode,
+                body: errorText,
+                가능한원인: [
+                    '좌표 형식 오류 (문자 포함, 범위 초과)',
+                    '좌표계 오류 (WGS84 외 사용)',
+                    'X,Y 좌표 반대 입력',
+                    '필수 파라미터 누락',
+                    '제공되지 않는 주소 범위',
+                    '잘못된 주소 형식'
+                ]
+            });
+
+            return { 
+                speedLimit: null, 
+                roadName: null, 
+                roadId: null,
+                error: errorMessage,
+                errorCode: errorCode,
+                rawResponse: errorText.substring(0, 500)
+            };
+        }
+
+        // 500 Internal Server Error 처리
+        if (response.status === 500) {
+            const errorText = await response.text();
+            console.error('❌ TMAP API 500 오류: 시스템 오류', {
+                status: response.status,
+                statusText: response.statusText,
+                body: errorText,
+                errorCode: '1005'
+            });
+            return { 
+                speedLimit: null, 
+                roadName: null, 
+                roadId: null,
+                error: '시스템 오류입니다.',
+                errorCode: '1005',
+                rawResponse: errorText.substring(0, 500)
+            };
+        }
+
+        // 기타 오류 처리
         if (!response.ok) {
             const errorText = await response.text();
             console.error('❌ TMAP API 오류:', {
@@ -78,12 +159,31 @@ const getSpeedLimitFromTmap = async (latitude, longitude) => {
                 statusText: response.statusText,
                 body: errorText
             });
-            throw new Error(`TMAP API 오류: ${response.status} - ${response.statusText}`);
+            return { 
+                speedLimit: null, 
+                roadName: null, 
+                roadId: null,
+                error: `TMAP API 오류: ${response.status} - ${response.statusText}`,
+                errorCode: String(response.status),
+                rawResponse: errorText.substring(0, 500)
+            };
         }
 
         // 응답 텍스트 먼저 확인 (디버깅)
         const responseText = await response.text();
         console.log('📄 TMAP API 응답 텍스트 (원본):', responseText);
+
+        // 빈 응답 처리
+        if (!responseText || responseText.trim() === '') {
+            console.warn('⚠️ TMAP API: 응답 본문이 비어있습니다');
+            return { 
+                speedLimit: null, 
+                roadName: null, 
+                roadId: null,
+                error: '응답 본문이 비어있습니다',
+                errorCode: 'EMPTY_RESPONSE'
+            };
+        }
 
         let data;
         try {
@@ -92,7 +192,14 @@ const getSpeedLimitFromTmap = async (latitude, longitude) => {
         } catch (parseError) {
             console.error('❌ JSON 파싱 오류:', parseError);
             console.error('응답 텍스트:', responseText);
-            return { speedLimit: null, roadName: null, roadId: null };
+            return { 
+                speedLimit: null, 
+                roadName: null, 
+                roadId: null,
+                error: 'JSON 파싱 오류',
+                errorCode: 'PARSE_ERROR',
+                rawResponse: responseText.substring(0, 500)
+            };
         }
 
         // TMAP API 응답 구조 파싱
@@ -119,7 +226,7 @@ const getSpeedLimitFromTmap = async (latitude, longitude) => {
         // 응답 구조 확인
         console.log('🔍 응답 데이터 최상위 키:', Object.keys(data));
         console.log('🔍 data.resultData 존재 여부:', !!data.resultData);
-        
+
         if (data.resultData) {
             const header = data.resultData.header || {};
             const matchedPoints = data.resultData.matchedPoints;
@@ -230,9 +337,9 @@ const getSpeedLimitFromTmap = async (latitude, longitude) => {
                     ],
                     전체응답: JSON.stringify(data).substring(0, 1000)
                 });
-                return { 
-                    speedLimit: null, 
-                    roadName: null, 
+                return {
+                    speedLimit: null,
+                    roadName: null,
                     roadId: null,
                     rawResponse: JSON.stringify(data).substring(0, 1000), // 디버깅용: 응답 전체
                     error: reason,
@@ -248,9 +355,9 @@ const getSpeedLimitFromTmap = async (latitude, longitude) => {
             응답데이터전체: data,
             전체응답JSON: JSON.stringify(data).substring(0, 1000)
         });
-        return { 
-            speedLimit: null, 
-            roadName: null, 
+        return {
+            speedLimit: null,
+            roadName: null,
             roadId: null,
             rawResponse: JSON.stringify(data).substring(0, 1000), // 디버깅용: 응답 전체
             error: 'resultData가 응답에 없음',
@@ -575,6 +682,7 @@ export const startGpsMonitoring = (onUpdate, onError) => {
                         matchedPointKeys: result.matchedPointKeys, // 디버깅용
                         matchedPointRaw: result.matchedPointRaw, // 디버깅용
                         error: result.error, // 디버깅용
+                        errorCode: result.errorCode, // 에러 코드 (있는 경우)
                         responseKeys: result.responseKeys // 디버깅용
                     });
                 }).catch(error => {

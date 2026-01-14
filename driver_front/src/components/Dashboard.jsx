@@ -323,6 +323,7 @@ const Dashboard = () => {
                             matchedPointKeys: data.matchedPointKeys, // matchedPoint의 모든 키
                             matchedPointRaw: data.matchedPointRaw, // matchedPoint 원본 데이터
                             error: data.error, // 오류 메시지 (있는 경우)
+                            errorCode: data.errorCode, // 에러 코드 (있는 경우)
                             responseKeys: data.responseKeys // 응답의 최상위 키 (있는 경우)
                         });
 
