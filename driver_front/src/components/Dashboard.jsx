@@ -94,6 +94,7 @@ const Dashboard = () => {
     const [speedLimit, setSpeedLimit] = useState(null); // 도로 제한 속도 (km/h)
     const [roadName, setRoadName] = useState(null); // 도로명
     const [speedLimitLoading, setSpeedLimitLoading] = useState(false); // 제한 속도 조회 중 상태
+    const [speedLimitDebug, setSpeedLimitDebug] = useState(null); // 디버깅 정보 (모바일용)
     const gpsWatchIdRef = useRef(null);
 
     const scoreRef = useRef(100);
@@ -114,8 +115,8 @@ const Dashboard = () => {
                 }
             }
         } else {
-            const saved = localStorage.getItem('drivingHistory');
-            if (saved) setHistory(JSON.parse(saved));
+        const saved = localStorage.getItem('drivingHistory');
+        if (saved) setHistory(JSON.parse(saved));
         }
     }, [user]);
 
@@ -312,6 +313,22 @@ const Dashboard = () => {
                     } else if (data.type === 'SPEED_LIMIT') {
                         // 제한 속도 업데이트 (TMAP API 응답)
                         setSpeedLimitLoading(false); // 조회 완료
+
+                        // 디버깅 정보 저장 (모바일용) - 실제 API 응답 전체 포함
+                        setSpeedLimitDebug({
+                            speedLimit: data.speedLimit,
+                            roadName: data.roadName,
+                            timestamp: new Date().toLocaleTimeString(),
+                            hasData: !!(data.speedLimit || data.roadName),
+                            rawResponse: data.rawResponse, // 실제 API 응답 전체
+                            matchedPointKeys: data.matchedPointKeys, // matchedPoint의 모든 키
+                            matchedPointRaw: data.matchedPointRaw, // matchedPoint 원본 데이터
+                            error: data.error, // 오류 메시지 (있는 경우)
+                            errorCode: data.errorCode, // 에러 코드 (있는 경우)
+                            responseKeys: data.responseKeys, // 응답의 최상위 키 (있는 경우)
+                            requestInfo: data.requestInfo // 요청 정보 (있는 경우)
+                        });
+
                         if (data.speedLimit !== undefined) {
                             setSpeedLimit(data.speedLimit);
                         }
@@ -321,6 +338,10 @@ const Dashboard = () => {
                     } else if (data.type === 'SPEED_LIMIT_LOADING') {
                         // 제한 속도 조회 시작
                         setSpeedLimitLoading(true);
+                        setSpeedLimitDebug({
+                            status: '조회 중...',
+                            timestamp: new Date().toLocaleTimeString()
+                        });
                     } else if (data.type === 'MOTION') {
                         // 가속도 센서 데이터: 급가속/급감속 감지
                         setGpsAcceleration(data.accelValue);
@@ -462,9 +483,9 @@ const Dashboard = () => {
                 localStorage.setItem('currentUser', JSON.stringify(updatedUser)); // Sync with Auth storage
             } else {
                 // Fallback for no user context (though should be protected)
-                const newHistory = [newEntry, ...history].slice(0, 10);
-                setHistory(newHistory);
-                localStorage.setItem('drivingHistory', JSON.stringify(newHistory));
+            const newHistory = [newEntry, ...history].slice(0, 10);
+            setHistory(newHistory);
+            localStorage.setItem('drivingHistory', JSON.stringify(newHistory));
             }
 
             setShowSummary(true);
@@ -577,15 +598,15 @@ const Dashboard = () => {
                         </div>
 
                         <div className="mt-auto">
-                            <button
+                                    <button
                                 onClick={handleAddressSubmit}
                                 className="w-full h-16 bg-black text-white rounded-2xl font-bold text-lg shadow-xl shadow-black/10 active:scale-95 transition-all"
-                            >
+                                    >
                                 내 지자체 확인하기
-                            </button>
-                        </div>
-                    </div>
-                )}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
 
                 {/* --- CASE 2: LOADING (지자체 배정 중) --- */}
                 {step === 'loading' && (
@@ -636,9 +657,10 @@ const Dashboard = () => {
                                         speedLimit={speedLimit}
                                         roadName={roadName}
                                         speedLimitLoading={speedLimitLoading}
+                                        speedLimitDebug={speedLimitDebug}
                                     />
-                                </>
-                            )}
+                                    </>
+                                )}
 
                             {/* 다른 페이지 렌더링 */}
                             {renderPage()}
