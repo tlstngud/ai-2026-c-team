@@ -324,7 +324,8 @@ const Dashboard = () => {
                             matchedPointRaw: data.matchedPointRaw, // matchedPoint 원본 데이터
                             error: data.error, // 오류 메시지 (있는 경우)
                             errorCode: data.errorCode, // 에러 코드 (있는 경우)
-                            responseKeys: data.responseKeys // 응답의 최상위 키 (있는 경우)
+                            responseKeys: data.responseKeys, // 응답의 최상위 키 (있는 경우)
+                            requestInfo: data.requestInfo // 요청 정보 (있는 경우)
                         });
 
                         if (data.speedLimit !== undefined) {

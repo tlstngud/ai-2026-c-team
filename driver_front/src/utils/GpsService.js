@@ -24,6 +24,22 @@ const SPEED_LIMIT_CHECK_INTERVAL = 5000; // 5초마다 제한 속도 조회
  * @returns {Promise<{speedLimit: number, roadName: string}>} 제한 속도 및 도로명
  */
 const getSpeedLimitFromTmap = async (latitude, longitude) => {
+    // 요청 정보 저장 (디버깅용)
+    const requestInfo = {
+        url: TMAP_SNAP_API_URL,
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Accept-Language': 'ko',
+            'appKey': TMAP_API_KEY
+        },
+        latitude: latitude,
+        longitude: longitude,
+        coords: `${longitude},${latitude}`,
+        responseType: '1',
+        timestamp: new Date().toISOString()
+    };
+
     try {
         console.log('🗺️ TMAP API 요청 시작:', {
             latitude: latitude.toFixed(6),
@@ -81,12 +97,13 @@ const getSpeedLimitFromTmap = async (latitude, longitude) => {
                     '리버스 지오코딩 사용 시 좌표 오류'
                 ]
             });
-            return { 
-                speedLimit: null, 
-                roadName: null, 
+            return {
+                speedLimit: null,
+                roadName: null,
                 roadId: null,
                 error: '204 No Content - 검색 결과 없음',
-                errorCode: '204'
+                errorCode: '204',
+                requestInfo: requestInfo
             };
         }
 
@@ -122,13 +139,14 @@ const getSpeedLimitFromTmap = async (latitude, longitude) => {
                 ]
             });
 
-            return { 
-                speedLimit: null, 
-                roadName: null, 
+            return {
+                speedLimit: null,
+                roadName: null,
                 roadId: null,
                 error: errorMessage,
                 errorCode: errorCode,
-                rawResponse: errorText.substring(0, 500)
+                rawResponse: errorText.substring(0, 500),
+                requestInfo: requestInfo
             };
         }
 
@@ -141,13 +159,14 @@ const getSpeedLimitFromTmap = async (latitude, longitude) => {
                 body: errorText,
                 errorCode: '1005'
             });
-            return { 
-                speedLimit: null, 
-                roadName: null, 
+            return {
+                speedLimit: null,
+                roadName: null,
                 roadId: null,
                 error: '시스템 오류입니다.',
                 errorCode: '1005',
-                rawResponse: errorText.substring(0, 500)
+                rawResponse: errorText.substring(0, 500),
+                requestInfo: requestInfo
             };
         }
 
@@ -159,13 +178,14 @@ const getSpeedLimitFromTmap = async (latitude, longitude) => {
                 statusText: response.statusText,
                 body: errorText
             });
-            return { 
-                speedLimit: null, 
-                roadName: null, 
+            return {
+                speedLimit: null,
+                roadName: null,
                 roadId: null,
                 error: `TMAP API 오류: ${response.status} - ${response.statusText}`,
                 errorCode: String(response.status),
-                rawResponse: errorText.substring(0, 500)
+                rawResponse: errorText.substring(0, 500),
+                requestInfo: requestInfo
             };
         }
 
@@ -176,12 +196,13 @@ const getSpeedLimitFromTmap = async (latitude, longitude) => {
         // 빈 응답 처리
         if (!responseText || responseText.trim() === '') {
             console.warn('⚠️ TMAP API: 응답 본문이 비어있습니다');
-            return { 
-                speedLimit: null, 
-                roadName: null, 
+            return {
+                speedLimit: null,
+                roadName: null,
                 roadId: null,
                 error: '응답 본문이 비어있습니다',
-                errorCode: 'EMPTY_RESPONSE'
+                errorCode: 'EMPTY_RESPONSE',
+                requestInfo: requestInfo
             };
         }
 
@@ -192,13 +213,14 @@ const getSpeedLimitFromTmap = async (latitude, longitude) => {
         } catch (parseError) {
             console.error('❌ JSON 파싱 오류:', parseError);
             console.error('응답 텍스트:', responseText);
-            return { 
-                speedLimit: null, 
-                roadName: null, 
+            return {
+                speedLimit: null,
+                roadName: null,
                 roadId: null,
                 error: 'JSON 파싱 오류',
                 errorCode: 'PARSE_ERROR',
-                rawResponse: responseText.substring(0, 500)
+                rawResponse: responseText.substring(0, 500),
+                requestInfo: requestInfo
             };
         }
 
@@ -286,7 +308,8 @@ const getSpeedLimitFromTmap = async (latitude, longitude) => {
                     roadId: matchedPoint.linkId || null, // 링크 ID
                     rawResponse: JSON.stringify(data).substring(0, 1000), // 디버깅용: 응답 전체 (최대 1000자)
                     matchedPointKeys: Object.keys(matchedPoint), // 디버깅용: matchedPoint의 모든 키
-                    matchedPointRaw: JSON.stringify(matchedPoint).substring(0, 500) // 디버깅용: matchedPoint 전체
+                    matchedPointRaw: JSON.stringify(matchedPoint).substring(0, 500), // 디버깅용: matchedPoint 전체
+                    requestInfo: requestInfo // 디버깅용: 요청 정보
                 };
 
                 console.log('✅ TMAP API 성공 - 파싱 결과:', {
@@ -344,7 +367,8 @@ const getSpeedLimitFromTmap = async (latitude, longitude) => {
                     rawResponse: JSON.stringify(data).substring(0, 1000), // 디버깅용: 응답 전체
                     error: reason,
                     matchedPointsType: typeof matchedPoints,
-                    matchedPointsValue: matchedPoints
+                    matchedPointsValue: matchedPoints,
+                    requestInfo: requestInfo
                 };
             }
         }
@@ -362,7 +386,8 @@ const getSpeedLimitFromTmap = async (latitude, longitude) => {
             rawResponse: JSON.stringify(data).substring(0, 1000), // 디버깅용: 응답 전체
             error: 'resultData가 응답에 없음',
             responseKeys: Object.keys(data),
-            fullResponse: data
+            fullResponse: data,
+            requestInfo: requestInfo
         };
     } catch (error) {
         // 네트워크 오류 상세 분석
@@ -395,7 +420,14 @@ const getSpeedLimitFromTmap = async (latitude, longitude) => {
                 stack: error.stack
             });
         }
-        return { speedLimit: null, roadName: null, roadId: null };
+        return { 
+            speedLimit: null, 
+            roadName: null, 
+            roadId: null,
+            error: error.message || '알 수 없는 오류',
+            errorCode: 'UNKNOWN_ERROR',
+            requestInfo: requestInfo
+        };
     }
 };
 
@@ -683,7 +715,8 @@ export const startGpsMonitoring = (onUpdate, onError) => {
                         matchedPointRaw: result.matchedPointRaw, // 디버깅용
                         error: result.error, // 디버깅용
                         errorCode: result.errorCode, // 에러 코드 (있는 경우)
-                        responseKeys: result.responseKeys // 디버깅용
+                        responseKeys: result.responseKeys, // 디버깅용
+                        requestInfo: result.requestInfo // 디버깅용: 요청 정보
                     });
                 }).catch(error => {
                     console.error('❌ 제한 속도 조회 중 오류:', error);
