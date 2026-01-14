@@ -235,7 +235,7 @@ const DrivePage = ({
 
                     <div className="absolute inset-0 pointer-events-none z-20 flex flex-col justify-between p-6 pb-28">
                         <div className="flex justify-between items-start">
-                            <div className="flex flex-col gap-2">
+                            <div className="flex flex-col items-start gap-2">
                                 {userRegion && (
                                     <div className="bg-black/30 backdrop-blur-md px-4 py-2 rounded-full border border-white/10">
                                         <span className="text-xs font-bold text-white/90 uppercase tracking-tight flex items-center gap-2">
