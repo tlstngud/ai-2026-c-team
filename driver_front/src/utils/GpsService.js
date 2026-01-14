@@ -117,6 +117,9 @@ const getSpeedLimitFromTmap = async (latitude, longitude) => {
         };
 
         // 응답 구조 확인
+        console.log('🔍 응답 데이터 최상위 키:', Object.keys(data));
+        console.log('🔍 data.resultData 존재 여부:', !!data.resultData);
+        
         if (data.resultData) {
             const header = data.resultData.header || {};
             const matchedPoints = data.resultData.matchedPoints;
@@ -128,7 +131,9 @@ const getSpeedLimitFromTmap = async (latitude, longitude) => {
                 matchedPoints길이: Array.isArray(matchedPoints) ? matchedPoints.length : 'N/A',
                 totalDistance: header.totalDistance,
                 matchedLinkCount: header.matchedLinkCount,
-                totalPointCount: header.totalPointCount
+                totalPointCount: header.totalPointCount,
+                resultData키: Object.keys(data.resultData),
+                matchedPoints값: matchedPoints ? (Array.isArray(matchedPoints) ? `배열[${matchedPoints.length}]` : matchedPoints) : 'null/undefined'
             });
 
             // matchedPoints가 배열이고 데이터가 있는 경우
@@ -209,6 +214,9 @@ const getSpeedLimitFromTmap = async (latitude, longitude) => {
                         matchedLinkCount: header.matchedLinkCount,
                         totalPointCount: header.totalPointCount
                     },
+                    matchedPoints타입: typeof matchedPoints,
+                    matchedPoints값: matchedPoints,
+                    resultData키: Object.keys(data.resultData),
                     가능한원인: [
                         '1. 요청한 좌표가 도로가 아닌 곳 (실내, 건물, 공원 등)',
                         '2. 데스크탑 환경에서 GPS 좌표가 부정확함',
@@ -227,7 +235,9 @@ const getSpeedLimitFromTmap = async (latitude, longitude) => {
                     roadName: null, 
                     roadId: null,
                     rawResponse: JSON.stringify(data).substring(0, 1000), // 디버깅용: 응답 전체
-                    error: reason
+                    error: reason,
+                    matchedPointsType: typeof matchedPoints,
+                    matchedPointsValue: matchedPoints
                 };
             }
         }
@@ -235,7 +245,8 @@ const getSpeedLimitFromTmap = async (latitude, longitude) => {
         // resultData가 없는 경우
         console.error('❌ TMAP API: resultData가 응답에 없음', {
             응답키: Object.keys(data),
-            전체응답: JSON.stringify(data).substring(0, 1000)
+            응답데이터전체: data,
+            전체응답JSON: JSON.stringify(data).substring(0, 1000)
         });
         return { 
             speedLimit: null, 
@@ -243,7 +254,8 @@ const getSpeedLimitFromTmap = async (latitude, longitude) => {
             roadId: null,
             rawResponse: JSON.stringify(data).substring(0, 1000), // 디버깅용: 응답 전체
             error: 'resultData가 응답에 없음',
-            responseKeys: Object.keys(data)
+            responseKeys: Object.keys(data),
+            fullResponse: data
         };
     } catch (error) {
         // 네트워크 오류 상세 분석
