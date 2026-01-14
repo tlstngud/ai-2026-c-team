@@ -14,20 +14,42 @@ const MyPage = ({ user, score, history, userRegion }) => {
     const safetyScore = Math.floor(score);
 
     // --- Simulation Data ---
+    // 할인율 계산 (InsurancePage와 동일한 로직)
+    const calculateDiscountRate = (score) => {
+        if (score >= 110) return 10;
+        else if (score >= 100) return 5;
+        else return 0;
+    };
+
+    const discountRate = calculateDiscountRate(safetyScore);
+    const monthlySavings = discountRate * 1250; // InsurancePage와 동일한 계산
+
     const currentMonthData = {
-        month: 1,
+        month: new Date().getMonth() + 1,
         driveTime: 8.5,
-        avgScore: 92,
+        avgScore: safetyScore,
         isAchieved: false
     };
 
+    // 평균 점수 계산 (최근 기록 기반)
+    const calculateAvgScore = () => {
+        if (history.length === 0) return safetyScore;
+        const recentHistory = history.slice(0, 7);
+        const sum = recentHistory.reduce((acc, curr) => acc + (curr.score || 0), 0);
+        return Math.floor(sum / recentHistory.length);
+    };
+
+    const avgScore = calculateAvgScore();
+    const lastYearDiscount = calculateDiscountRate(avgScore - 5); // 작년은 현재보다 5점 낮았다고 가정
+    const expectedDiscount = calculateDiscountRate(avgScore);
+
     const annualReportData = {
-        monthsActive: 4,
-        avgScore: 96,
-        tier: "Gold",
-        renewalDate: "2026-11-20",
-        lastYearDiscount: 13,
-        expectedDiscount: 15
+        monthsActive: Math.min(history.length, 12), // 기록 개수로 계산 (최대 12개월)
+        avgScore: avgScore,
+        tier: expectedDiscount >= 10 ? "Gold" : expectedDiscount >= 5 ? "Silver" : "Bronze",
+        renewalDate: new Date(new Date().setMonth(new Date().getMonth() + 1)).toISOString().split('T')[0].replace(/-/g, '-'),
+        lastYearDiscount: lastYearDiscount,
+        expectedDiscount: expectedDiscount
     };
 
     const monthlyProgress = Math.min((currentMonthData.driveTime / 10) * 100, 100);
@@ -105,7 +127,7 @@ const MyPage = ({ user, score, history, userRegion }) => {
             <Header type="mypage" />
 
             <main className="px-5 pt-6 space-y-8 max-w-md mx-auto">
-                
+
                 {/* 1. Profile Section (Clean & Minimal) */}
                 <section>
                     <div className="flex items-center gap-4 mb-6">
@@ -165,7 +187,7 @@ const MyPage = ({ user, score, history, userRegion }) => {
 
                         {/* Custom Progress Bar */}
                         <div className="relative w-full h-3 bg-slate-100 rounded-full overflow-hidden mb-4">
-                            <div 
+                            <div
                                 className="absolute top-0 left-0 h-full bg-indigo-500 rounded-full transition-all duration-1000 ease-out"
                                 style={{ width: `${monthlyProgress}%` }}
                             ></div>
@@ -204,21 +226,26 @@ const MyPage = ({ user, score, history, userRegion }) => {
                                 <h3 className="text-4xl font-bold tracking-tight text-white">
                                     {annualReportData.expectedDiscount}%
                                 </h3>
-                                <span className="text-sm font-medium text-emerald-400 mb-1.5 flex items-center gap-1">
-                                    <TrendingUp size={14} /> +2% 상승
-                                </span>
+                                {annualReportData.expectedDiscount > annualReportData.lastYearDiscount && (
+                                    <span className="text-sm font-medium text-emerald-400 mb-1.5 flex items-center gap-1">
+                                        <TrendingUp size={14} /> +{annualReportData.expectedDiscount - annualReportData.lastYearDiscount}% 상승
+                                    </span>
+                                )}
                             </div>
+                            <p className="text-xs text-slate-400 mt-2">
+                                예상 절감액 (월): ₩{monthlySavings.toLocaleString()}
+                            </p>
                         </div>
 
                         <div className="grid grid-cols-12 gap-1 h-1.5 w-full mb-4">
                             {[...Array(12)].map((_, i) => (
-                                <div 
-                                    key={i} 
+                                <div
+                                    key={i}
                                     className={`col-span-1 rounded-full ${i < annualReportData.monthsActive ? 'bg-emerald-500' : 'bg-slate-700'}`}
                                 ></div>
                             ))}
                         </div>
-                        
+
                         <div className="flex justify-between text-[10px] text-slate-400 font-medium">
                             <span>유지 기간: {annualReportData.monthsActive}개월</span>
                             <span>갱신: {annualReportData.renewalDate}</span>
@@ -249,11 +276,10 @@ const MyPage = ({ user, score, history, userRegion }) => {
                             <button
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
-                                className={`px-3.5 py-1.5 rounded-full text-[11px] font-bold transition-all border ${
-                                    activeTab === tab.id
+                                className={`px-3.5 py-1.5 rounded-full text-[11px] font-bold transition-all border ${activeTab === tab.id
                                     ? 'bg-slate-900 text-white border-slate-900'
                                     : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
-                                }`}
+                                    }`}
                             >
                                 {tab.label}
                             </button>
@@ -285,7 +311,7 @@ const MyPage = ({ user, score, history, userRegion }) => {
                                             </span>
                                         )}
                                     </div>
-                                    
+
                                     <div className="flex items-end justify-between">
                                         <p className={`text-lg font-bold ${coupon.status === 'AVAILABLE' ? 'text-slate-900' : 'text-slate-400'}`}>
                                             {coupon.amount}
@@ -309,11 +335,11 @@ const MyPage = ({ user, score, history, userRegion }) => {
             {/* Modal */}
             {selectedCoupon && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-6 animate-in fade-in duration-200">
-                    <div 
+                    <div
                         className="bg-white w-full max-w-sm rounded-[32px] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 relative"
                         onClick={(e) => e.stopPropagation()}
                     >
-                        <button 
+                        <button
                             onClick={() => setSelectedCoupon(null)}
                             className="absolute top-4 right-4 p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200 transition-colors z-10"
                         >
@@ -324,7 +350,7 @@ const MyPage = ({ user, score, history, userRegion }) => {
                             <div className={`w-16 h-16 rounded-2xl ${getThemeColor(selectedCoupon.theme).light} flex items-center justify-center mb-6`}>
                                 <TicketIcon type={selectedCoupon.type} className={getThemeColor(selectedCoupon.theme).text} size={32} />
                             </div>
-                            
+
                             <h3 className="text-xl font-bold text-slate-900 mb-2 w-3/4 leading-tight">
                                 {selectedCoupon.name}
                             </h3>
