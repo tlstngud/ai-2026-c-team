@@ -452,7 +452,7 @@ const DrivePage = ({
                                 <div>
                                     <p className="text-gray-500 text-xs font-bold uppercase">속도</p>
                                     <p className="text-lg font-bold text-black">
-                                        {currentSpeed > 0 ? Math.round(currentSpeed) : '--'}<span className="text-xs text-gray-400">km/h</span>
+                                        {Math.round(currentSpeed || 0)}<span className="text-xs text-gray-400">km/h</span>
                                     </p>
                                 </div>
                                 <div>
