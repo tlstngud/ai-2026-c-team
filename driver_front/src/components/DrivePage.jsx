@@ -374,16 +374,32 @@ const DrivePage = ({
                                                 )}
                                                 {/* 디버깅 정보 (모바일용) */}
                                                 {speedLimitDebug && (
-                                                    <div className="mt-2 pt-2 border-t border-white/10 w-full">
-                                                        <div className="flex flex-col items-center gap-1">
-                                                            <span className="text-[9px] text-white/40">
-                                                                업데이트: {speedLimitDebug.timestamp}
-                                                            </span>
-                                                            <span className="text-[9px] text-white/40">
-                                                                데이터: {speedLimitDebug.hasData ? '있음' : '없음'} |
-                                                                속도: {speedLimitDebug.speedLimit ?? 'null'} |
-                                                                도로: {speedLimitDebug.roadName ?? 'null'}
-                                                            </span>
+                                                    <div className="mt-2 pt-2 border-t border-white/10 w-full max-w-xs">
+                                                        <div className="flex flex-col items-center gap-1 text-[8px] text-white/50">
+                                                            <span>업데이트: {speedLimitDebug.timestamp}</span>
+                                                            <span>속도: {speedLimitDebug.speedLimit ?? 'null'} | 도로: {speedLimitDebug.roadName ?? 'null'}</span>
+                                                            {speedLimitDebug.error && (
+                                                                <span className="text-red-300">오류: {speedLimitDebug.error}</span>
+                                                            )}
+                                                            {speedLimitDebug.matchedPointKeys && (
+                                                                <span className="text-white/40">필드: {speedLimitDebug.matchedPointKeys.join(', ')}</span>
+                                                            )}
+                                                            {speedLimitDebug.matchedPointRaw && (
+                                                                <details className="text-left w-full">
+                                                                    <summary className="cursor-pointer text-white/60">matchedPoint 원본</summary>
+                                                                    <pre className="text-[7px] text-white/40 mt-1 overflow-x-auto whitespace-pre-wrap break-all">
+                                                                        {speedLimitDebug.matchedPointRaw}
+                                                                    </pre>
+                                                                </details>
+                                                            )}
+                                                            {speedLimitDebug.rawResponse && (
+                                                                <details className="text-left w-full">
+                                                                    <summary className="cursor-pointer text-white/60">API 응답 전체</summary>
+                                                                    <pre className="text-[7px] text-white/40 mt-1 overflow-x-auto whitespace-pre-wrap break-all">
+                                                                        {speedLimitDebug.rawResponse}
+                                                                    </pre>
+                                                                </details>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 )}
@@ -395,15 +411,32 @@ const DrivePage = ({
                                                 </span>
                                                 {/* 디버깅 정보 (모바일용) */}
                                                 {speedLimitDebug && (
-                                                    <div className="mt-1 pt-2 border-t border-white/10 w-full">
-                                                        <div className="flex flex-col items-center gap-1">
-                                                            <span className="text-[9px] text-white/40">
-                                                                {speedLimitDebug.timestamp}
-                                                            </span>
-                                                            <span className="text-[9px] text-white/40">
-                                                                속도: {speedLimitDebug.speedLimit ?? 'null'} |
-                                                                도로: {speedLimitDebug.roadName ?? 'null'}
-                                                            </span>
+                                                    <div className="mt-1 pt-2 border-t border-white/10 w-full max-w-xs">
+                                                        <div className="flex flex-col items-center gap-1 text-[8px] text-white/50">
+                                                            <span>{speedLimitDebug.timestamp}</span>
+                                                            <span>속도: {speedLimitDebug.speedLimit ?? 'null'} | 도로: {speedLimitDebug.roadName ?? 'null'}</span>
+                                                            {speedLimitDebug.error && (
+                                                                <span className="text-red-300">오류: {speedLimitDebug.error}</span>
+                                                            )}
+                                                            {speedLimitDebug.matchedPointKeys && (
+                                                                <span className="text-white/40">필드: {speedLimitDebug.matchedPointKeys.join(', ')}</span>
+                                                            )}
+                                                            {speedLimitDebug.matchedPointRaw && (
+                                                                <details className="text-left w-full">
+                                                                    <summary className="cursor-pointer text-white/60">matchedPoint 원본</summary>
+                                                                    <pre className="text-[7px] text-white/40 mt-1 overflow-x-auto whitespace-pre-wrap break-all">
+                                                                        {speedLimitDebug.matchedPointRaw}
+                                                                    </pre>
+                                                                </details>
+                                                            )}
+                                                            {speedLimitDebug.rawResponse && (
+                                                                <details className="text-left w-full">
+                                                                    <summary className="cursor-pointer text-white/60">API 응답 전체</summary>
+                                                                    <pre className="text-[7px] text-white/40 mt-1 overflow-x-auto whitespace-pre-wrap break-all">
+                                                                        {speedLimitDebug.rawResponse}
+                                                                    </pre>
+                                                                </details>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 )}

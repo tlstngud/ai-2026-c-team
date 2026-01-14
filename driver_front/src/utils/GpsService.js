@@ -171,7 +171,10 @@ const getSpeedLimitFromTmap = async (latitude, longitude) => {
                 result = {
                     speedLimit: speedLimitValue, // 제한 속도 (km/h) - 숫자로 변환
                     roadName: roadNameValue,
-                    roadId: matchedPoint.linkId || null // 링크 ID
+                    roadId: matchedPoint.linkId || null, // 링크 ID
+                    rawResponse: JSON.stringify(data).substring(0, 1000), // 디버깅용: 응답 전체 (최대 1000자)
+                    matchedPointKeys: Object.keys(matchedPoint), // 디버깅용: matchedPoint의 모든 키
+                    matchedPointRaw: JSON.stringify(matchedPoint).substring(0, 500) // 디버깅용: matchedPoint 전체
                 };
 
                 console.log('✅ TMAP API 성공 - 파싱 결과:', {
@@ -185,7 +188,9 @@ const getSpeedLimitFromTmap = async (latitude, longitude) => {
                     파싱된도로명: result.roadName || '없음',
                     도로ID: result.roadId || '없음',
                     매칭된포인트수: matchedPoints.length,
-                    결과객체전체: result
+                    결과객체전체: result,
+                    matchedPoint전체필드: Object.keys(matchedPoint),
+                    matchedPoint원본: matchedPoint
                 });
 
                 return result;
@@ -215,18 +220,31 @@ const getSpeedLimitFromTmap = async (latitude, longitude) => {
                         '도로 위의 정확한 GPS 좌표 사용',
                         '다른 좌표로 재시도'
                     ],
-                    전체응답: JSON.stringify(data).substring(0, 500)
+                    전체응답: JSON.stringify(data).substring(0, 1000)
                 });
-                return { speedLimit: null, roadName: null, roadId: null };
+                return { 
+                    speedLimit: null, 
+                    roadName: null, 
+                    roadId: null,
+                    rawResponse: JSON.stringify(data).substring(0, 1000), // 디버깅용: 응답 전체
+                    error: reason
+                };
             }
         }
 
         // resultData가 없는 경우
         console.error('❌ TMAP API: resultData가 응답에 없음', {
             응답키: Object.keys(data),
-            전체응답: JSON.stringify(data).substring(0, 500)
+            전체응답: JSON.stringify(data).substring(0, 1000)
         });
-        return { speedLimit: null, roadName: null, roadId: null };
+        return { 
+            speedLimit: null, 
+            roadName: null, 
+            roadId: null,
+            rawResponse: JSON.stringify(data).substring(0, 1000), // 디버깅용: 응답 전체
+            error: 'resultData가 응답에 없음',
+            responseKeys: Object.keys(data)
+        };
     } catch (error) {
         // 네트워크 오류 상세 분석
         if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
@@ -536,10 +554,16 @@ export const startGpsMonitoring = (onUpdate, onError) => {
                     }
 
                     // 제한 속도 업데이트를 콜백으로 전달 (null이어도 전달)
+                    // 디버깅 정보도 함께 전달
                     onUpdate({
                         type: 'SPEED_LIMIT',
                         speedLimit: currentSpeedLimit,
-                        roadName: currentRoadName
+                        roadName: currentRoadName,
+                        rawResponse: result.rawResponse, // 디버깅용
+                        matchedPointKeys: result.matchedPointKeys, // 디버깅용
+                        matchedPointRaw: result.matchedPointRaw, // 디버깅용
+                        error: result.error, // 디버깅용
+                        responseKeys: result.responseKeys // 디버깅용
                     });
                 }).catch(error => {
                     console.error('❌ 제한 속도 조회 중 오류:', error);
