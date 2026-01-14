@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Play, Square, Camera, CameraOff, MapPin } from 'lucide-react';
+import { Play, Square, Camera, CameraOff, MapPin, Bug, X } from 'lucide-react';
 import { STATE_CONFIG, APPLE_STATE_CONFIG } from './constants';
 
 const DrivePage = ({
@@ -26,7 +26,8 @@ const DrivePage = ({
     gpsStatus = 'GPS 검색중...',
     speedLimit = null,
     roadName = null,
-    speedLimitLoading = false
+    speedLimitLoading = false,
+    speedLimitDebug = null
 }) => {
     const videoContainerRef = useRef(null);
     const modalRef = useRef(null);
@@ -34,6 +35,7 @@ const DrivePage = ({
     const [isDragging, setIsDragging] = useState(false);
     const dragStartY = useRef(0);
     const dragStartHeight = useRef(0);
+    const [showDebugPanel, setShowDebugPanel] = useState(false);
 
     // 모달 드래그 핸들러
     const handleTouchStart = (e) => {
@@ -337,7 +339,7 @@ const DrivePage = ({
                         </div>
 
                         {/* 하단 중앙: 제한 속도 및 도로 정보 (큰 카드) */}
-                        {isActive && (speedLimitLoading || speedLimit || roadName) && (
+                        {isActive && (
                             <div className="self-center mb-20">
                                 <div className="bg-black/50 backdrop-blur-xl px-6 py-4 rounded-2xl border-2 border-white/20 shadow-2xl">
                                     <div className="flex flex-col items-center gap-2">
@@ -350,7 +352,7 @@ const DrivePage = ({
                                                     </span>
                                                 </div>
                                             </>
-                                        ) : (
+                                        ) : speedLimit || roadName ? (
                                             <>
                                                 {speedLimit && (
                                                     <div className="flex items-center gap-3">
@@ -371,7 +373,81 @@ const DrivePage = ({
                                                         </span>
                                                     </div>
                                                 )}
+                                                {/* 디버깅 정보 (모바일용) */}
+                                                {speedLimitDebug && (
+                                                    <div className="mt-2 pt-2 border-t border-white/10 w-full max-w-xs">
+                                                        <div className="flex flex-col items-center gap-1 text-[8px] text-white/50">
+                                                            <span>업데이트: {speedLimitDebug.timestamp}</span>
+                                                            <span>속도: {speedLimitDebug.speedLimit ?? 'null'} | 도로: {speedLimitDebug.roadName ?? 'null'}</span>
+                                                            {speedLimitDebug.error && (
+                                                                <span className="text-red-300">
+                                                                    오류: {speedLimitDebug.error}
+                                                                    {speedLimitDebug.errorCode && ` (코드: ${speedLimitDebug.errorCode})`}
+                                                                </span>
+                                                            )}
+                                                            {speedLimitDebug.matchedPointKeys && (
+                                                                <span className="text-white/40">필드: {speedLimitDebug.matchedPointKeys.join(', ')}</span>
+                                                            )}
+                                                            {speedLimitDebug.matchedPointRaw && (
+                                                                <details className="text-left w-full">
+                                                                    <summary className="cursor-pointer text-white/60">matchedPoint 원본</summary>
+                                                                    <pre className="text-[7px] text-white/40 mt-1 overflow-x-auto whitespace-pre-wrap break-all">
+                                                                        {speedLimitDebug.matchedPointRaw}
+                                                                    </pre>
+                                                                </details>
+                                                            )}
+                                                            {speedLimitDebug.rawResponse && (
+                                                                <details className="text-left w-full">
+                                                                    <summary className="cursor-pointer text-white/60">API 응답 전체</summary>
+                                                                    <pre className="text-[7px] text-white/40 mt-1 overflow-x-auto whitespace-pre-wrap break-all">
+                                                                        {speedLimitDebug.rawResponse}
+                                                                    </pre>
+                                                                </details>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </>
+                                        ) : (
+                                            <div className="flex flex-col items-center gap-2">
+                                                <span className="text-sm font-medium text-white/50">
+                                                    도로 정보 없음
+                                                </span>
+                                                {/* 디버깅 정보 (모바일용) */}
+                                                {speedLimitDebug && (
+                                                    <div className="mt-1 pt-2 border-t border-white/10 w-full max-w-xs">
+                                                        <div className="flex flex-col items-center gap-1 text-[8px] text-white/50">
+                                                            <span>{speedLimitDebug.timestamp}</span>
+                                                            <span>속도: {speedLimitDebug.speedLimit ?? 'null'} | 도로: {speedLimitDebug.roadName ?? 'null'}</span>
+                                                            {speedLimitDebug.error && (
+                                                                <span className="text-red-300">
+                                                                    오류: {speedLimitDebug.error}
+                                                                    {speedLimitDebug.errorCode && ` (코드: ${speedLimitDebug.errorCode})`}
+                                                                </span>
+                                                            )}
+                                                            {speedLimitDebug.matchedPointKeys && (
+                                                                <span className="text-white/40">필드: {speedLimitDebug.matchedPointKeys.join(', ')}</span>
+                                                            )}
+                                                            {speedLimitDebug.matchedPointRaw && (
+                                                                <details className="text-left w-full">
+                                                                    <summary className="cursor-pointer text-white/60">matchedPoint 원본</summary>
+                                                                    <pre className="text-[7px] text-white/40 mt-1 overflow-x-auto whitespace-pre-wrap break-all">
+                                                                        {speedLimitDebug.matchedPointRaw}
+                                                                    </pre>
+                                                                </details>
+                                                            )}
+                                                            {speedLimitDebug.rawResponse && (
+                                                                <details className="text-left w-full">
+                                                                    <summary className="cursor-pointer text-white/60">API 응답 전체</summary>
+                                                                    <pre className="text-[7px] text-white/40 mt-1 overflow-x-auto whitespace-pre-wrap break-all">
+                                                                        {speedLimitDebug.rawResponse}
+                                                                    </pre>
+                                                                </details>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
                                         )}
                                     </div>
                                 </div>
@@ -405,6 +481,130 @@ const DrivePage = ({
                         </div>
                     </div>
                 </div>
+
+                {/* 디버깅 패널 플로팅 버튼 */}
+                {isActive && (
+                    <button
+                        onClick={() => setShowDebugPanel(true)}
+                        className="fixed bottom-24 right-4 z-50 bg-purple-600 hover:bg-purple-700 text-white p-3 rounded-full shadow-lg transition-all active:scale-95"
+                        style={{ zIndex: 1000 }}
+                    >
+                        <Bug size={20} />
+                    </button>
+                )}
+
+                {/* 디버깅 패널 전체 화면 모달 */}
+                {showDebugPanel && (
+                    <div 
+                        className="fixed inset-0 bg-black/95 z-[9999] overflow-y-auto"
+                        style={{ zIndex: 9999 }}
+                    >
+                        <div className="p-4 pb-20">
+                            <div className="flex items-center justify-between mb-4">
+                                <h2 className="text-xl font-bold text-white">🔍 API 디버깅 정보</h2>
+                                <button
+                                    onClick={() => setShowDebugPanel(false)}
+                                    className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+                                >
+                                    <X size={24} className="text-white" />
+                                </button>
+                            </div>
+
+                            {speedLimitDebug ? (
+                                <div className="space-y-4">
+                                    {/* 기본 정보 */}
+                                    <div className="bg-white/10 backdrop-blur-md rounded-lg p-4">
+                                        <h3 className="text-sm font-semibold text-white/90 mb-2">기본 정보</h3>
+                                        <div className="space-y-1 text-xs text-white/70">
+                                            <div>업데이트 시간: {speedLimitDebug.timestamp}</div>
+                                            <div>제한 속도: {speedLimitDebug.speedLimit ?? 'null'}</div>
+                                            <div>도로명: {speedLimitDebug.roadName ?? 'null'}</div>
+                                            <div>데이터 존재: {speedLimitDebug.hasData ? '예' : '아니오'}</div>
+                                        </div>
+                                    </div>
+
+                                    {/* 에러 정보 */}
+                                    {speedLimitDebug.error && (
+                                        <div className="bg-red-500/20 backdrop-blur-md rounded-lg p-4 border border-red-500/50">
+                                            <h3 className="text-sm font-semibold text-red-300 mb-2">❌ 에러 정보</h3>
+                                            <div className="space-y-1 text-xs text-red-200">
+                                                <div>에러 메시지: {speedLimitDebug.error}</div>
+                                                {speedLimitDebug.errorCode && (
+                                                    <div>에러 코드: {speedLimitDebug.errorCode}</div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* matchedPoint 필드 정보 */}
+                                    {speedLimitDebug.matchedPointKeys && (
+                                        <div className="bg-blue-500/20 backdrop-blur-md rounded-lg p-4 border border-blue-500/50">
+                                            <h3 className="text-sm font-semibold text-blue-300 mb-2">📋 matchedPoint 필드</h3>
+                                            <div className="text-xs text-blue-200 break-all">
+                                                {speedLimitDebug.matchedPointKeys.join(', ')}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* matchedPoint 원본 데이터 */}
+                                    {speedLimitDebug.matchedPointRaw && (
+                                        <div className="bg-green-500/20 backdrop-blur-md rounded-lg p-4 border border-green-500/50">
+                                            <h3 className="text-sm font-semibold text-green-300 mb-2">📄 matchedPoint 원본 데이터</h3>
+                                            <pre className="text-[10px] text-green-200 mt-2 p-3 bg-black/30 rounded overflow-x-auto whitespace-pre-wrap break-all">
+                                                {speedLimitDebug.matchedPointRaw}
+                                            </pre>
+                                        </div>
+                                    )}
+
+                                    {/* API 응답 전체 */}
+                                    {speedLimitDebug.rawResponse && (
+                                        <div className="bg-yellow-500/20 backdrop-blur-md rounded-lg p-4 border border-yellow-500/50">
+                                            <h3 className="text-sm font-semibold text-yellow-300 mb-2">📦 API 응답 전체</h3>
+                                            <pre className="text-[10px] text-yellow-200 mt-2 p-3 bg-black/30 rounded overflow-x-auto whitespace-pre-wrap break-all max-h-96 overflow-y-auto">
+                                                {speedLimitDebug.rawResponse}
+                                            </pre>
+                                        </div>
+                                    )}
+
+                                    {/* 응답 구조 정보 */}
+                                    {speedLimitDebug.responseKeys && (
+                                        <div className="bg-purple-500/20 backdrop-blur-md rounded-lg p-4 border border-purple-500/50">
+                                            <h3 className="text-sm font-semibold text-purple-300 mb-2">🔑 응답 최상위 키</h3>
+                                            <div className="text-xs text-purple-200 break-all">
+                                                {speedLimitDebug.responseKeys.join(', ')}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* API 요청 정보 */}
+                                    {speedLimitDebug.requestInfo && (
+                                        <div className="bg-indigo-500/20 backdrop-blur-md rounded-lg p-4 border border-indigo-500/50">
+                                            <h3 className="text-sm font-semibold text-indigo-300 mb-2">📤 API 요청 정보</h3>
+                                            <div className="space-y-1 text-xs text-indigo-200">
+                                                <div>URL: <span className="break-all">{speedLimitDebug.requestInfo.url}</span></div>
+                                                <div>Method: {speedLimitDebug.requestInfo.method}</div>
+                                                <div>위도: {speedLimitDebug.requestInfo.latitude?.toFixed(6)}</div>
+                                                <div>경도: {speedLimitDebug.requestInfo.longitude?.toFixed(6)}</div>
+                                                <div>좌표: {speedLimitDebug.requestInfo.coords}</div>
+                                                <div>요청 시간: {speedLimitDebug.requestInfo.timestamp}</div>
+                                                <details className="mt-2">
+                                                    <summary className="cursor-pointer text-indigo-300">헤더 정보</summary>
+                                                    <pre className="text-[9px] text-indigo-200 mt-2 p-2 bg-black/30 rounded overflow-x-auto whitespace-pre-wrap break-all">
+                                                        {JSON.stringify(speedLimitDebug.requestInfo.headers, null, 2)}
+                                                    </pre>
+                                                </details>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="bg-white/10 backdrop-blur-md rounded-lg p-4">
+                                    <p className="text-white/70 text-sm">디버깅 정보가 아직 없습니다. GPS 모니터링이 시작되면 정보가 표시됩니다.</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
 
                 <div
                     ref={modalRef}
