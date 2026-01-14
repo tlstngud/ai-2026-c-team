@@ -61,6 +61,23 @@ const Header = ({ type = 'drive', isActive, averageScore, discountRate }) => {
         );
     }
 
+    if (type === 'mypage') {
+        return (
+            <header className={commonClasses}>
+                <div className="w-full flex justify-between items-center">
+                    <HeaderTitle
+                        icon={User}
+                        title="My Page"
+                        subtitle="Profile & Wallet"
+                    />
+                    <button onClick={logout} className="p-2 bg-red-50 rounded-xl text-red-500 hover:bg-red-100 transition-colors">
+                        <LogOut size={20} />
+                    </button>
+                </div>
+            </header>
+        );
+    }
+
     // Default: 'drive'
     return (
         <header className={commonClasses}>

@@ -10,6 +10,7 @@ import DrivePage from './DrivePage';
 import InsurancePage from './InsurancePage';
 import DrivingLogPage from './DrivingLogPage';
 import LogDetailPage from './LogDetailPage';
+import MyPage from './MyPage';
 
 // 지자체별 챌린지 데이터베이스
 const MUNICIPALITY_DB = {
@@ -509,6 +510,10 @@ const Dashboard = () => {
         if (currentPage === 'log') {
             if (selectedLog) return <LogDetailPage data={selectedLog} onBack={() => setSelectedLog(null)} />;
             return <DrivingLogPage onSelectLog={(log) => setSelectedLog(log)} history={history} />;
+        }
+        if (currentPage === 'mypage') {
+            const avgScore = history.length > 0 ? getAverageScore() : score;
+            return <MyPage user={user} score={avgScore} history={history} userRegion={userRegion} />;
         }
         return null;
     };
