@@ -509,10 +509,10 @@ export const startGpsMonitoring = (onUpdate, onError) => {
         // 디버깅: 가속도 값 확인 (처음 5번 + 이후 1% 확률)
         if (motionEventCount <= 5 || Math.random() < 0.01) {
             console.log('📱 가속도 센서 데이터:', {
-                x: accel.x !== undefined ? accel.x.toFixed(2) : 'undefined',
-                y: accel.y !== undefined ? accel.y.toFixed(2) : 'undefined',
-                z: accel.z !== undefined ? accel.z.toFixed(2) : 'undefined',
-                speed: lastSpeedKmh.toFixed(1) + ' km/h',
+                x: accel.x !== undefined && accel.x !== null ? accel.x.toFixed(2) : 'undefined',
+                y: accel.y !== undefined && accel.y !== null ? accel.y.toFixed(2) : 'undefined',
+                z: accel.z !== undefined && accel.z !== null ? accel.z.toFixed(2) : 'undefined',
+                speed: (lastSpeedKmh !== null && lastSpeedKmh !== undefined) ? lastSpeedKmh.toFixed(1) + ' km/h' : '0.0 km/h',
                 count: motionEventCount,
                 원본이벤트: event // 디버깅용
             });
@@ -555,7 +555,7 @@ export const startGpsMonitoring = (onUpdate, onError) => {
             isHardAccel = true;
             console.log('🚀 급가속 감지!', {
                 accel: mainAccel.toFixed(2) + ' m/s²',
-                speed: lastSpeedKmh.toFixed(1) + ' km/h',
+                speed: (lastSpeedKmh !== null && lastSpeedKmh !== undefined) ? lastSpeedKmh.toFixed(1) + ' km/h' : '0.0 km/h',
                 testMode: isTestMode,
                 axis: absX >= absY && absX >= absZ ? 'X' : (absY >= absX && absY >= absZ ? 'Y' : 'Z')
             });
@@ -563,7 +563,7 @@ export const startGpsMonitoring = (onUpdate, onError) => {
             isHardBrake = true;
             console.log('🛑 급감속 감지!', {
                 accel: mainAccel.toFixed(2) + ' m/s²',
-                speed: lastSpeedKmh.toFixed(1) + ' km/h',
+                speed: (lastSpeedKmh !== null && lastSpeedKmh !== undefined) ? lastSpeedKmh.toFixed(1) + ' km/h' : '0.0 km/h',
                 testMode: isTestMode,
                 axis: absX >= absY && absX >= absZ ? 'X' : (absY >= absX && absY >= absZ ? 'Y' : 'Z')
             });
