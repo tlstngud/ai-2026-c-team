@@ -344,8 +344,8 @@ export const startGpsMonitoring = (onUpdate, onError) => {
         // 필터링: 작은 진동 무시 (1.0 m/s² 미만)
         if (accelMagnitude < 1.0) return;
 
-        const isTestMode = lastSpeedKmh < MIN_SPEED_FOR_MOTION;
-        // if (lastSpeedKmh < MIN_SPEED_FOR_MOTION) return; // 실제 운전 시 활성화
+        // 속도 제한: 최소 속도 이상일 때만 가속도 센서 판단
+        if (lastSpeedKmh < MIN_SPEED_FOR_MOTION) return;
 
         let isHardAccel = false;
         let isHardBrake = false;
