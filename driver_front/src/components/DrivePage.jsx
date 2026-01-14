@@ -323,53 +323,6 @@ const DrivePage = ({
                             </div>
                         </div>
 
-                        {/* 하단 중앙: 제한 속도 및 도로 정보 (큰 카드) */}
-                        {isActive && (
-                            <div className="self-center mb-20">
-                                <div className="bg-black/50 backdrop-blur-xl px-6 py-4 rounded-2xl border-2 border-white/20 shadow-2xl">
-                                    <div className="flex flex-col items-center gap-2">
-                                        {speedLimitLoading ? (
-                                            <>
-                                                <div className="flex items-center gap-2">
-                                                    <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
-                                                    <span className="text-sm font-semibold text-white/80 animate-pulse">
-                                                        도로 정보 조회 중...
-                                                    </span>
-                                                </div>
-                                            </>
-                                        ) : speedLimit || roadName ? (
-                                            <>
-                                                {speedLimit && (
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="text-xs font-semibold text-white/70 uppercase tracking-wide">
-                                                            제한 속도
-                                                        </span>
-                                                        <span className="text-3xl font-bold text-blue-400">
-                                                            {speedLimit}
-                                                            <span className="text-lg font-medium text-white/70 ml-1">km/h</span>
-                                                        </span>
-                                                    </div>
-                                                )}
-                                                {roadName && (
-                                                    <div className="flex items-center gap-2">
-                                                        <MapPin size={14} className="text-white/60" />
-                                                        <span className="text-sm font-bold text-white">
-                                                            {roadName}
-                                                        </span>
-                                                    </div>
-                                                )}
-                                            </>
-                                        ) : (
-                                            <div className="flex flex-col items-center gap-2">
-                                                <span className="text-sm font-medium text-white/50">
-                                                    도로 정보 없음
-                                                </span>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
 
                         {isActive && (
                             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-64 transition-all duration-300">
