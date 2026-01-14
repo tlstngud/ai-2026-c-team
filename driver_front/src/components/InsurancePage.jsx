@@ -2,9 +2,18 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { TrendingUp, DollarSign, CheckCircle2, MapPin, Ticket, Award, Map } from 'lucide-react';
 import Header from './Header';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import ChallengeDetail from './ChallengeDetail';
 
-const InsurancePage = ({ score = 85, history = [], userRegion = null }) => {
+const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChallengeDetail = null }) => {
     const [discountRate, setDiscountRate] = useState(0);
+    const [showChallengeDetail, setShowChallengeDetail] = useState(false);
+    
+    // showChallengeDetail 상태 변경 시 부모 컴포넌트에 알림
+    useEffect(() => {
+        if (onShowChallengeDetail) {
+            onShowChallengeDetail(showChallengeDetail);
+        }
+    }, [showChallengeDetail, onShowChallengeDetail]);
 
     useEffect(() => {
         if (score >= 110) setDiscountRate(10);
@@ -42,13 +51,46 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null }) => {
         });
     }, [history]);
 
+    // 챌린지 상세 페이지 표시 (조건부 렌더링)
+    if (showChallengeDetail) {
+        return (
+            <ChallengeDetail
+                challenge={{
+                    region: region.name,
+                    title: region.campaign || `${region.name} 안전운전 챌린지`,
+                    targetScore: region.target,
+                    myScore: score,
+                    reward: region.reward,
+                    participants: 1243,
+                    period: '2026.01.15 ~ 2026.01.29 (2주)',
+                    description: `${region.name}에서 안전운전을 실천해주세요. 목표 점수 달성 시 혜택을 드립니다.`,
+                    rules: [
+                        '지정된 기간 동안 100km 이상 주행',
+                        `안전운전 점수 ${region.target}점 이상 유지`,
+                        '급가속/급감속 최소화'
+                    ],
+                    conditions: [
+                        `${region.name} 거주자 또는 주 활동 운전자`,
+                        '최근 1년 내 중과실 사고 이력 없음',
+                        '마케팅 활용 동의 필수'
+                    ]
+                }}
+                currentScore={score}
+                onBack={() => setShowChallengeDetail(false)}
+            />
+        );
+    }
+
     return (
         <div className="min-h-full bg-[#F8FAFC] text-slate-800 font-sans">
             <Header type="insurance" discountRate={discountRate} />
 
             <main className="grid grid-cols-1 gap-4 p-4 sm:p-6">
                 {/* 지자체 챌린지 Hero Card */}
-                <div className={`relative bg-gradient-to-br ${region.bgImage} rounded-[2rem] p-6 text-white overflow-hidden shadow-xl`}>
+                <div 
+                    className={`relative bg-gradient-to-br ${region.bgImage} rounded-[2rem] p-6 text-white overflow-hidden shadow-xl cursor-pointer active:scale-[0.98] transition-transform`}
+                    onClick={() => setShowChallengeDetail(true)}
+                >
                     <Map className="absolute right-[-20px] bottom-[-20px] text-white/5" size={140} />
                     <div className="relative z-10">
                         <div className="flex items-center gap-2 mb-4">

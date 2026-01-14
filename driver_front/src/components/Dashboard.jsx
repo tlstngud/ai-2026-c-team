@@ -77,6 +77,12 @@ const Dashboard = () => {
     const [selectedLog, setSelectedLog] = useState(null);
     const [hasPermission, setHasPermission] = useState(false);
     const [isActive, setIsActive] = useState(false);
+    // 가중치 기반 점수 계산을 위한 상태
+    const [driverBehaviorScore, setDriverBehaviorScore] = useState(100); // 운전자 행동 점수 (40%)
+    const [speedLimitScore, setSpeedLimitScore] = useState(100); // 제한속도 준수 점수 (35%)
+    const [accelDecelScore, setAccelDecelScore] = useState(100); // 급가속/감속 점수 (25%)
+
+    // 최종 가중 평균 점수
     const [score, setScore] = useState(100);
     const [sessionTime, setSessionTime] = useState(0);
     const [currentState, setCurrentState] = useState(0);
@@ -95,9 +101,30 @@ const Dashboard = () => {
     const [roadName, setRoadName] = useState(null); // 도로명
     const [speedLimitLoading, setSpeedLimitLoading] = useState(false); // 제한 속도 조회 중 상태
     const [speedLimitDebug, setSpeedLimitDebug] = useState(null); // 디버깅 정보 (모바일용)
+    const [showChallengeDetail, setShowChallengeDetail] = useState(false); // 챌린지 상세 페이지 표시 여부
     const gpsWatchIdRef = useRef(null);
 
+    // 가중치 상수
+    const WEIGHTS = {
+        DRIVER_BEHAVIOR: 0.40,  // 운전자 행동 40%
+        SPEED_LIMIT: 0.35,      // 제한속도 준수 35%
+        ACCEL_DECEL: 0.25       // 급가속/감속 25%
+    };
+
+    // 각 요소별 점수 ref
+    const driverBehaviorScoreRef = useRef(100);
+    const speedLimitScoreRef = useRef(100);
+    const accelDecelScoreRef = useRef(100);
     const scoreRef = useRef(100);
+
+    // 가중 평균 점수 계산 함수
+    const calculateWeightedScore = () => {
+        const weightedScore =
+            (driverBehaviorScoreRef.current * WEIGHTS.DRIVER_BEHAVIOR) +
+            (speedLimitScoreRef.current * WEIGHTS.SPEED_LIMIT) +
+            (accelDecelScoreRef.current * WEIGHTS.ACCEL_DECEL);
+        return Math.max(0, Math.min(100, weightedScore));
+    };
     const sessionTimeRef = useRef(0);
 
     // --- Initialize History & User Region ---
@@ -306,9 +333,15 @@ const Dashboard = () => {
                                 overspeed: prev.overspeed + 1
                             }));
                             setEventCount(prev => prev + 1);
-                            // 과속 패널티: 3점
-                            scoreRef.current = Math.max(0, scoreRef.current - 3);
-                            setScore(scoreRef.current);
+                            // 제한속도 준수 점수 감점 (35% 가중치)
+                            // 과속 1회당 5점 감점 (제한속도 준수 요소만)
+                            speedLimitScoreRef.current = Math.max(0, speedLimitScoreRef.current - 5);
+                            setSpeedLimitScore(speedLimitScoreRef.current);
+
+                            // 가중 평균 점수 재계산
+                            const newScore = calculateWeightedScore();
+                            scoreRef.current = newScore;
+                            setScore(newScore);
                         }
                     } else if (data.type === 'SPEED_LIMIT') {
                         // 제한 속도 업데이트 (TMAP API 응답)
@@ -360,9 +393,15 @@ const Dashboard = () => {
                                 hardAccel: prev.hardAccel + 1
                             }));
                             setEventCount(prev => prev + 1);
-                            // 급가속 패널티: 2점
-                            scoreRef.current = Math.max(0, scoreRef.current - 2);
-                            setScore(scoreRef.current);
+                            // 급가속/감속 점수 감점 (25% 가중치)
+                            // 급가속 1회당 4점 감점 (급가속/감속 요소만)
+                            accelDecelScoreRef.current = Math.max(0, accelDecelScoreRef.current - 4);
+                            setAccelDecelScore(accelDecelScoreRef.current);
+
+                            // 가중 평균 점수 재계산
+                            const newScore = calculateWeightedScore();
+                            scoreRef.current = newScore;
+                            setScore(newScore);
                         }
 
                         // 급감속 감지
@@ -376,9 +415,15 @@ const Dashboard = () => {
                                 hardBrake: prev.hardBrake + 1
                             }));
                             setEventCount(prev => prev + 1);
-                            // 급감속 패널티: 2.5점
-                            scoreRef.current = Math.max(0, scoreRef.current - 2.5);
-                            setScore(scoreRef.current);
+                            // 급가속/감속 점수 감점 (25% 가중치)
+                            // 급감속 1회당 5점 감점 (급가속/감속 요소만)
+                            accelDecelScoreRef.current = Math.max(0, accelDecelScoreRef.current - 5);
+                            setAccelDecelScore(accelDecelScoreRef.current);
+
+                            // 가중 평균 점수 재계산
+                            const newScore = calculateWeightedScore();
+                            scoreRef.current = newScore;
+                            setScore(newScore);
                         }
                     }
                 },
@@ -411,6 +456,15 @@ const Dashboard = () => {
             setSensorStatus({ gps: false, motion: false });
             setSpeedLimit(null);
             setRoadName(null);
+            // 점수 초기화
+            driverBehaviorScoreRef.current = 100;
+            speedLimitScoreRef.current = 100;
+            accelDecelScoreRef.current = 100;
+            setDriverBehaviorScore(100);
+            setSpeedLimitScore(100);
+            setAccelDecelScore(100);
+            scoreRef.current = 100;
+            setScore(100);
         }
 
         return () => {
@@ -421,6 +475,7 @@ const Dashboard = () => {
     }, [isActive]);
 
     // --- Simulation Logic (Scoring) ---
+    // 운전자 행동 점수 계산 (40% 가중치)
     useEffect(() => {
         let interval = null;
         if (isActive) {
@@ -432,16 +487,24 @@ const Dashboard = () => {
                 else if (rand > 0.90) nextState = 2;
                 setCurrentState(nextState);
 
+                // 운전자 행동 점수 감점 (40% 가중치)
                 let penalty = 0;
                 let recovery = 0.05;
                 if (nextState !== 0) {
-                    if (nextState === 1) penalty = 1.5;
-                    if (nextState === 2) penalty = 2.0;
-                    if (nextState === 3) penalty = 4.0;
+                    // 상태별 감점량 조정 (운전자 행동 요소만)
+                    if (nextState === 1) penalty = 3.0;  // 경미한 부주의
+                    if (nextState === 2) penalty = 4.0;  // 중간 부주의
+                    if (nextState === 3) penalty = 8.0;   // 심각한 부주의 (졸음 등)
                     setEventCount(prev => prev + 1);
                     recovery = 0;
                 }
-                const newScore = Math.max(0, Math.min(100, scoreRef.current - penalty + recovery));
+
+                // 운전자 행동 점수만 업데이트
+                driverBehaviorScoreRef.current = Math.max(0, Math.min(100, driverBehaviorScoreRef.current - penalty + recovery));
+                setDriverBehaviorScore(driverBehaviorScoreRef.current);
+
+                // 가중 평균 점수 재계산
+                const newScore = calculateWeightedScore();
                 scoreRef.current = newScore;
                 setScore(newScore);
             }, 300);
@@ -490,8 +553,15 @@ const Dashboard = () => {
 
             setShowSummary(true);
         } else {
-            setScore(100);
+            // 모든 점수 초기화
+            driverBehaviorScoreRef.current = 100;
+            speedLimitScoreRef.current = 100;
+            accelDecelScoreRef.current = 100;
+            setDriverBehaviorScore(100);
+            setSpeedLimitScore(100);
+            setAccelDecelScore(100);
             scoreRef.current = 100;
+            setScore(100);
             setCurrentState(0);
             setEventCount(0);
             setSessionTime(0);
@@ -526,7 +596,7 @@ const Dashboard = () => {
     const renderPage = () => {
         if (currentPage === 'insurance') {
             const avgScore = history.length > 0 ? getAverageScore() : score;
-            return <InsurancePage score={avgScore} history={history} userRegion={userRegion} />;
+            return <InsurancePage score={avgScore} history={history} userRegion={userRegion} onShowChallengeDetail={setShowChallengeDetail} />;
         }
         if (currentPage === 'log') {
             if (selectedLog) return <LogDetailPage data={selectedLog} onBack={() => setSelectedLog(null)} />;
@@ -730,6 +800,7 @@ const Dashboard = () => {
                             onPageChange={handlePageChange}
                             selectedLog={selectedLog}
                             showCameraView={showCameraView}
+                            showChallengeDetail={showChallengeDetail}
                         />
                     </>
                 )}
