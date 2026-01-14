@@ -19,8 +19,8 @@ const SPEED_LIMIT_CHECK_INTERVAL = 5000; // 5초마다 제한 속도 조회
 
 // 테스트 좌표 (고속도로 - 올림픽대로)
 const TEST_COORDINATES = {
-    latitude: 37.4244,
-    longitude: 127.1345,
+    latitude: 37.5665,
+    longitude: 126.9780,
     enabled: true // true로 설정하면 실제 GPS 대신 이 좌표 사용 (테스트용)
 };
 
@@ -32,18 +32,24 @@ const TEST_COORDINATES = {
  */
 const getSpeedLimitFromTmap = async (latitude, longitude) => {
     // 요청 정보 저장 (디버깅용)
+    const requestBody = {
+        locations: [{
+            latitude: latitude,
+            longitude: longitude
+        }]
+    };
+
     const requestInfo = {
         url: TMAP_SNAP_API_URL,
         method: 'POST',
         headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
+            'Content-Type': 'application/json',
             'Accept-Language': 'ko',
             'appKey': TMAP_API_KEY
         },
         latitude: latitude,
         longitude: longitude,
-        coords: `${longitude},${latitude}`,
-        responseType: '1',
+        requestBody: requestBody,
         timestamp: new Date().toISOString()
     };
 
@@ -59,30 +65,24 @@ const getSpeedLimitFromTmap = async (latitude, longitude) => {
         const timeoutId = setTimeout(() => controller.abort(), 10000); // 10초 타임아웃
 
         // TMAP MatchToRoads API 요청
-        // 명세서에 따르면:
-        // - Content-Type: application/x-www-form-urlencoded
-        // - coords 형식: 경도,위도 (WGS84, longitude,latitude 순서)
-        // - responseType: 1 (전체 데이터 요청)
-        // - appKey: 헤더에도 포함
-        const coords = `${longitude},${latitude}`; // 경도,위도 형식
-
-        const formData = new URLSearchParams();
-        formData.append('responseType', '1'); // 전체 데이터 요청
-        formData.append('coords', coords);
+        // 올바른 요청 형식:
+        // - Content-Type: application/json
+        // - Body: {"locations": [{"latitude": 위도, "longitude": 경도}]}
+        // - appKey: 헤더에 포함
 
         console.log('📝 TMAP API 요청 Body:', {
-            responseType: '1',
-            coords: coords
+            locations: requestBody.locations,
+            전체요청: JSON.stringify(requestBody, null, 2)
         });
 
         const response = await fetch(TMAP_SNAP_API_URL, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
+                'Content-Type': 'application/json',
                 'Accept-Language': 'ko',
-                'appKey': TMAP_API_KEY // 헤더에도 appKey 포함
+                'appKey': TMAP_API_KEY // 헤더에 appKey 포함
             },
-            body: formData.toString(),
+            body: JSON.stringify(requestBody),
             signal: controller.signal
         });
 
@@ -650,7 +650,7 @@ export const startGpsMonitoring = (onUpdate, onError) => {
             // TMAP API로 제한 속도 조회 (5초마다 한 번만)
             // 테스트 모드: TEST_COORDINATES.enabled가 true이면 테스트 좌표만 사용 (GPS 조건 무시)
             const useTestCoords = TEST_COORDINATES.enabled;
-            
+
             if (useTestCoords) {
                 // 테스트 모드: GPS 조건 무시하고 항상 테스트 좌표 사용
                 if ((currentTime - lastSpeedLimitCheck) > SPEED_LIMIT_CHECK_INTERVAL) {
