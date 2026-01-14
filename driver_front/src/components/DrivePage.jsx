@@ -437,28 +437,51 @@ const DrivePage = ({
 
                         {/* Action Button */}
                         <div className="mt-auto flex gap-3">
-                            {(isActive || (!isActive && sessionTime > 0)) && (
+                            {/* 녹화 전: [Back, Start] */}
+                            {!isActive && sessionTime === 0 && (
+                                <>
+                                    <button
+                                        onClick={() => setShowCameraView(false)}
+                                        className="flex-1 h-14 rounded-2xl bg-gray-100 text-gray-900 font-bold flex items-center justify-center gap-2 transition-all active:scale-95 hover:bg-gray-200"
+                                    >
+                                        <CameraOff size={18} /> Back
+                                    </button>
+                                    <button
+                                        onClick={toggleSession}
+                                        className="flex-1 h-14 rounded-2xl flex items-center justify-center gap-2 font-bold text-lg shadow-lg active:scale-95 transition-all bg-black text-white shadow-black/20"
+                                    >
+                                        <Play fill="currentColor" size={18} /> Start Driving
+                                    </button>
+                                </>
+                            )}
+                            
+                            {/* 녹화 중: [Stop] */}
+                            {isActive && (
                                 <button
-                                    onClick={() => setShowCameraView(false)}
-                                    className="flex-1 h-14 rounded-2xl bg-gray-100 text-gray-900 font-bold flex items-center justify-center gap-2 transition-all active:scale-95 hover:bg-gray-200"
+                                    onClick={toggleSession}
+                                    className="w-full h-14 rounded-2xl flex items-center justify-center gap-2 font-bold text-lg shadow-lg active:scale-95 transition-all bg-black text-white shadow-black/20"
                                 >
-                                    <CameraOff size={18} /> Back
+                                    <Square fill="currentColor" size={18} /> Stop
                                 </button>
                             )}
-                            <button
-                                onClick={toggleSession}
-                                className={`${isActive || (!isActive && sessionTime > 0) ? 'flex-1' : 'w-full'} h-14 rounded-2xl flex items-center justify-center gap-2 font-bold text-lg shadow-lg active:scale-95 transition-all
-                                    ${isActive
-                                        ? 'bg-black text-white shadow-black/20'
-                                        : 'bg-black text-white shadow-black/20'
-                                    }`}
-                            >
-                                {isActive ? (
-                                    <> <Square fill="currentColor" size={18} /> End Driving </>
-                                ) : (
-                                    <> <Play fill="currentColor" size={18} /> Start Driving </>
-                                )}
-                            </button>
+                            
+                            {/* 녹화 후: [Back, Start] */}
+                            {!isActive && sessionTime > 0 && (
+                                <>
+                                    <button
+                                        onClick={() => setShowCameraView(false)}
+                                        className="flex-1 h-14 rounded-2xl bg-gray-100 text-gray-900 font-bold flex items-center justify-center gap-2 transition-all active:scale-95 hover:bg-gray-200"
+                                    >
+                                        <CameraOff size={18} /> Back
+                                    </button>
+                                    <button
+                                        onClick={toggleSession}
+                                        className="flex-1 h-14 rounded-2xl flex items-center justify-center gap-2 font-bold text-lg shadow-lg active:scale-95 transition-all bg-black text-white shadow-black/20"
+                                    >
+                                        <Play fill="currentColor" size={18} /> Start Driving
+                                    </button>
+                                </>
+                            )}
                         </div>
                     </div>
                 </div>
