@@ -261,7 +261,7 @@ const DrivePage = ({
                             <div className="flex flex-col items-end gap-2">
                                 {/* Score Big Display */}
                                 <div className="flex flex-col items-end leading-none">
-                                    <span className="text-6xl font-black tracking-tighter drop-shadow-xl text-white">
+                                    <span className="text-5xl font-black tracking-tighter drop-shadow-xl text-white">
                                         {Math.floor(score)}
                                     </span>
                                     <span className="text-[10px] font-bold text-white/60 uppercase tracking-widest mr-1">
@@ -437,7 +437,7 @@ const DrivePage = ({
 
                         {/* Action Button */}
                         <div className="mt-auto flex gap-3">
-                            {isActive && (
+                            {(isActive || (!isActive && sessionTime > 0)) && (
                                 <button
                                     onClick={() => setShowCameraView(false)}
                                     className="flex-1 h-14 rounded-2xl bg-gray-100 text-gray-900 font-bold flex items-center justify-center gap-2 transition-all active:scale-95 hover:bg-gray-200"
@@ -447,9 +447,9 @@ const DrivePage = ({
                             )}
                             <button
                                 onClick={toggleSession}
-                                className={`${isActive ? 'flex-1' : 'w-full'} h-14 rounded-2xl flex items-center justify-center gap-2 font-bold text-lg shadow-lg active:scale-95 transition-all
-                                    ${isActive 
-                                        ? 'bg-black text-white shadow-black/20' 
+                                className={`${isActive || (!isActive && sessionTime > 0) ? 'flex-1' : 'w-full'} h-14 rounded-2xl flex items-center justify-center gap-2 font-bold text-lg shadow-lg active:scale-95 transition-all
+                                    ${isActive
+                                        ? 'bg-black text-white shadow-black/20'
                                         : 'bg-black text-white shadow-black/20'
                                     }`}
                             >
