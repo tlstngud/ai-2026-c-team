@@ -454,7 +454,7 @@ const DrivePage = ({
                                     </button>
                                 </>
                             )}
-                            
+
                             {/* 녹화 중: [Stop] */}
                             {isActive && (
                                 <button
@@ -464,7 +464,7 @@ const DrivePage = ({
                                     <Square fill="currentColor" size={18} /> Stop
                                 </button>
                             )}
-                            
+
                             {/* 녹화 후: [Back, Start] */}
                             {!isActive && sessionTime > 0 && (
                                 <>
