@@ -13,8 +13,8 @@ const MIN_SPEED_FOR_MOTION = 10; // km/h (이 속도 이상일 때만 가속도 
 // TMAP API 설정
 const TMAP_API_KEY = '49sDimr9yt5PxoX30zQq481OCuwcUNDV6D2cbXs3';
 const TMAP_API_VERSION = '1'; // API 버전
-// TMAP MatchToRoads API 엔드포인트 (올바른 URL)
-const TMAP_SNAP_API_URL = `https://apis.openapi.sk.com/tmap/road/matchToRoads?version=${TMAP_API_VERSION}&appKey=${TMAP_API_KEY}`;
+// TMAP NearToRoad API 엔드포인트 (가까운 도로 찾기)
+const TMAP_NEAR_TO_ROAD_API_URL = `https://apis.openapi.sk.com/tmap/road/nearToRoad`;
 const SPEED_LIMIT_CHECK_INTERVAL = 5000; // 5초마다 제한 속도 조회
 
 // 테스트 좌표 (정확한 도로 한 가운데 위치)
@@ -26,64 +26,63 @@ const TEST_COORDINATES = {
 };
 
 /**
- * TMAP Snap API로 도로 제한 속도 조회
+ * TMAP NearToRoad API로 도로 제한 속도 조회
  * @param {number} latitude - 위도
  * @param {number} longitude - 경도
  * @returns {Promise<{speedLimit: number, roadName: string}>} 제한 속도 및 도로명
  */
 const getSpeedLimitFromTmap = async (latitude, longitude) => {
+    // GET 요청을 위한 Query String 생성
+    const queryParams = new URLSearchParams({
+        version: TMAP_API_VERSION,
+        appKey: TMAP_API_KEY,
+        lat: latitude.toString(),
+        lon: longitude.toString()
+    });
+    const fullUrl = `${TMAP_NEAR_TO_ROAD_API_URL}?${queryParams.toString()}`;
+
     // 요청 정보 저장 (디버깅용)
     const requestInfo = {
-        url: TMAP_SNAP_API_URL,
-        method: 'POST',
+        url: fullUrl,
+        method: 'GET',
         headers: {
-            'appKey': TMAP_API_KEY,
-            'Content-Type': 'application/x-www-form-urlencoded'
+            'Accept': 'application/json'
         },
         latitude: latitude,
         longitude: longitude,
-        coords: `${longitude},${latitude}`,
-        version: '1',
-        responseType: '1',
+        version: TMAP_API_VERSION,
         timestamp: new Date().toISOString()
     };
 
     try {
-        console.log('🗺️ TMAP API 요청 시작:', {
+        console.log('🗺️ TMAP NearToRoad API 요청 시작:', {
             latitude: latitude.toFixed(6),
             longitude: longitude.toFixed(6),
-            url: TMAP_SNAP_API_URL
+            url: fullUrl
         });
 
         // CORS 및 네트워크 오류 처리
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000); // 10초 타임아웃
 
-        // TMAP MatchToRoads API 요청
+        // TMAP NearToRoad API 요청 (GET Method)
         // 정확한 요청 형식:
-        // - Content-Type: application/x-www-form-urlencoded
-        // - Body: version=1&responseType=1&coords=경도,위도
-        // - appKey: 헤더에 포함
-        const coords = `${longitude},${latitude}`; // 경도,위도 형식
+        // - Method: GET
+        // - Query Parameters: version, appKey, lat, lon
+        // - Accept: application/json
 
-        const formData = new URLSearchParams();
-        formData.append('version', '1'); // API 버전
-        formData.append('responseType', '1'); // 거리순:1, 좌표순:2
-        formData.append('coords', coords); // 경도,위도 문자열
-
-        console.log('📝 TMAP API 요청 Body:', {
-            version: '1',
-            responseType: '1',
-            coords: coords
+        console.log('📝 TMAP API 요청 Query Parameters:', {
+            version: TMAP_API_VERSION,
+            appKey: TMAP_API_KEY.substring(0, 10) + '...',
+            lat: latitude.toString(),
+            lon: longitude.toString()
         });
 
-        const response = await fetch(TMAP_SNAP_API_URL, {
-            method: 'POST',
+        const response = await fetch(fullUrl, {
+            method: 'GET',
             headers: {
-                'appKey': TMAP_API_KEY, // 헤더에 appKey 포함
-                'Content-Type': 'application/x-www-form-urlencoded'
+                'Accept': 'application/json'
             },
-            body: formData.toString(),
             signal: controller.signal
         });
 
@@ -232,8 +231,8 @@ const getSpeedLimitFromTmap = async (latitude, longitude) => {
             };
         }
 
-        // TMAP API 응답 구조 파싱
-        // 응답 형식: { resultData: { matchedPoints: [{ speed, linkId, roadCategory, ... }] } }
+        // TMAP NearToRoad API 응답 구조 파싱
+        // 응답 형식: { resultData: { header: { speed, roadName, linkId, roadCategory, ... }, linkPoints: [...] } }
         let result = { speedLimit: null, roadName: null, roadId: null };
 
         // 도로 카테고리 매핑 (roadCategory -> 도로명)
@@ -259,101 +258,73 @@ const getSpeedLimitFromTmap = async (latitude, longitude) => {
 
         if (data.resultData) {
             const header = data.resultData.header || {};
-            const matchedPoints = data.resultData.matchedPoints;
 
-            console.log('📊 TMAP API 응답 구조:', {
+            console.log('📊 TMAP NearToRoad API 응답 구조:', {
                 header존재: !!header,
-                matchedPoints존재: !!matchedPoints,
-                matchedPoints타입: Array.isArray(matchedPoints) ? '배열' : typeof matchedPoints,
-                matchedPoints길이: Array.isArray(matchedPoints) ? matchedPoints.length : 'N/A',
+                header키: Object.keys(header),
+                speed: header.speed,
+                roadName: header.roadName,
+                linkId: header.linkId,
+                roadCategory: header.roadCategory,
                 totalDistance: header.totalDistance,
-                matchedLinkCount: header.matchedLinkCount,
-                totalPointCount: header.totalPointCount,
-                resultData키: Object.keys(data.resultData),
-                matchedPoints값: matchedPoints ? (Array.isArray(matchedPoints) ? `배열[${matchedPoints.length}]` : matchedPoints) : 'null/undefined'
+                resultData키: Object.keys(data.resultData)
             });
 
-            // matchedPoints가 배열이고 데이터가 있는 경우
-            if (Array.isArray(matchedPoints) && matchedPoints.length > 0) {
-                // 첫 번째 매칭된 포인트 사용 (가장 가까운 도로)
-                const matchedPoint = matchedPoints[0];
-
-                // 디버깅: matchedPoint의 모든 필드 확인
-                console.log('🔍 matchedPoint 상세 정보:', {
-                    전체객체: matchedPoint,
-                    모든키: Object.keys(matchedPoint),
-                    speed: matchedPoint.speed,
-                    speedLimit: matchedPoint.speedLimit,
-                    limitSpeed: matchedPoint.limitSpeed,
-                    linkId: matchedPoint.linkId,
-                    roadCategory: matchedPoint.roadCategory,
-                    roadName: matchedPoint.roadName,
-                    roadType: matchedPoint.roadType
+            // header에서 직접 데이터 추출
+            if (header) {
+                // 디버깅: header의 모든 필드 확인
+                console.log('🔍 header 상세 정보:', {
+                    전체객체: header,
+                    모든키: Object.keys(header),
+                    speed: header.speed,
+                    speed타입: typeof header.speed,
+                    roadName: header.roadName,
+                    linkId: header.linkId,
+                    roadCategory: header.roadCategory
                 });
 
                 // speed 필드 확인 (응답 구조: speed는 숫자로 옴)
-                // matchedPoint.speed가 숫자이거나 문자열일 수 있으므로 Number로 변환
-                const speedLimitValue = matchedPoint.speed !== undefined && matchedPoint.speed !== null
-                    ? Number(matchedPoint.speed)
-                    : (matchedPoint.speedLimit !== undefined && matchedPoint.speedLimit !== null
-                        ? Number(matchedPoint.speedLimit)
-                        : (matchedPoint.limitSpeed !== undefined && matchedPoint.limitSpeed !== null
-                            ? Number(matchedPoint.limitSpeed)
-                            : (matchedPoint.maxSpeed !== undefined && matchedPoint.maxSpeed !== null
-                                ? Number(matchedPoint.maxSpeed)
-                                : null)));
+                const speedLimitValue = header.speed !== undefined && header.speed !== null
+                    ? Number(header.speed)
+                    : null;
 
-                // 도로명 확인 (roadCategory를 도로명으로 매핑)
-                // 응답 구조에는 roadName 필드가 없고 roadCategory만 있음
-                const roadNameValue = matchedPoint.roadName ||
-                    (matchedPoint.roadCategory !== undefined && matchedPoint.roadCategory !== null
-                        ? roadCategoryMap[matchedPoint.roadCategory] || `도로등급 ${matchedPoint.roadCategory}`
+                // 도로명 확인 (roadName이 있으면 사용, 없으면 roadCategory로 매핑)
+                const roadNameValue = header.roadName && header.roadName.trim() !== ''
+                    ? header.roadName
+                    : (header.roadCategory !== undefined && header.roadCategory !== null
+                        ? roadCategoryMap[header.roadCategory] || `도로등급 ${header.roadCategory}`
                         : null);
 
                 result = {
                     speedLimit: speedLimitValue, // 제한 속도 (km/h) - 숫자로 변환
                     roadName: roadNameValue,
-                    roadId: matchedPoint.linkId || null, // 링크 ID
+                    roadId: header.linkId || null, // 링크 ID
                     rawResponse: JSON.stringify(data).substring(0, 1000), // 디버깅용: 응답 전체 (최대 1000자)
-                    matchedPointKeys: Object.keys(matchedPoint), // 디버깅용: matchedPoint의 모든 키
-                    matchedPointRaw: JSON.stringify(matchedPoint).substring(0, 500), // 디버깅용: matchedPoint 전체
+                    headerKeys: Object.keys(header), // 디버깅용: header의 모든 키
+                    headerRaw: JSON.stringify(header).substring(0, 500), // 디버깅용: header 전체
                     requestInfo: requestInfo // 디버깅용: 요청 정보
                 };
 
-                console.log('✅ TMAP API 성공 - 파싱 결과:', {
-                    원본speed: matchedPoint.speed,
-                    speed타입: typeof matchedPoint.speed,
+                console.log('✅ TMAP NearToRoad API 성공 - 파싱 결과:', {
+                    원본speed: header.speed,
+                    speed타입: typeof header.speed,
                     파싱된제한속도: result.speedLimit,
                     제한속도타입: typeof result.speedLimit,
                     제한속도표시: result.speedLimit ? `${result.speedLimit}km/h` : '없음',
-                    원본roadCategory: matchedPoint.roadCategory,
-                    roadCategory타입: typeof matchedPoint.roadCategory,
+                    원본roadCategory: header.roadCategory,
+                    roadCategory타입: typeof header.roadCategory,
+                    원본roadName: header.roadName,
                     파싱된도로명: result.roadName || '없음',
                     도로ID: result.roadId || '없음',
-                    매칭된포인트수: matchedPoints.length,
                     결과객체전체: result,
-                    matchedPoint전체필드: Object.keys(matchedPoint),
-                    matchedPoint원본: matchedPoint
+                    header전체필드: Object.keys(header),
+                    header원본: header
                 });
 
                 return result;
             } else {
-                // matchedPoints가 없거나 빈 배열인 경우
-                const reason = !matchedPoints
-                    ? 'matchedPoints 필드가 응답에 없음'
-                    : matchedPoints.length === 0
-                        ? 'matchedPoints 배열이 비어있음 (도로 매칭 실패)'
-                        : 'matchedPoints가 배열이 아님';
-
-                console.warn('⚠️ TMAP API: 도로 정보 없음', {
-                    이유: reason,
-                    header정보: {
-                        totalDistance: header.totalDistance,
-                        matchedLinkCount: header.matchedLinkCount,
-                        totalPointCount: header.totalPointCount
-                    },
-                    matchedPoints타입: typeof matchedPoints,
-                    matchedPoints값: matchedPoints,
+                // header가 없는 경우
+                console.warn('⚠️ TMAP NearToRoad API: header가 응답에 없음', {
                     resultData키: Object.keys(data.resultData),
                     가능한원인: [
                         '1. 요청한 좌표가 도로가 아닌 곳 (실내, 건물, 공원 등)',
@@ -373,9 +344,7 @@ const getSpeedLimitFromTmap = async (latitude, longitude) => {
                     roadName: null,
                     roadId: null,
                     rawResponse: JSON.stringify(data).substring(0, 1000), // 디버깅용: 응답 전체
-                    error: reason,
-                    matchedPointsType: typeof matchedPoints,
-                    matchedPointsValue: matchedPoints,
+                    error: 'header가 응답에 없음',
                     requestInfo: requestInfo
                 };
             }
@@ -722,9 +691,11 @@ export const startGpsMonitoring = (onUpdate, onError) => {
                             type: 'SPEED_LIMIT',
                             speedLimit: currentSpeedLimit,
                             roadName: currentRoadName,
-                            rawResponse: result.rawResponse, // 디버깅용
-                            matchedPointKeys: result.matchedPointKeys, // 디버깅용
-                            matchedPointRaw: result.matchedPointRaw, // 디버깅용
+                        rawResponse: result.rawResponse, // 디버깅용
+                        headerKeys: result.headerKeys, // 디버깅용: header의 모든 키
+                        headerRaw: result.headerRaw, // 디버깅용: header 원본 데이터
+                        matchedPointKeys: result.headerKeys, // 호환성을 위해 유지
+                        matchedPointRaw: result.headerRaw, // 호환성을 위해 유지
                             error: result.error, // 디버깅용
                             errorCode: result.errorCode, // 에러 코드 (있는 경우)
                             responseKeys: result.responseKeys, // 디버깅용
@@ -817,9 +788,11 @@ export const startGpsMonitoring = (onUpdate, onError) => {
                             type: 'SPEED_LIMIT',
                             speedLimit: currentSpeedLimit,
                             roadName: currentRoadName,
-                            rawResponse: result.rawResponse, // 디버깅용
-                            matchedPointKeys: result.matchedPointKeys, // 디버깅용
-                            matchedPointRaw: result.matchedPointRaw, // 디버깅용
+                        rawResponse: result.rawResponse, // 디버깅용
+                        headerKeys: result.headerKeys, // 디버깅용: header의 모든 키
+                        headerRaw: result.headerRaw, // 디버깅용: header 원본 데이터
+                        matchedPointKeys: result.headerKeys, // 호환성을 위해 유지
+                        matchedPointRaw: result.headerRaw, // 호환성을 위해 유지
                             error: result.error, // 디버깅용
                             errorCode: result.errorCode, // 에러 코드 (있는 경우)
                             responseKeys: result.responseKeys, // 디버깅용
