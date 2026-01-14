@@ -17,14 +17,6 @@ const TMAP_API_VERSION = '1'; // API 버전
 const TMAP_NEAR_TO_ROAD_API_URL = `https://apis.openapi.sk.com/tmap/road/nearToRoad`;
 const SPEED_LIMIT_CHECK_INTERVAL = 5000; // 5초마다 제한 속도 조회
 
-// 테스트 좌표 (정확한 도로 한 가운데 위치)
-// 올림픽대로
-const TEST_COORDINATES = {
-    latitude: 37.5162,
-    longitude: 126.9226,
-    enabled: false // true로 설정하면 실제 GPS 대신 이 좌표 사용 (테스트용)
-};
-
 /**
  * TMAP NearToRoad API로 도로 제한 속도 조회
  * @param {number} latitude - 위도
@@ -55,28 +47,9 @@ const getSpeedLimitFromTmap = async (latitude, longitude) => {
     };
 
     try {
-        console.log('🗺️ TMAP NearToRoad API 요청 시작:', {
-            latitude: latitude.toFixed(6),
-            longitude: longitude.toFixed(6),
-            url: fullUrl
-        });
-
         // CORS 및 네트워크 오류 처리
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000); // 10초 타임아웃
-
-        // TMAP NearToRoad API 요청 (GET Method)
-        // 정확한 요청 형식:
-        // - Method: GET
-        // - Query Parameters: version, appKey, lat, lon
-        // - Accept: application/json
-
-        console.log('📝 TMAP API 요청 Query Parameters:', {
-            version: TMAP_API_VERSION,
-            appKey: TMAP_API_KEY.substring(0, 10) + '...',
-            lat: latitude.toString(),
-            lon: longitude.toString()
-        });
 
         const response = await fetch(fullUrl, {
             method: 'GET',
@@ -88,22 +61,8 @@ const getSpeedLimitFromTmap = async (latitude, longitude) => {
 
         clearTimeout(timeoutId);
 
-        console.log('📡 TMAP API 응답 상태:', {
-            status: response.status,
-            statusText: response.statusText,
-            ok: response.ok
-        });
-
         // 204 No Content 처리 (검색 결과가 없는 경우)
         if (response.status === 204) {
-            console.warn('⚠️ TMAP API: 204 No Content - 검색 결과가 없습니다', {
-                가능한원인: [
-                    '요청한 좌표가 도로가 아닌 곳 (실내, 건물, 공원 등)',
-                    '검색 결과 자체가 없음',
-                    '잘못된 좌표 또는 대한민국을 벗어난 좌표',
-                    '리버스 지오코딩 사용 시 좌표 오류'
-                ]
-            });
             return {
                 speedLimit: null,
                 roadName: null,
@@ -130,21 +89,6 @@ const getSpeedLimitFromTmap = async (latitude, longitude) => {
                 errorMessage = errorText || errorMessage;
             }
 
-            console.error('❌ TMAP API 400 오류:', {
-                status: response.status,
-                statusText: response.statusText,
-                errorMessage: errorMessage,
-                errorCode: errorCode,
-                body: errorText,
-                가능한원인: [
-                    '좌표 형식 오류 (문자 포함, 범위 초과)',
-                    '좌표계 오류 (WGS84 외 사용)',
-                    'X,Y 좌표 반대 입력',
-                    '필수 파라미터 누락',
-                    '제공되지 않는 주소 범위',
-                    '잘못된 주소 형식'
-                ]
-            });
 
             return {
                 speedLimit: null,
@@ -160,12 +104,6 @@ const getSpeedLimitFromTmap = async (latitude, longitude) => {
         // 500 Internal Server Error 처리
         if (response.status === 500) {
             const errorText = await response.text();
-            console.error('❌ TMAP API 500 오류: 시스템 오류', {
-                status: response.status,
-                statusText: response.statusText,
-                body: errorText,
-                errorCode: '1005'
-            });
             return {
                 speedLimit: null,
                 roadName: null,
@@ -180,11 +118,6 @@ const getSpeedLimitFromTmap = async (latitude, longitude) => {
         // 기타 오류 처리
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('❌ TMAP API 오류:', {
-                status: response.status,
-                statusText: response.statusText,
-                body: errorText
-            });
             return {
                 speedLimit: null,
                 roadName: null,
@@ -196,13 +129,11 @@ const getSpeedLimitFromTmap = async (latitude, longitude) => {
             };
         }
 
-        // 응답 텍스트 먼저 확인 (디버깅)
+        // 응답 텍스트 먼저 확인
         const responseText = await response.text();
-        console.log('📄 TMAP API 응답 텍스트 (원본):', responseText);
 
         // 빈 응답 처리
         if (!responseText || responseText.trim() === '') {
-            console.warn('⚠️ TMAP API: 응답 본문이 비어있습니다');
             return {
                 speedLimit: null,
                 roadName: null,
@@ -216,10 +147,7 @@ const getSpeedLimitFromTmap = async (latitude, longitude) => {
         let data;
         try {
             data = JSON.parse(responseText);
-            console.log('📦 TMAP API 응답 데이터 (파싱됨):', data);
         } catch (parseError) {
-            console.error('❌ JSON 파싱 오류:', parseError);
-            console.error('응답 텍스트:', responseText);
             return {
                 speedLimit: null,
                 roadName: null,
@@ -252,36 +180,11 @@ const getSpeedLimitFromTmap = async (latitude, longitude) => {
             12: '이면도로 2'
         };
 
-        // 응답 구조 확인
-        console.log('🔍 응답 데이터 최상위 키:', Object.keys(data));
-        console.log('🔍 data.resultData 존재 여부:', !!data.resultData);
-
         if (data.resultData) {
             const header = data.resultData.header || {};
 
-            console.log('📊 TMAP NearToRoad API 응답 구조:', {
-                header존재: !!header,
-                header키: Object.keys(header),
-                speed: header.speed,
-                roadName: header.roadName,
-                linkId: header.linkId,
-                roadCategory: header.roadCategory,
-                totalDistance: header.totalDistance,
-                resultData키: Object.keys(data.resultData)
-            });
-
             // header에서 직접 데이터 추출
             if (header) {
-                // 디버깅: header의 모든 필드 확인
-                console.log('🔍 header 상세 정보:', {
-                    전체객체: header,
-                    모든키: Object.keys(header),
-                    speed: header.speed,
-                    speed타입: typeof header.speed,
-                    roadName: header.roadName,
-                    linkId: header.linkId,
-                    roadCategory: header.roadCategory
-                });
 
                 // speed 필드 확인 (응답 구조: speed는 숫자로 옴)
                 const speedLimitValue = header.speed !== undefined && header.speed !== null
@@ -305,40 +208,9 @@ const getSpeedLimitFromTmap = async (latitude, longitude) => {
                     requestInfo: requestInfo // 디버깅용: 요청 정보
                 };
 
-                console.log('✅ TMAP NearToRoad API 성공 - 파싱 결과:', {
-                    원본speed: header.speed,
-                    speed타입: typeof header.speed,
-                    파싱된제한속도: result.speedLimit,
-                    제한속도타입: typeof result.speedLimit,
-                    제한속도표시: result.speedLimit ? `${result.speedLimit}km/h` : '없음',
-                    원본roadCategory: header.roadCategory,
-                    roadCategory타입: typeof header.roadCategory,
-                    원본roadName: header.roadName,
-                    파싱된도로명: result.roadName || '없음',
-                    도로ID: result.roadId || '없음',
-                    결과객체전체: result,
-                    header전체필드: Object.keys(header),
-                    header원본: header
-                });
-
                 return result;
             } else {
                 // header가 없는 경우
-                console.warn('⚠️ TMAP NearToRoad API: header가 응답에 없음', {
-                    resultData키: Object.keys(data.resultData),
-                    가능한원인: [
-                        '1. 요청한 좌표가 도로가 아닌 곳 (실내, 건물, 공원 등)',
-                        '2. 데스크탑 환경에서 GPS 좌표가 부정확함',
-                        '3. 해당 위치에 도로 데이터가 없음',
-                        '4. 좌표가 해외 지역이거나 TMAP 데이터 범위 밖'
-                    ],
-                    해결방법: [
-                        '실제 차량 운전 중 야외에서 테스트',
-                        '도로 위의 정확한 GPS 좌표 사용',
-                        '다른 좌표로 재시도'
-                    ],
-                    전체응답: JSON.stringify(data).substring(0, 1000)
-                });
                 return {
                     speedLimit: null,
                     roadName: null,
@@ -351,11 +223,6 @@ const getSpeedLimitFromTmap = async (latitude, longitude) => {
         }
 
         // resultData가 없는 경우
-        console.error('❌ TMAP API: resultData가 응답에 없음', {
-            응답키: Object.keys(data),
-            응답데이터전체: data,
-            전체응답JSON: JSON.stringify(data).substring(0, 1000)
-        });
         return {
             speedLimit: null,
             roadName: null,
@@ -444,11 +311,6 @@ export const startGpsMonitoring = (onUpdate, onError) => {
         return null;
     }
 
-    // 데스크탑/노트북 환경 감지
-    const isDesktop = !('ontouchstart' in window) || window.innerWidth > 1024;
-    if (isDesktop) {
-        console.log('💻 데스크탑 환경 감지: GPS 속도는 0으로 표시될 수 있습니다.');
-    }
 
     let lastSpeedKmh = 0;
     let lastOverspeedCheck = 0;
@@ -468,24 +330,9 @@ export const startGpsMonitoring = (onUpdate, onError) => {
         const accel = acceleration || accelerationIncludingGravity;
 
         if (!accel) {
-            // 처음 몇 번만 로그
-            if (motionEventCount <= 3) {
-                console.log('⚠️ 가속도 데이터 없음', { event });
-            }
             return;
         }
 
-        // 디버깅: 가속도 값 확인 (처음 5번 + 이후 1% 확률)
-        if (motionEventCount <= 5 || Math.random() < 0.01) {
-            console.log('📱 가속도 센서 데이터:', {
-                x: accel.x !== undefined && accel.x !== null ? accel.x.toFixed(2) : 'undefined',
-                y: accel.y !== undefined && accel.y !== null ? accel.y.toFixed(2) : 'undefined',
-                z: accel.z !== undefined && accel.z !== null ? accel.z.toFixed(2) : 'undefined',
-                speed: (lastSpeedKmh !== null && lastSpeedKmh !== undefined) ? lastSpeedKmh.toFixed(1) + ' km/h' : '0.0 km/h',
-                count: motionEventCount,
-                원본이벤트: event // 디버깅용
-            });
-        }
 
         const accelY = accel.y || 0;
         const accelX = accel.x || 0;
@@ -497,8 +344,6 @@ export const startGpsMonitoring = (onUpdate, onError) => {
         // 필터링: 작은 진동 무시 (1.0 m/s² 미만)
         if (accelMagnitude < 1.0) return;
 
-        // 테스트 모드: 속도 제한 완화 (정지 상태에서도 테스트 가능)
-        // 실제 운전 시에는 아래 주석을 해제하고 테스트 모드 로직 제거
         const isTestMode = lastSpeedKmh < MIN_SPEED_FOR_MOTION;
         // if (lastSpeedKmh < MIN_SPEED_FOR_MOTION) return; // 실제 운전 시 활성화
 
@@ -522,20 +367,8 @@ export const startGpsMonitoring = (onUpdate, onError) => {
         // 임계값 체크
         if (mainAccel > HARD_ACCEL_THRESHOLD) {
             isHardAccel = true;
-            console.log('🚀 급가속 감지!', {
-                accel: mainAccel.toFixed(2) + ' m/s²',
-                speed: (lastSpeedKmh !== null && lastSpeedKmh !== undefined) ? lastSpeedKmh.toFixed(1) + ' km/h' : '0.0 km/h',
-                testMode: isTestMode,
-                axis: absX >= absY && absX >= absZ ? 'X' : (absY >= absX && absY >= absZ ? 'Y' : 'Z')
-            });
         } else if (mainAccel < HARD_BRAKE_THRESHOLD) {
             isHardBrake = true;
-            console.log('🛑 급감속 감지!', {
-                accel: mainAccel.toFixed(2) + ' m/s²',
-                speed: (lastSpeedKmh !== null && lastSpeedKmh !== undefined) ? lastSpeedKmh.toFixed(1) + ' km/h' : '0.0 km/h',
-                testMode: isTestMode,
-                axis: absX >= absY && absX >= absZ ? 'X' : (absY >= absX && absY >= absZ ? 'Y' : 'Z')
-            });
         }
 
         if (isHardAccel || isHardBrake) {
@@ -553,14 +386,6 @@ export const startGpsMonitoring = (onUpdate, onError) => {
     if (typeof DeviceMotionEvent !== 'undefined') {
         motionHandler = handleMotion;
         window.addEventListener('devicemotion', motionHandler);
-        console.log('✅ 가속도 센서 이벤트 리스너 등록됨');
-
-        // 노트북/데스크탑에서는 가속도 센서가 없을 수 있음
-        if (isDesktop) {
-            console.log('💻 노트북/데스크탑: 가속도 센서가 없을 수 있습니다. 모바일 기기에서 테스트해주세요.');
-        }
-    } else {
-        console.warn('⚠️ DeviceMotionEvent를 지원하지 않는 브라우저입니다.');
     }
 
     // --- [B] GPS (속도 및 위치 표시용) ---
@@ -606,213 +431,47 @@ export const startGpsMonitoring = (onUpdate, onError) => {
                 }
             }
 
-            // 디버깅: 정확도와 속도 로그 (처음 몇 번만)
-            if (Math.random() < 0.05) { // 5% 확률
-                console.log('📍 GPS 상태:', {
-                    speed: currentSpeedKmh.toFixed(1) + ' km/h',
-                    accuracy: accuracy ? accuracy.toFixed(0) + 'm' : 'N/A',
-                    status: gpsStatus
-                });
-            }
-
             lastSpeedKmh = currentSpeedKmh;
 
             // TMAP API로 제한 속도 조회 (5초마다 한 번만)
-            // 테스트 모드: TEST_COORDINATES.enabled가 true이면 테스트 좌표만 사용 (GPS 조건 무시)
-            const useTestCoords = TEST_COORDINATES.enabled;
+            if ((currentTime - lastSpeedLimitCheck) > SPEED_LIMIT_CHECK_INTERVAL &&
+                latitude && longitude && accuracy && accuracy < 100) {
+                // 정확도가 좋을 때만 조회 (100m 이내)
+                lastSpeedLimitCheck = currentTime;
 
-            if (useTestCoords) {
-                // 테스트 모드: GPS 조건 무시하고 항상 테스트 좌표 사용
-                if ((currentTime - lastSpeedLimitCheck) > SPEED_LIMIT_CHECK_INTERVAL) {
-                    lastSpeedLimitCheck = currentTime;
+                // 조회 시작 알림
+                onUpdate({
+                    type: 'SPEED_LIMIT_LOADING'
+                });
 
-                    console.log('🧪 테스트 모드: 제한 속도 조회 시작 (테스트 좌표만 사용):', {
-                        위도: TEST_COORDINATES.latitude.toFixed(6),
-                        경도: TEST_COORDINATES.longitude.toFixed(6),
-                        위치: '올림픽대로 (도로 한 가운데)',
-                        GPS조건: '무시됨'
-                    });
+                // 비동기로 제한 속도 조회 (블로킹 방지)
+                getSpeedLimitFromTmap(latitude, longitude).then(result => {
+                    currentSpeedLimit = result.speedLimit;
+                    currentRoadName = result.roadName;
 
-                    // 조회 시작 알림
+                    // 제한 속도 업데이트를 콜백으로 전달
                     onUpdate({
-                        type: 'SPEED_LIMIT_LOADING'
+                        type: 'SPEED_LIMIT',
+                        speedLimit: currentSpeedLimit,
+                        roadName: currentRoadName,
+                        rawResponse: result.rawResponse,
+                        headerKeys: result.headerKeys,
+                        headerRaw: result.headerRaw,
+                        matchedPointKeys: result.headerKeys,
+                        matchedPointRaw: result.headerRaw,
+                        error: result.error,
+                        errorCode: result.errorCode,
+                        responseKeys: result.responseKeys,
+                        requestInfo: result.requestInfo
                     });
-
-                    // 비동기로 제한 속도 조회 (블로킹 방지) - 테스트 좌표 사용
-                    getSpeedLimitFromTmap(TEST_COORDINATES.latitude, TEST_COORDINATES.longitude).then(result => {
-                        const prevLimit = currentSpeedLimit;
-                        const prevRoad = currentRoadName;
-
-                        // 결과 상세 로그 (항상 출력)
-                        console.log('🔍 TMAP API 조회 결과 상세:', {
-                            result객체: result,
-                            speedLimit: result.speedLimit,
-                            speedLimit타입: typeof result.speedLimit,
-                            speedLimit값존재: result.speedLimit !== null && result.speedLimit !== undefined,
-                            roadName: result.roadName,
-                            roadId: result.roadId,
-                            이전제한속도: prevLimit,
-                            이전도로명: prevRoad
-                        });
-
-                        currentSpeedLimit = result.speedLimit;
-                        currentRoadName = result.roadName;
-
-                        // 결과가 없어도 로그 출력
-                        if (!result.speedLimit && !result.roadName) {
-                            console.warn('⚠️ TMAP API: 제한 속도와 도로명 모두 없음', {
-                                위도: TEST_COORDINATES.latitude.toFixed(6),
-                                경도: TEST_COORDINATES.longitude.toFixed(6),
-                                위치: '올림픽대로 (테스트 좌표)',
-                                result객체: result,
-                                가능한원인: 'matchedPoints 배열이 비어있거나 도로 매칭 실패'
-                            });
-                        }
-
-                        // 변경사항이 있을 때만 로그
-                        if (prevLimit !== currentSpeedLimit || prevRoad !== currentRoadName) {
-                            console.log('🛣️ 제한 속도 업데이트:', {
-                                이전: prevLimit ? `${prevLimit}km/h (${prevRoad})` : '없음',
-                                현재: currentSpeedLimit ? `${currentSpeedLimit}km/h (${currentRoadName})` : '없음',
-                                업데이트여부: '변경됨',
-                                speedLimit값: currentSpeedLimit,
-                                speedLimit타입: typeof currentSpeedLimit
-                            });
-                        } else {
-                            console.log('ℹ️ 제한 속도 변경 없음:', {
-                                현재값: currentSpeedLimit ? `${currentSpeedLimit}km/h (${currentRoadName})` : '없음',
-                                speedLimit값: currentSpeedLimit
-                            });
-                        }
-
-                        // 제한 속도 업데이트를 콜백으로 전달 (null이어도 전달)
-                        // 디버깅 정보도 함께 전달
-                        onUpdate({
-                            type: 'SPEED_LIMIT',
-                            speedLimit: currentSpeedLimit,
-                            roadName: currentRoadName,
-                            rawResponse: result.rawResponse, // 디버깅용
-                            headerKeys: result.headerKeys, // 디버깅용: header의 모든 키
-                            headerRaw: result.headerRaw, // 디버깅용: header 원본 데이터
-                            matchedPointKeys: result.headerKeys, // 호환성을 위해 유지
-                            matchedPointRaw: result.headerRaw, // 호환성을 위해 유지
-                            error: result.error, // 디버깅용
-                            errorCode: result.errorCode, // 에러 코드 (있는 경우)
-                            responseKeys: result.responseKeys, // 디버깅용
-                            requestInfo: result.requestInfo // 디버깅용: 요청 정보
-                        });
-                    }).catch(error => {
-                        console.error('❌ 제한 속도 조회 중 오류:', error);
-                        console.error('오류 상세:', {
-                            name: error.name,
-                            message: error.message,
-                            stack: error.stack
-                        });
-                        // 오류 발생 시에도 로딩 상태 해제
-                        onUpdate({
-                            type: 'SPEED_LIMIT',
-                            speedLimit: null,
-                            roadName: null
-                        });
-                    });
-                }
-            } else {
-                // 실제 GPS 모드: GPS 조건 확인 후 조회
-                if ((currentTime - lastSpeedLimitCheck) > SPEED_LIMIT_CHECK_INTERVAL &&
-                    latitude && longitude && accuracy && accuracy < 100) {
-                    // 정확도가 좋을 때만 조회 (100m 이내로 완화)
-                    lastSpeedLimitCheck = currentTime;
-
-                    console.log('🔄 제한 속도 조회 시작 (5초 간격):', {
-                        위도: latitude.toFixed(6),
-                        경도: longitude.toFixed(6),
-                        정확도: accuracy.toFixed(0) + 'm',
-                        모드: '실제 GPS 사용'
-                    });
-
-                    // 조회 시작 알림
+                }).catch(error => {
+                    // 오류 발생 시에도 로딩 상태 해제
                     onUpdate({
-                        type: 'SPEED_LIMIT_LOADING'
+                        type: 'SPEED_LIMIT',
+                        speedLimit: null,
+                        roadName: null
                     });
-
-                    // 비동기로 제한 속도 조회 (블로킹 방지)
-                    getSpeedLimitFromTmap(latitude, longitude).then(result => {
-                        const prevLimit = currentSpeedLimit;
-                        const prevRoad = currentRoadName;
-
-                        // 결과 상세 로그 (항상 출력)
-                        console.log('🔍 TMAP API 조회 결과 상세:', {
-                            result객체: result,
-                            speedLimit: result.speedLimit,
-                            speedLimit타입: typeof result.speedLimit,
-                            speedLimit값존재: result.speedLimit !== null && result.speedLimit !== undefined,
-                            roadName: result.roadName,
-                            roadId: result.roadId,
-                            이전제한속도: prevLimit,
-                            이전도로명: prevRoad
-                        });
-
-                        currentSpeedLimit = result.speedLimit;
-                        currentRoadName = result.roadName;
-
-                        // 결과가 없어도 로그 출력
-                        if (!result.speedLimit && !result.roadName) {
-                            console.warn('⚠️ TMAP API: 제한 속도와 도로명 모두 없음', {
-                                위도: latitude.toFixed(6),
-                                경도: longitude.toFixed(6),
-                                정확도: accuracy.toFixed(0) + 'm',
-                                result객체: result,
-                                가능한원인: 'matchedPoints 배열이 비어있거나 도로 매칭 실패'
-                            });
-                        }
-
-                        // 변경사항이 있을 때만 로그
-                        if (prevLimit !== currentSpeedLimit || prevRoad !== currentRoadName) {
-                            console.log('🛣️ 제한 속도 업데이트:', {
-                                이전: prevLimit ? `${prevLimit}km/h (${prevRoad})` : '없음',
-                                현재: currentSpeedLimit ? `${currentSpeedLimit}km/h (${currentRoadName})` : '없음',
-                                업데이트여부: '변경됨',
-                                speedLimit값: currentSpeedLimit,
-                                speedLimit타입: typeof currentSpeedLimit
-                            });
-                        } else {
-                            console.log('ℹ️ 제한 속도 변경 없음:', {
-                                현재값: currentSpeedLimit ? `${currentSpeedLimit}km/h (${currentRoadName})` : '없음',
-                                speedLimit값: currentSpeedLimit
-                            });
-                        }
-
-                        // 제한 속도 업데이트를 콜백으로 전달 (null이어도 전달)
-                        // 디버깅 정보도 함께 전달
-                        onUpdate({
-                            type: 'SPEED_LIMIT',
-                            speedLimit: currentSpeedLimit,
-                            roadName: currentRoadName,
-                            rawResponse: result.rawResponse, // 디버깅용
-                            headerKeys: result.headerKeys, // 디버깅용: header의 모든 키
-                            headerRaw: result.headerRaw, // 디버깅용: header 원본 데이터
-                            matchedPointKeys: result.headerKeys, // 호환성을 위해 유지
-                            matchedPointRaw: result.headerRaw, // 호환성을 위해 유지
-                            error: result.error, // 디버깅용
-                            errorCode: result.errorCode, // 에러 코드 (있는 경우)
-                            responseKeys: result.responseKeys, // 디버깅용
-                            requestInfo: result.requestInfo // 디버깅용: 요청 정보
-                        });
-                    }).catch(error => {
-                        console.error('❌ 제한 속도 조회 중 오류:', error);
-                        console.error('오류 상세:', {
-                            name: error.name,
-                            message: error.message,
-                            stack: error.stack
-                        });
-                        // 오류 발생 시에도 로딩 상태 해제
-                        onUpdate({
-                            type: 'SPEED_LIMIT',
-                            speedLimit: null,
-                            roadName: null
-                        });
-                    });
-                }
+                });
             }
 
             // 과속 감지
@@ -836,12 +495,12 @@ export const startGpsMonitoring = (onUpdate, onError) => {
                 type: 'GPS',
                 latitude,
                 longitude,
-                speed: Math.floor(currentSpeedKmh), // 정수로 변환
+                speed: currentSpeedKmh || 0, // 속도가 없으면 0
                 accuracy: accuracy ? Math.floor(accuracy) : null,
                 isOverspeed,
-                status: gpsStatus, // GPS 상태 메시지
-                speedLimit: currentSpeedLimit, // 현재 도로 제한 속도
-                roadName: currentRoadName // 현재 도로명
+                status: gpsStatus,
+                speedLimit: currentSpeedLimit,
+                roadName: currentRoadName
             });
         },
         (error) => {
@@ -853,23 +512,17 @@ export const startGpsMonitoring = (onUpdate, onError) => {
                 case 1: // PERMISSION_DENIED
                     errorMessage = '위치 권한이 거부되었습니다. 설정에서 위치 권한을 허용해주세요.';
                     errorType = 'permission_denied';
-                    console.warn('🚫 위치 권한 거부됨');
                     break;
                 case 2: // POSITION_UNAVAILABLE
                     errorMessage = '위치 정보를 사용할 수 없습니다. 위치 서비스가 활성화되어 있는지 확인해주세요.';
                     errorType = 'position_unavailable';
-                    console.warn('⚠️ 위치 정보 사용 불가:', {
-                        message: error.message,
-                        note: 'iOS에서는 설정 > 개인정보 보호 및 보안 > 위치 서비스가 켜져 있어야 합니다.'
-                    });
                     break;
                 case 3: // TIMEOUT
                     errorMessage = '위치 정보 요청 시간이 초과되었습니다. 다시 시도해주세요.';
                     errorType = 'timeout';
-                    console.warn('⏱️ 위치 요청 시간 초과');
                     break;
                 default:
-                    console.error('GPS Error:', error);
+                    break;
             }
 
             // 오류 정보를 콜백에 전달

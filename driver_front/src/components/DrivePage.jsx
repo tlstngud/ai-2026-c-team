@@ -263,38 +263,24 @@ const DrivePage = ({
                                 </div>
                                 {isActive && (
                                     <div className="flex flex-col items-end gap-2">
-                                        {/* 현재 속도 */}
+                                        {/* 현재 속도 / 제한 속도 비교 */}
                                         <div className="bg-black/30 backdrop-blur-md px-4 py-2 rounded-full border border-white/10">
                                             <div className="flex items-center gap-2">
                                                 <span className="text-lg font-bold text-white">
-                                                    {currentSpeed > 0 ? Math.round(currentSpeed) : '--'}
+                                                    {Math.round(currentSpeed || 0)}
                                                 </span>
                                                 <span className="text-xs font-medium text-white/70">km/h</span>
+                                                {speedLimit && !speedLimitLoading && (
+                                                    <>
+                                                        <span className="text-xs font-medium text-white/50">/</span>
+                                                        <span className={`text-lg font-bold ${currentSpeed > speedLimit ? 'text-red-400' : 'text-blue-400'}`}>
+                                                            {speedLimit}
+                                                        </span>
+                                                        <span className="text-xs font-medium text-white/50">km/h</span>
+                                                    </>
+                                                )}
                                             </div>
                                         </div>
-                                        {/* 제한 속도 카드 */}
-                                        {(speedLimitLoading || speedLimit) && (
-                                            <div className="bg-blue-500/80 backdrop-blur-md px-4 py-3 rounded-xl border-2 border-blue-400/50 shadow-lg">
-                                                <div className="flex flex-col items-end">
-                                                    <span className="text-[10px] font-semibold text-white/80 uppercase tracking-wide mb-1">
-                                                        제한 속도
-                                                    </span>
-                                                    {speedLimitLoading ? (
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                                            <span className="text-lg font-bold text-white animate-pulse">
-                                                                조회중...
-                                                            </span>
-                                                        </div>
-                                                    ) : speedLimit ? (
-                                                        <span className="text-2xl font-bold text-white">
-                                                            {speedLimit}
-                                                            <span className="text-sm font-medium text-white/80 ml-1">km/h</span>
-                                                        </span>
-                                                    ) : null}
-                                                </div>
-                                            </div>
-                                        )}
                                         {/* 도로 정보 카드 */}
                                         {(speedLimitLoading || roadName) && (
                                             <div className="bg-black/40 backdrop-blur-md px-4 py-2 rounded-xl border border-white/20">
