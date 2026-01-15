@@ -13,12 +13,28 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
     const [challenge, setChallenge] = useState(null);
     const [loading, setLoading] = useState(true);
     
-    // 콜드 스타트 처리
+    // 점수 계산: 7개 미만이면 전체 기록 평균, 7개 이상이면 최근 7개 평균
     const totalDistance = history.reduce((acc, curr) => acc + (curr.distance || 0), 0);
-    const MIN_DISTANCE_FOR_SCORE = 30;
-    const isAnalyzing = totalDistance < MIN_DISTANCE_FOR_SCORE;
+    const MIN_RECORDS_FOR_SCORE = 7;
     const hasNoData = history.length === 0;
-    const displayScore = hasNoData || isAnalyzing ? null : score;
+    
+    // 점수 계산 로직
+    const calculateDisplayScore = () => {
+        if (hasNoData) return null;
+        if (history.length < MIN_RECORDS_FOR_SCORE) {
+            // 7개 미만: 전체 기록의 평균 점수
+            const sum = history.reduce((acc, curr) => acc + (curr.score || 0), 0);
+            return Math.floor(sum / history.length);
+        } else {
+            // 7개 이상: 최근 7개 기록의 평균 점수
+            const recentHistory = history.slice(0, 7);
+            const sum = recentHistory.reduce((acc, curr) => acc + (curr.score || 0), 0);
+            return Math.floor(sum / recentHistory.length);
+        }
+    };
+    
+    const displayScore = calculateDisplayScore();
+    const isAnalyzing = history.length < MIN_RECORDS_FOR_SCORE && !hasNoData; // 7개 미만일 때만 "분석 중" 표시
     
     // showChallengeDetail 상태 변경 시 부모 컴포넌트에 알림
     useEffect(() => {
@@ -42,9 +58,10 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
     // 챌린지 정보 localStorage에서 불러오기
     useEffect(() => {
         const loadChallenge = () => {
-            if (userRegion?.name) {
-                try {
-                    const challenges = storage.getChallenges();
+            try {
+                const challenges = storage.getChallenges();
+                
+                if (userRegion?.name) {
                     // 지역에 맞는 챌린지 찾기
                     const matchedChallenge = challenges.find(c => 
                         c.region === userRegion.name || 
@@ -54,13 +71,23 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
                     
                     if (matchedChallenge) {
                         setChallenge(matchedChallenge);
+                    } else {
+                        // 매칭되는 챌린지가 없으면 기본 챌린지 사용
+                        const defaultChallenge = challenges.find(c => c.region === '전국 공통') || challenges[0];
+                        if (defaultChallenge) {
+                            setChallenge(defaultChallenge);
+                        }
                     }
-                } catch (error) {
-                    console.error('챌린지 정보 로드 오류:', error);
-                } finally {
-                    setLoading(false);
+                } else {
+                    // userRegion이 없으면 기본 챌린지 사용
+                    const defaultChallenge = challenges.find(c => c.region === '전국 공통') || challenges[0];
+                    if (defaultChallenge) {
+                        setChallenge(defaultChallenge);
+                    }
                 }
-            } else {
+            } catch (error) {
+                console.error('챌린지 정보 로드 오류:', error);
+            } finally {
                 setLoading(false);
             }
         };
@@ -107,20 +134,36 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
     }, [history]);
 
     // 챌린지 상세 페이지 표시 (조건부 렌더링)
-    if (showChallengeDetail && challenge) {
+    if (showChallengeDetail) {
+        // challenge가 없어도 region 정보를 기반으로 기본 챌린지 데이터 생성
+        const challengeData = challenge || {
+            challengeId: `challenge_${region.name.replace(/\s/g, '_')}`,
+            region: region.name,
+            name: region.campaign,
+            title: `${region.name} 안전운전 챌린지`,
+            targetScore: region.target,
+            reward: region.reward,
+            participants: 0,
+            startDate: new Date().toISOString(),
+            endDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(), // 14일 후
+            description: `${region.name}에서 안전운전을 실천해주세요. 목표 점수 달성 시 혜택을 드립니다.`,
+            rules: ['지정된 기간 동안 안전운전 실천', `안전운전 점수 ${region.target}점 이상 유지`, '급가속/급감속 최소화'],
+            conditions: [`${region.name} 거주자 또는 주 활동 운전자`, '최근 1년 내 중과실 사고 이력 없음', '마케팅 활용 동의 필수']
+        };
+        
         return (
             <ChallengeDetail
                 challenge={{
-                    region: challenge.region,
-                    title: challenge.name,
-                    targetScore: challenge.targetScore,
+                    region: challengeData.region,
+                    title: challengeData.name || challengeData.title,
+                    targetScore: challengeData.targetScore,
                     myScore: score,
-                    reward: challenge.reward,
-                    participants: challenge.participants || 0,
-                    period: `${challenge.period.start.split('T')[0]} ~ ${challenge.period.end.split('T')[0]}`,
-                    description: challenge.description,
-                    rules: challenge.rules || [],
-                    conditions: challenge.conditions || []
+                    reward: challengeData.reward,
+                    participants: challengeData.participants || 0,
+                    period: challengeData.period || `${challengeData.startDate?.split('T')[0] || new Date().toISOString().split('T')[0]} ~ ${challengeData.endDate?.split('T')[0] || new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}`,
+                    description: challengeData.description,
+                    rules: challengeData.rules || [],
+                    conditions: challengeData.conditions || []
                 }}
                 currentScore={score}
                 onBack={() => setShowChallengeDetail(false)}
@@ -164,9 +207,12 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
                                     </div>
                                 ) : isAnalyzing ? (
                                     <div className="flex flex-col gap-1">
-                                        <span className="text-2xl font-black text-white/70 animate-pulse">Analysing...</span>
+                                        <div className="flex items-baseline gap-1">
+                                            <span className="text-5xl font-black">{displayScore}</span>
+                                            <span className="text-sm font-medium text-white/60">/ {region.target}</span>
+                                        </div>
                                         <span className="text-xs text-white/60">
-                                            점수 산출까지 {MIN_DISTANCE_FOR_SCORE - totalDistance}km 남음
+                                            분석 중... ({history.length}/{MIN_RECORDS_FOR_SCORE}개 기록)
                                         </span>
                                     </div>
                                 ) : (
@@ -292,14 +338,19 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
                     <div className="flex justify-between items-start mb-4">
                         <div>
                             <p className="text-[10px] font-bold text-blue-500 uppercase tracking-wider mb-1">Safety Score</p>
-                            {hasNoData || isAnalyzing ? (
+                            {hasNoData ? (
                                 <div className="flex flex-col gap-1">
-                                    <span className="text-2xl font-black text-slate-300">{hasNoData ? '--' : 'Analysing...'}</span>
-                                    {isAnalyzing && (
-                                        <span className="text-xs text-blue-500 font-medium">
-                                            점수 산출까지 {MIN_DISTANCE_FOR_SCORE - totalDistance}km 남음
-                                        </span>
-                                    )}
+                                    <span className="text-2xl font-black text-slate-300">--</span>
+                                    <span className="text-xs text-slate-400">첫 주행을 시작해보세요!</span>
+                                </div>
+                            ) : isAnalyzing ? (
+                                <div className="flex flex-col gap-1">
+                                    <h2 className="text-4xl font-black text-slate-900 tracking-tighter">
+                                        {displayScore}<span className="text-base text-slate-300 ml-1 font-normal">pts</span>
+                                    </h2>
+                                    <span className="text-xs text-blue-500 font-medium">
+                                        분석 중... ({history.length}/{MIN_RECORDS_FOR_SCORE}개 기록)
+                                    </span>
                                 </div>
                             ) : (
                                 <h2 className="text-4xl font-black text-slate-900 tracking-tighter">

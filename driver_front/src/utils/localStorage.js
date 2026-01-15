@@ -50,10 +50,33 @@ export const storage = {
                 createdAt: new Date().toISOString()
             };
             logs.unshift(newLog); // 최신이 앞에
-            localStorage.setItem('drivingLogs', JSON.stringify(logs));
+            
+            // localStorage 저장 시도
+            const jsonString = JSON.stringify(logs);
+            localStorage.setItem('drivingLogs', jsonString);
+            
+            console.log('✅ localStorage: 로그 저장 완료', {
+                logId: newLog.logId,
+                userId: newLog.userId,
+                score: newLog.score,
+                duration: newLog.duration,
+                totalLogs: logs.length
+            });
+            
+            // 저장 확인
+            const verify = localStorage.getItem('drivingLogs');
+            if (!verify) {
+                console.error('❌ localStorage: 저장 후 확인 실패 - 데이터가 없습니다.');
+                return null;
+            }
+            
             return newLog;
         } catch (e) {
-            console.error('Error saving log:', e);
+            console.error('❌ localStorage: 로그 저장 중 오류', e);
+            // localStorage 용량 초과 체크
+            if (e.name === 'QuotaExceededError') {
+                console.error('❌ localStorage: 저장 공간이 부족합니다. 오래된 로그를 삭제해주세요.');
+            }
             return null;
         }
     },
