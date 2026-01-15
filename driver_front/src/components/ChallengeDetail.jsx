@@ -23,7 +23,7 @@ const ChallengeDetail = ({ challenge, onBack, currentScore = 0, onJoin, isJoined
         description: '지정된 기간 동안 안전운전을 실천해주세요. 목표 점수 달성 시 혜택을 드립니다.',
         reward: '안전운전 인증서 발급',
         rules: [
-            '지정된 기간 동안 100km 이상 주행',
+            '지정된 기간 동안 50km 이상 주행',
             '안전운전 점수 90점 이상 유지',
             '급가속/급감속 최소화'
         ],

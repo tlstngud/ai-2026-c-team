@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { TrendingUp, CheckCircle2, MapPin, Ticket, Award, Map } from 'lucide-react';
 import Header from './Header';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -6,6 +7,7 @@ import ChallengeDetail from './ChallengeDetail';
 import { storage } from '../utils/localStorage';
 
 const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChallengeDetail = null, onClaimReward = null }) => {
+    const navigate = useNavigate();
     const [discountRate, setDiscountRate] = useState(0);
     const [showChallengeDetail, setShowChallengeDetail] = useState(false);
     const [isRewardClaimed, setIsRewardClaimed] = useState(false);
@@ -46,7 +48,13 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
     const displayScore = calculateDisplayScore();
     const isAnalyzing = history.length < MIN_RECORDS_FOR_SCORE && !hasNoData; // 7개 미만일 때만 "분석 중" 표시
 
-
+    // 챌린지 상세 페이지로 이동 (모달 방식 유지)
+    const handleShowChallengeDetail = () => {
+        setShowChallengeDetail(true);
+        if (onShowChallengeDetail) {
+            onShowChallengeDetail(true);
+        }
+    };
 
     // showChallengeDetail 상태 변경 시 부모 컴포넌트에 알림
     useEffect(() => {
@@ -193,7 +201,7 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
                 {/* 지자체 챌린지 Hero Card */}
                 <div
                     className={`relative bg-gradient-to-br ${region.bgImage} rounded-[2rem] p-6 text-white overflow-hidden shadow-xl cursor-pointer active:scale-[0.98] transition-transform`}
-                    onClick={() => setShowChallengeDetail(true)}
+                    onClick={handleShowChallengeDetail}
                 >
                     <Map className="absolute right-[-20px] bottom-[-20px] text-white/5" size={140} />
                     <div className="relative z-10">
