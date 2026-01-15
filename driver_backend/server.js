@@ -7,7 +7,15 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // 미들웨어
-app.use(cors());
+// CORS 설정: 프로덕션에서는 특정 도메인만 허용
+const corsOptions = {
+    origin: process.env.NODE_ENV === 'production' 
+        ? ['https://www.c-team.cloud', 'https://c-team.cloud', 'https://api.c-team.cloud']
+        : true, // 개발 환경에서는 모든 도메인 허용
+    credentials: true,
+    optionsSuccessStatus: 200
+};
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

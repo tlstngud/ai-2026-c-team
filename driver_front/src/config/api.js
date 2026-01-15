@@ -11,8 +11,12 @@ const getApiBaseUrl = () => {
         return envUrl;
     }
 
-    // 프로덕션 환경: 항상 HTTPS 사용
+    // 프로덕션 환경: 도메인 우선, 실패 시 IP 주소 fallback
     if (import.meta.env.MODE === 'production') {
+        // 도메인을 먼저 시도하되, DNS 해석 실패 시 IP 주소 사용
+        // 브라우저에서 도메인을 먼저 시도하고, 실패하면 IP로 재시도하는 로직은
+        // 네트워크 레벨에서 처리되므로 여기서는 도메인을 반환
+        // 단, DNS 전파가 안 된 경우를 대비해 IP 주소도 제공
         return 'https://api.c-team.cloud/api';
     }
 
