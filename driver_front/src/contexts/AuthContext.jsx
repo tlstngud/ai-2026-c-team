@@ -76,8 +76,28 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    // 2. 로그인 함수 (DB API 호출)
+    // 2. 로그인 함수 (DB API 호출) - 임시 비활성화
     const login = async (id, password) => {
+        // 임시: 로그인 검증 없이 바로 로그인
+        const userData = {
+            id: id || 'test_user',
+            name: '테스트 사용자',
+            score: 85,
+            region: {
+                name: '춘천시',
+                campaign: '스마일 춘천 안전운전',
+                target: 90,
+                reward: '춘천사랑상품권 3만원 + 보험할인'
+            }
+        };
+
+        setUser(userData);
+        localStorage.setItem('currentUser', JSON.stringify(userData));
+        localStorage.setItem('userRegion', JSON.stringify(userData.region));
+
+        return { success: true };
+
+        /* 원본 로그인 로직 (나중에 복원)
         try {
             // 백엔드 API 호출
             const response = await fetch(`${API_BASE_URL}/auth/login`, {
@@ -114,6 +134,7 @@ export const AuthProvider = ({ children }) => {
             console.error('로그인 오류:', error);
             return { success: false, message: '서버 연결 오류. 잠시 후 다시 시도해주세요.' };
         }
+        */
     };
 
     const logout = async () => {
