@@ -70,7 +70,7 @@ export const AuthProvider = ({ children }) => {
                 name,
                 password, // 시연용이므로 해싱하지 않음 (실제로는 해싱 필요)
                 address,
-                region: regionName,
+                regionName: regionName,
                 score: 80,
                 discountRate: 0,
                 region: region,
