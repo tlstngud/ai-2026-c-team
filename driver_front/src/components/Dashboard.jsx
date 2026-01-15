@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { addLogByUserId, getLogsByUserId } from '../utils/LogService';
+import { storage } from '../utils/localStorage';
 import { startGpsMonitoring, stopGpsMonitoring, requestMotionPermission } from '../utils/GpsService';
-import { couponAPI } from '../utils/api';
+import { storage } from '../utils/localStorage';
 import { AlertTriangle, X, MapPin, Search, Award } from 'lucide-react';
 import { STATE_CONFIG, APPLE_STATE_CONFIG } from './constants';
 import Header from './Header';
@@ -538,7 +539,7 @@ const Dashboard = () => {
                 maxSpeed: Math.round(currentSpeed)
             };
 
-            // Save log for specific user
+            // Save log for specific user (localStorage 기반)
             if (user) {
                 addLogByUserId(user.id, newEntry).then(updatedLogs => {
                     setHistory(updatedLogs); // Update local state with returned logs
@@ -546,9 +547,22 @@ const Dashboard = () => {
                     console.error('주행 기록 저장 오류:', error);
                 });
 
-                // Update user score in AuthContext
-                const updatedUser = { ...user, score: finalScore };
-                setUser(updatedUser);
+                // Update user score in localStorage and AuthContext
+                const savedUser = storage.getUser();
+                if (savedUser) {
+                    const updatedUser = { 
+                        ...savedUser, 
+                        score: finalScore,
+                        updatedAt: new Date().toISOString()
+                    };
+                    storage.setUser(updatedUser);
+                    setUser({
+                        id: updatedUser.id,
+                        name: updatedUser.name,
+                        score: updatedUser.score,
+                        region: updatedUser.region
+                    });
+                }
             } else {
                 // Fallback for no user context (though should be protected)
                 const newHistory = [newEntry, ...history].slice(0, 10);
@@ -592,59 +606,77 @@ const Dashboard = () => {
     const CurrentIcon = showCameraView ? STATE_CONFIG[currentState].icon : APPLE_STATE_CONFIG[currentState].icon;
     const currentConfig = showCameraView ? STATE_CONFIG : APPLE_STATE_CONFIG;
 
-    // 쿠폰 목록 API에서 불러오기
+    // 쿠폰 목록 localStorage에서 불러오기
     useEffect(() => {
-        const loadCoupons = async () => {
+        const loadCoupons = () => {
             if (user) {
                 try {
-                    const response = await couponAPI.getAll();
-                    if (response.success) {
-                        // API 응답을 기존 형식으로 변환
-                        const formattedCoupons = response.data.coupons.map(coupon => ({
-                            id: coupon.couponId,
-                            type: coupon.type,
-                            name: coupon.name,
-                            amount: coupon.amount,
-                            provider: coupon.provider,
-                            status: coupon.status,
-                            expiry: coupon.expiry.split('T')[0].replace(/-/g, '.'),
-                            theme: coupon.theme
-                        }));
-                        setCoupons(formattedCoupons);
-                    }
+                    const savedCoupons = storage.getCoupons(user.id);
+                    // 기존 형식으로 변환
+                    const formattedCoupons = savedCoupons.map(coupon => ({
+                        id: coupon.couponId || coupon.id,
+                        type: coupon.type,
+                        name: coupon.name,
+                        amount: coupon.amount,
+                        provider: coupon.provider,
+                        status: coupon.status || 'AVAILABLE',
+                        expiry: coupon.expiry ? (typeof coupon.expiry === 'string' ? coupon.expiry.split('T')[0].replace(/-/g, '.') : coupon.expiry) : '2026.12.31',
+                        theme: coupon.theme
+                    }));
+                    setCoupons(formattedCoupons);
                 } catch (error) {
                     console.error('쿠폰 목록 로드 오류:', error);
+                    setCoupons([]);
                 }
+            } else {
+                setCoupons([]);
             }
         };
         loadCoupons();
     }, [user]);
 
-    // 쿠폰 추가 함수
+    // 쿠폰 추가 함수 (localStorage 기반)
     const addCoupon = async (couponData) => {
         try {
-            const response = await couponAPI.issue({
-                challengeId: null,
-                region: couponData.provider
-            });
+            if (!user) {
+                setToast({ isVisible: true, message: '로그인이 필요합니다.' });
+                return;
+            }
 
-            if (response.success) {
-                // API에서 받은 쿠폰을 상태에 추가
-                const newCoupon = {
-                    id: response.data.couponId,
-                    type: response.data.type,
-                    name: response.data.name,
-                    amount: response.data.amount,
-                    provider: response.data.provider,
-                    status: response.data.status,
-                    expiry: response.data.expiry,
-                    theme: response.data.theme,
-                    issuedAt: response.data.issuedAt
+            // 쿠폰 데이터 생성
+            const expiryDate = new Date();
+            expiryDate.setMonth(expiryDate.getMonth() + 6); // 6개월 후 만료
+
+            const newCoupon = {
+                userId: user.id,
+                type: couponData.type || 'VOUCHER',
+                name: couponData.name || '안전운전 보상',
+                amount: couponData.amount || '10,000원',
+                provider: couponData.provider || userRegion?.name || '전국 공통',
+                status: 'AVAILABLE',
+                expiry: expiryDate.toISOString(),
+                theme: couponData.theme || 'blue',
+                challengeId: couponData.challengeId || null
+            };
+
+            const savedCoupon = storage.addCoupon(newCoupon);
+
+            if (savedCoupon) {
+                // 상태에 추가
+                const formattedCoupon = {
+                    id: savedCoupon.couponId,
+                    type: savedCoupon.type,
+                    name: savedCoupon.name,
+                    amount: savedCoupon.amount,
+                    provider: savedCoupon.provider,
+                    status: savedCoupon.status,
+                    expiry: savedCoupon.expiry.split('T')[0].replace(/-/g, '.'),
+                    theme: savedCoupon.theme
                 };
-                setCoupons(prev => [newCoupon, ...prev]);
+                setCoupons(prev => [formattedCoupon, ...prev]);
                 setToast({ isVisible: true, message: '쿠폰이 쿠폰함에 추가되었습니다!' });
             } else {
-                setToast({ isVisible: true, message: response.error?.message || '쿠폰 발급에 실패했습니다.' });
+                setToast({ isVisible: true, message: '쿠폰 발급에 실패했습니다.' });
             }
         } catch (error) {
             console.error('쿠폰 발급 오류:', error);

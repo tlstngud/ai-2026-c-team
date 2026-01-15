@@ -3,7 +3,7 @@ import { TrendingUp, DollarSign, CheckCircle2, MapPin, Ticket, Award, Map } from
 import Header from './Header';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import ChallengeDetail from './ChallengeDetail';
-import { challengeAPI } from '../utils/api';
+import { storage } from '../utils/localStorage';
 
 const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChallengeDetail = null, onClaimReward = null }) => {
     const [discountRate, setDiscountRate] = useState(0);
@@ -39,14 +39,21 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
         }
     }, [displayScore]);
 
-    // 챌린지 정보 API에서 불러오기
+    // 챌린지 정보 localStorage에서 불러오기
     useEffect(() => {
-        const loadChallenge = async () => {
+        const loadChallenge = () => {
             if (userRegion?.name) {
                 try {
-                    const response = await challengeAPI.getAll(userRegion.name);
-                    if (response.success && response.data.challenges.length > 0) {
-                        setChallenge(response.data.challenges[0]);
+                    const challenges = storage.getChallenges();
+                    // 지역에 맞는 챌린지 찾기
+                    const matchedChallenge = challenges.find(c => 
+                        c.region === userRegion.name || 
+                        userRegion.name.includes(c.region) ||
+                        c.region.includes(userRegion.name)
+                    );
+                    
+                    if (matchedChallenge) {
+                        setChallenge(matchedChallenge);
                     }
                 } catch (error) {
                     console.error('챌린지 정보 로드 오류:', error);
