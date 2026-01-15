@@ -22,10 +22,13 @@ const DrivingLogPage = ({ onSelectLog }) => {
     const [userLogs, setUserLogs] = useState([]);
 
     useEffect(() => {
-        if (user) {
-            const logs = getLogsByUserId(user.id);
-            setUserLogs(logs);
-        }
+        const loadLogs = async () => {
+            if (user) {
+                const logs = await getLogsByUserId(user.id);
+                setUserLogs(logs);
+            }
+        };
+        loadLogs();
     }, [user]);
 
     return (

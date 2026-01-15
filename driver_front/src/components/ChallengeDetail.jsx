@@ -71,7 +71,7 @@ const ChallengeDetail = ({ challenge, onBack, currentScore = 0 }) => {
     // --- Handlers ---
     const handleJoin = () => {
         setIsJoined(true);
-        // API Call here...
+        // localStorage 기반: 챌린지 참여 상태는 localStorage에 저장됨
     };
 
     const myScore = isJoined ? challengeData.myScore : 0;

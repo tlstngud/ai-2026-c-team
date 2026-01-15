@@ -102,7 +102,7 @@ const SignUpPage = () => {
 
         const result = await signUp(formData.id, formData.name, formData.password, regionData);
         if (result.success) {
-            // 지자체 정보 저장 (API에서 이미 저장됨)
+            // localStorage 기반: 지자체 정보는 localStorage에 저장됨
             alert('회원가입이 완료되었습니다! 로그인해주세요.');
             navigate('/login');
         } else {
