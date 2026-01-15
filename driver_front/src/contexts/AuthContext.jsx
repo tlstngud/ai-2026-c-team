@@ -23,28 +23,58 @@ export const AuthProvider = ({ children }) => {
         initAuth();
     }, []);
 
-    // 1. 회원가입 함수 (DB API 호출)
+    // 1. 회원가입 함수 - localStorage 기반 (임시)
     const signUp = async (id, name, password, regionData = null) => {
-        try {
-            // 주소에서 지역 정보 추출
-            const address = regionData?.address || '';
-            let regionName = '전국 공통';
-            let regionCampaign = '대한민국 안전운전 챌린지';
-            let regionTarget = 90;
-            let regionReward = '안전운전 인증서 발급';
+        // 주소에서 지역 정보 추출
+        const address = regionData?.address || '';
+        let regionName = '전국 공통';
+        let regionCampaign = '대한민국 안전운전 챌린지';
+        let regionTarget = 90;
+        let regionReward = '안전운전 인증서 발급';
 
-            if (address.includes('춘천')) {
-                regionName = '춘천시';
-                regionCampaign = '스마일 춘천 안전운전';
-                regionTarget = 90;
-                regionReward = '춘천사랑상품권 3만원 + 보험할인';
-            } else if (address.includes('서울')) {
-                regionName = '서울특별시';
-                regionCampaign = '서울 마이-티 드라이버';
-                regionTarget = 92;
-                regionReward = '서울시 공영주차장 50% 할인권';
+        if (address.includes('춘천')) {
+            regionName = '춘천시';
+            regionCampaign = '스마일 춘천 안전운전';
+            regionTarget = 90;
+            regionReward = '춘천사랑상품권 3만원 + 보험할인';
+        } else if (address.includes('서울')) {
+            regionName = '서울특별시';
+            regionCampaign = '서울 마이-티 드라이버';
+            regionTarget = 92;
+            regionReward = '서울시 공영주차장 50% 할인권';
+        }
+
+        // localStorage에서 기존 회원 목록 가져오기
+        const usersJson = localStorage.getItem('registeredUsers');
+        const users = usersJson ? JSON.parse(usersJson) : [];
+
+        // 중복 아이디 체크
+        if (users.find(u => u.id === id)) {
+            return { success: false, message: '이미 존재하는 아이디입니다.' };
+        }
+
+        // 새 회원 정보 저장
+        const newUser = {
+            id,
+            name,
+            password,
+            address,
+            score: 85,
+            region: {
+                name: regionName,
+                campaign: regionCampaign,
+                target: regionTarget,
+                reward: regionReward
             }
+        };
 
+        users.push(newUser);
+        localStorage.setItem('registeredUsers', JSON.stringify(users));
+
+        return { success: true };
+
+        /* 원본 회원가입 로직 (나중에 복원)
+        try {
             // 백엔드 API 호출
             const response = await fetch(`${API_BASE_URL}/auth/signup`, {
                 method: 'POST',
@@ -74,21 +104,32 @@ export const AuthProvider = ({ children }) => {
             console.error('회원가입 오류:', error);
             return { success: false, message: '서버 연결 오류. 잠시 후 다시 시도해주세요.' };
         }
+        */
     };
 
-    // 2. 로그인 함수 (DB API 호출) - 임시 비활성화
+    // 2. 로그인 함수 - localStorage 기반 (임시)
     const login = async (id, password) => {
-        // 임시: 로그인 검증 없이 바로 로그인
+        // localStorage에서 회원 목록 가져오기
+        const usersJson = localStorage.getItem('registeredUsers');
+        const users = usersJson ? JSON.parse(usersJson) : [];
+
+        // 회원 찾기
+        const foundUser = users.find(u => u.id === id);
+
+        if (!foundUser) {
+            return { success: false, message: '존재하지 않는 아이디입니다.' };
+        }
+
+        if (foundUser.password !== password) {
+            return { success: false, message: '비밀번호가 일치하지 않습니다.' };
+        }
+
+        // 로그인 성공
         const userData = {
-            id: id || 'test_user',
-            name: '테스트 사용자',
-            score: 85,
-            region: {
-                name: '춘천시',
-                campaign: '스마일 춘천 안전운전',
-                target: 90,
-                reward: '춘천사랑상품권 3만원 + 보험할인'
-            }
+            id: foundUser.id,
+            name: foundUser.name,
+            score: foundUser.score || 85,
+            region: foundUser.region
         };
 
         setUser(userData);
