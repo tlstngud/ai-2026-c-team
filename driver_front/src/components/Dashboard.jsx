@@ -4,6 +4,7 @@ import { Routes, Route, useNavigate, useLocation, useParams } from 'react-router
 import { addLogByUserId, getLogsByUserId } from '../utils/LogService';
 import { storage } from '../utils/localStorage';
 import { startGpsMonitoring, stopGpsMonitoring, requestMotionPermission } from '../utils/GpsService';
+import { modelAPI } from '../utils/modelAPI';
 import { AlertTriangle, X, MapPin, Search, Award } from 'lucide-react';
 import { STATE_CONFIG, APPLE_STATE_CONFIG } from './constants';
 import Header from './Header';
@@ -187,32 +188,58 @@ const Dashboard = () => {
 
     // --- Camera Setup ---
     const attachStreamToVideo = (stream) => {
-        if (!stream) return;
+        if (!stream) {
+            console.error("❌ No stream");
+            return;
+        }
 
-        const setupVideo = (videoEl) => {
-            if (!videoEl) return;
+        const tracks = stream.getTracks();
+        console.log("📹 Stream tracks:", tracks.length, tracks.map(t => t.readyState));
+
+        const setupVideo = (videoEl, name) => {
+            if (!videoEl) {
+                console.log(`⚠️ ${name} is null`);
+                return;
+            }
+
+            console.log(`🎥 Setting up ${name}`);
+
+            // srcObject 설정
             videoEl.srcObject = stream;
-            videoEl.setAttribute("playsinline", "true"); // iOS 블랙스크린 방지
-            videoEl.setAttribute("webkit-playsinline", "true");
+            videoEl.muted = true;
+            videoEl.autoplay = true;
+            videoEl.playsInline = true;
 
+            // 이벤트 리스너
             videoEl.onloadedmetadata = () => {
-                videoEl.play().catch(e => console.warn("Video play failed:", e));
+                console.log(`✅ ${name} metadata: ${videoEl.videoWidth}x${videoEl.videoHeight}`);
+                videoEl.play().catch(e => console.log(`${name} play:`, e.message));
             };
 
-            const playPromise = videoEl.play();
-            if (playPromise !== undefined) {
-                playPromise
-                    .then(() => {
-                        // 모바일에서 video 요소 강제 표시
-                        videoEl.style.display = 'block';
-                        videoEl.style.visibility = 'visible';
-                    })
-                    .catch(e => console.warn("Video play failed:", e));
-            }
+            videoEl.onplaying = () => console.log(`▶️ ${name} playing`);
+            videoEl.onerror = (e) => console.error(`❌ ${name} error:`, videoEl.error);
+
+            // 즉시 재생
+            videoEl.play().catch(() => {});
         };
 
-        if (videoRef.current) setupVideo(videoRef.current);
-        if (videoRef2.current) setupVideo(videoRef2.current);
+        // 즉시 설정 시도
+        setupVideo(videoRef.current, "videoRef");
+        setupVideo(videoRef2.current, "videoRef2");
+
+        // videoRef가 null이면 DOM 렌더링 후 재시도
+        if (!videoRef.current || !videoRef2.current) {
+            console.log("🔄 Video refs not ready, retrying in 200ms...");
+            setTimeout(() => {
+                setupVideo(videoRef.current, "videoRef-retry");
+                setupVideo(videoRef2.current, "videoRef2-retry");
+            }, 200);
+
+            setTimeout(() => {
+                setupVideo(videoRef.current, "videoRef-retry2");
+                setupVideo(videoRef2.current, "videoRef2-retry2");
+            }, 500);
+        }
     };
 
     const startCamera = async () => {
@@ -286,6 +313,24 @@ const Dashboard = () => {
             }, 100);
         }
     }, [location.pathname, showCameraView]);
+
+    // isActive 변경 시 스트림 재연결 (녹화 시작/종료 시 비디오가 끊기는 문제 방지)
+    useEffect(() => {
+        if (isActive && streamRef.current && streamRef.current.active) {
+            console.log("🔄 isActive 변경으로 스트림 재연결 시도...");
+            // DOM 렌더링 후 재연결
+            const retryAttach = () => {
+                if (videoRef.current && !videoRef.current.srcObject) {
+                    console.log("📹 videoRef에 스트림 재연결");
+                    videoRef.current.srcObject = streamRef.current;
+                    videoRef.current.play().catch(e => console.warn("Play failed:", e));
+                }
+            };
+            setTimeout(retryAttach, 50);
+            setTimeout(retryAttach, 150);
+            setTimeout(retryAttach, 300);
+        }
+    }, [isActive]);
 
     // --- Session Time Counter ---
     useEffect(() => {
@@ -485,27 +530,25 @@ const Dashboard = () => {
         };
     }, [isActive]);
 
-    // --- Simulation Logic (Scoring) ---
-    // 운전자 행동 점수 계산 (40% 가중치)
+    // --- AI 모델 추론 연결 ---
+    // 카메라 프레임 -> GPU 서버 -> 추론 결과 수신
     useEffect(() => {
-        let interval = null;
-        if (isActive) {
-            interval = setInterval(() => {
-                const rand = Math.random();
-                let nextState = 0;
-                if (rand > 0.96) nextState = 3;
-                else if (rand > 0.93) nextState = 1;
-                else if (rand > 0.90) nextState = 2;
+        if (isActive && videoRef.current) {
+            // 추론 결과 콜백
+            const handleInferenceResult = (result) => {
+                // result: { class_id, class_name, confidence, probabilities }
+                const nextState = result.class_id;
                 setCurrentState(nextState);
 
                 // 운전자 행동 점수 감점 (40% 가중치)
                 let penalty = 0;
                 let recovery = 0.05;
                 if (nextState !== 0) {
-                    // 상태별 감점량 조정 (운전자 행동 요소만)
-                    if (nextState === 1) penalty = 3.0;  // 경미한 부주의
-                    if (nextState === 2) penalty = 4.0;  // 중간 부주의
-                    if (nextState === 3) penalty = 8.0;   // 심각한 부주의 (졸음 등)
+                    // 상태별 감점량: 0=Normal, 1=Drowsy, 2=Searching, 3=Phone, 4=Assault
+                    if (nextState === 1) penalty = 5.0;  // 졸음
+                    if (nextState === 2) penalty = 3.0;  // 주시태만
+                    if (nextState === 3) penalty = 4.0;  // 휴대폰
+                    if (nextState === 4) penalty = 10.0; // 폭행
                     setEventCount(prev => prev + 1);
                     recovery = 0;
                 }
@@ -518,9 +561,20 @@ const Dashboard = () => {
                 const newScore = calculateWeightedScore();
                 scoreRef.current = newScore;
                 setScore(newScore);
-            }, 300);
+            };
+
+            // 프레임 캡처 및 전송 시작 (30fps)
+            modelAPI.startCapture(videoRef.current, handleInferenceResult, 30)
+                .then(() => console.log('AI 모델 연결됨'))
+                .catch(err => console.error('AI 모델 연결 실패:', err));
+        } else {
+            // 세션 종료시 연결 해제
+            modelAPI.stopCapture();
         }
-        return () => clearInterval(interval);
+
+        return () => {
+            modelAPI.stopCapture();
+        };
     }, [isActive]);
 
     // --- Handlers ---

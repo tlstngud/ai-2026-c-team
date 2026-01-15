@@ -46,6 +46,33 @@ export default defineConfig({
   },
   server: {
     host: '0.0.0.0',
-    port: 5173
+    port: 8888,
+    proxy: {
+      '/auth': {
+        target: 'http://localhost:8000',
+        changeOrigin: true
+      },
+      '/driving': {
+        target: 'http://localhost:8000',
+        changeOrigin: true
+      },
+      '/session': {
+        target: 'http://localhost:8000',
+        changeOrigin: true
+      },
+      '/ws': {
+        target: 'ws://localhost:8000',
+        ws: true,
+        changeOrigin: true
+      },
+      '/health': {
+        target: 'http://localhost:8000',
+        changeOrigin: true
+      },
+      '/infer': {
+        target: 'http://localhost:8000',
+        changeOrigin: true
+      }
+    }
   }
 })
