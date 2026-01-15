@@ -48,7 +48,7 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
     }, [userRegion]);
 
     // 지자체 정보가 없으면 기본값 사용
-    const region = challenge ? {
+    const region = challenge && challenge.region ? {
         name: challenge.region,
         campaign: challenge.name,
         color: challenge.region.includes('춘천') ? 'bg-emerald-500' : challenge.region.includes('서울') ? 'bg-indigo-600' : 'bg-blue-600',
@@ -180,7 +180,7 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
                         <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Challenge Reward</h3>
 
                         <div className="flex gap-4 items-center">
-                            <div className={`w-12 h-12 rounded-full ${region.color.replace('bg-', 'bg-').replace('500', '100').replace('600', '100')} flex items-center justify-center ${region.accent}`}>
+                            <div className={`w-12 h-12 rounded-full ${region.color ? region.color.replace('bg-', 'bg-').replace('500', '100').replace('600', '100') : 'bg-blue-100'} flex items-center justify-center ${region.accent || 'text-blue-600'}`}>
                                 <Ticket size={24} />
                             </div>
                             <div className="flex-1">
@@ -202,15 +202,15 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
                                                 // 쿠폰 데이터 생성
                                                 const couponData = {
                                                     type: 'VOUCHER',
-                                                    name: region.reward,
-                                                    amount: region.reward.includes('상품권') 
+                                                    name: region.reward || '안전운전 인증서',
+                                                    amount: region.reward && region.reward.includes('상품권') 
                                                         ? region.reward.match(/\d+만?원/)?.[0] || '10,000원'
-                                                        : region.reward.includes('할인') 
+                                                        : region.reward && region.reward.includes('할인') 
                                                         ? '50% 할인'
-                                                        : region.reward,
+                                                        : region.reward || '인증서',
                                                     provider: region.name,
-                                                    theme: region.color.includes('emerald') ? 'emerald' 
-                                                        : region.color.includes('indigo') ? 'indigo' 
+                                                    theme: region.color && region.color.includes('emerald') ? 'emerald' 
+                                                        : region.color && region.color.includes('indigo') ? 'indigo' 
                                                         : 'blue'
                                                 };
                                                 onClaimReward(couponData);
@@ -220,7 +220,7 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
                                                 }, 2000);
                                             }
                                         }}
-                                        className={`${region.color} text-white text-xs font-bold px-3 py-2 rounded-xl shadow-lg active:scale-95 transition-transform`}
+                                        className={`${region.color || 'bg-blue-600'} text-white text-xs font-bold px-3 py-2 rounded-xl shadow-lg active:scale-95 transition-transform`}
                                     >
                                         받기
                                     </button>
