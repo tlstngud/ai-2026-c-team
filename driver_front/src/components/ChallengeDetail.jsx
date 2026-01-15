@@ -4,9 +4,11 @@ import {
     CheckCircle2, Trophy, ArrowRight, ShieldCheck, Users
 } from 'lucide-react';
 
-const ChallengeDetail = ({ challenge, onBack, currentScore = 0 }) => {
-    // 참여 여부 상태 (실제로는 API나 상태 관리에서 가져와야 함)
-    const [isJoined, setIsJoined] = useState(false);
+// [2026-01-15 수정] onJoin prop 추가 (챌린지 참여 시 콜백)
+const ChallengeDetail = ({ challenge, onBack, currentScore = 0, onJoin, isJoined: initialIsJoined }) => {
+    // [2026-01-15 수정] 참여 여부 상태 (props로 초기값 설정하여 상태 유지)
+    const [isJoined, setIsJoined] = useState(initialIsJoined || false);
+    const [showCancelConfirm, setShowCancelConfirm] = useState(false); // [2026-01-15 수정] 취소 확인 모달 상태
 
     // challenge가 없으면 기본값 사용
     const challengeData = challenge || {
@@ -70,8 +72,30 @@ const ChallengeDetail = ({ challenge, onBack, currentScore = 0 }) => {
 
     // --- Handlers ---
     const handleJoin = () => {
-        setIsJoined(true);
-        // localStorage 기반: 챌린지 참여 상태는 localStorage에 저장됨
+        if (isJoined) {
+            // [2026-01-15 수정] 이미 참여 중인 경우 -> 취소 확인 모달 표시
+            // 바로 취소하지 않고 사용자 의사를 재확인함
+            setShowCancelConfirm(true);
+        } else {
+            // [2026-01-15 수정] 참여하지 않은 경우 -> 바로 참여 처리
+            setIsJoined(true);
+            if (onJoin) {
+                setTimeout(() => {
+                    onJoin(true);
+                }, 300);
+            }
+        }
+    };
+
+    // [2026-01-15 수정] 챌린지 취소 확정 핸들러
+    // 모달에서 '네, 취소할게요' 선택 시 호출됨
+    const handleConfirmCancel = () => {
+        setIsJoined(false);
+        setShowCancelConfirm(false);
+
+        if (onJoin) {
+            onJoin(false); // 부모에게 취소 상태 전달
+        }
     };
 
     const myScore = isJoined ? challengeData.myScore : 0;
@@ -245,13 +269,12 @@ const ChallengeDetail = ({ challenge, onBack, currentScore = 0 }) => {
             </main>
 
             {/* 6. Sticky Footer Action - Slide Up */}
-            <div className="fixed bottom-0 left-0 right-0 p-6 pb-8 bg-gradient-to-t from-white via-white to-transparent z-[180] opacity-0 animate-[slideUpFade_0.5s_ease-out_1.1s_forwards]">
+            <div className={`fixed bottom-0 left-0 right-0 p-6 pb-8 bg-gradient-to-t from-white via-white to-transparent z-[180] opacity-0 animate-[slideUpFade_0.5s_ease-out_1.1s_forwards]`}>
                 <button
-                    onClick={isJoined ? () => { } : handleJoin}
-                    disabled={isJoined && myScore < challengeData.targetScore}
+                    onClick={handleJoin} // [수정] 참여 중이어도 클릭 가능 (토글)
                     className={`w-full h-14 rounded-[1.2rem] flex items-center justify-center gap-2 text-lg font-bold shadow-xl shadow-slate-200 transition-all active:scale-95
                         ${isJoined
-                            ? 'bg-slate-900 text-white cursor-default'
+                            ? 'bg-slate-900 text-white hover:bg-slate-800' // [수정] 참여 중일 때도 클릭 효과
                             : `${theme.button} text-white hover:opacity-90`
                         }`}
                 >
@@ -266,6 +289,36 @@ const ChallengeDetail = ({ challenge, onBack, currentScore = 0 }) => {
                     )}
                 </button>
             </div>
+            {/* [2026-01-15 수정] 취소 확인 모달 */}
+            {showCancelConfirm && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white w-[80%] max-w-sm rounded-[24px] p-6 shadow-2xl animate-in zoom-in-95 duration-200">
+                        <div className="text-center mb-6">
+                            <div className="w-12 h-12 rounded-full bg-red-100 text-red-500 flex items-center justify-center mx-auto mb-4">
+                                <AlertCircle size={24} />
+                            </div>
+                            <h3 className="text-lg font-bold text-slate-900 mb-2">챌린지를 취소하시겠습니까?</h3>
+                            <p className="text-sm text-slate-500 leading-relaxed">
+                                취소하시면 현재까지의 진행 상황이<br />초기화될 수 있습니다.
+                            </p>
+                        </div>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setShowCancelConfirm(false)}
+                                className="flex-1 py-3.5 rounded-xl bg-slate-100 text-slate-600 font-bold text-sm hover:bg-slate-200 transition-colors"
+                            >
+                                아니오
+                            </button>
+                            <button
+                                onClick={handleConfirmCancel}
+                                className="flex-1 py-3.5 rounded-xl bg-red-500 text-white font-bold text-sm shadow-md shadow-red-200 hover:bg-red-600 transition-colors"
+                            >
+                                네, 취소할게요
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
