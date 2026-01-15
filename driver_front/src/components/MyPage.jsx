@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { User, Wallet, Calculator, QrCode, X, Search, Filter, AlertCircle, Car, Shield, Gift, Award, TrendingUp, Calendar } from 'lucide-react';
 import Header from './Header';
 
@@ -7,7 +6,6 @@ const MyPage = ({ user, score, history, userRegion, coupons = [] }) => {
     // --- State ---
     const [activeTab, setActiveTab] = useState('ALL'); // ALL, VOUCHER, PARKING, OIL
     const [selectedCoupon, setSelectedCoupon] = useState(null);
-    const navigate = useNavigate();
 
     // --- Data ---
     const username = user?.name || '김운전';
@@ -162,10 +160,6 @@ const MyPage = ({ user, score, history, userRegion, coupons = [] }) => {
         return colors[theme] || colors.indigo;
     };
 
-    const handleInsuranceReportClick = () => {
-        navigate('/insurance-policy');
-    };
-
     return (
         <div className="min-h-screen bg-[#F9FAFB] pb-32 font-sans text-slate-900 selection:bg-indigo-100">
             <Header type="mypage" />
@@ -287,12 +281,7 @@ const MyPage = ({ user, score, history, userRegion, coupons = [] }) => {
                 </section>
 
                 {/* 3. Insurance Report (Dark Theme Card) */}
-                <button
-                    type="button"
-                    onClick={handleInsuranceReportClick}
-                    className="bg-slate-900 rounded-[24px] p-6 text-white relative overflow-hidden shadow-xl shadow-slate-200 text-left w-full cursor-pointer active:scale-[0.98] transition-transform"
-                    aria-label="insurance policy"
-                >
+                <section className="bg-slate-900 rounded-[24px] p-6 text-white relative overflow-hidden shadow-xl shadow-slate-200">
                     <div className="relative z-10">
                         <div className="flex justify-between items-center mb-6">
                             <div className="flex items-center gap-2">
@@ -340,7 +329,7 @@ const MyPage = ({ user, score, history, userRegion, coupons = [] }) => {
 
                     {/* Background Decor */}
                     <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
-                </button>
+                </section>
 
                 {/* 4. Coupon Wallet */}
                 <section>
