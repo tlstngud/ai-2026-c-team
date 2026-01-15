@@ -194,7 +194,11 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
             startDate: new Date().toISOString(),
             endDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(), // 14일 후
             description: `${region.name}에서 안전운전을 실천해주세요. 목표 점수 달성 시 혜택을 드립니다.`,
-            rules: ['지정된 기간 동안 안전운전 실천', `안전운전 점수 ${region.target}점 이상 유지`, '급가속/급감속 최소화'],
+            rules: [
+                '1년 동안 월별 과속 10회 이하 시 감면',
+                '1년 동안 안전 점수 90점 이상 유지 시 감면',
+                '1년 동안 월별 과속 20회 이하 시 감면'
+            ],
             conditions: [`${region.name} 거주자 또는 주 활동 운전자`, '최근 1년 내 중과실 사고 이력 없음', '마케팅 활용 동의 필수']
         };
 
