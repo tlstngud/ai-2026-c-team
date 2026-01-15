@@ -10,12 +10,12 @@ const getApiBaseUrl = () => {
         }
         return envUrl;
     }
-    
+
     // 프로덕션 환경: 항상 HTTPS 사용
     if (import.meta.env.MODE === 'production') {
-        return 'https://15.134.130.219/api';
+        return 'https://api.c-team.cloud/api';
     }
-    
+
     // 개발 환경
     return 'http://localhost:3000/api';
 };
