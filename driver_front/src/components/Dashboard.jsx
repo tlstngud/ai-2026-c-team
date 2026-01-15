@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { Routes, Route, useNavigate, useLocation, useParams } from 'react-router-dom';
 import { addLogByUserId, getLogsByUserId } from '../utils/LogService';
 import { storage } from '../utils/localStorage';
 import { startGpsMonitoring, stopGpsMonitoring, requestMotionPermission } from '../utils/GpsService';
@@ -46,6 +47,10 @@ const MUNICIPALITY_DB = {
 };
 
 const Dashboard = () => {
+    // --- React Router ---
+    const navigate = useNavigate();
+    const location = useLocation();
+    
     // --- Onboarding & User Region State ---
     const { user, setUser } = useAuth();
     const [step, setStep] = useState(() => {
@@ -65,7 +70,7 @@ const Dashboard = () => {
     const videoRef = useRef(null);
     const videoRef2 = useRef(null);
     const streamRef = useRef(null);
-    const [currentPage, setCurrentPage] = useState('drive'); // drive, insurance, log
+    
     const [showCameraView, setShowCameraView] = useState(false);
     const [selectedLog, setSelectedLog] = useState(null);
     const [hasPermission, setHasPermission] = useState(false);
@@ -81,6 +86,7 @@ const Dashboard = () => {
     const [currentState, setCurrentState] = useState(0);
     const [eventCount, setEventCount] = useState(0);
     const [showSummary, setShowSummary] = useState(false);
+    const [finalSessionScore, setFinalSessionScore] = useState(null); // 세션 종료 시 최종 점수 저장
     const [history, setHistory] = useState([]);
 
     // GPS 관련 상태
@@ -111,6 +117,7 @@ const Dashboard = () => {
     const speedLimitScoreRef = useRef(100);
     const accelDecelScoreRef = useRef(100);
     const scoreRef = useRef(100);
+    const finalSessionScoreRef = useRef(null); // 세션 종료 시 최종 점수 저장 (ref로 즉시 접근 가능)
 
     // 가중 평균 점수 계산 함수
     const calculateWeightedScore = () => {
@@ -173,6 +180,7 @@ const Dashboard = () => {
             setUserRegion(regionData);
             localStorage.setItem('userRegion', JSON.stringify(regionData));
             setStep('dashboard');
+            navigate('/drive'); // 대시보드로 이동
         }, 1500);
     };
 
@@ -271,13 +279,13 @@ const Dashboard = () => {
 
     // 페이지 이동 후 돌아왔을 때 스트림 재연결 (카메라가 켜져있는 상태라면)
     useEffect(() => {
-        if (currentPage === 'drive' && showCameraView && streamRef.current && streamRef.current.active) {
+        if ((location.pathname === '/drive' || location.pathname === '/') && showCameraView && streamRef.current && streamRef.current.active) {
             // 약간의 지연을 주어 DOM이 확실히 렌더링 된 후 연결 시도
             setTimeout(() => {
                 attachStreamToVideo(streamRef.current);
             }, 100);
         }
-    }, [currentPage, showCameraView]);
+    }, [location.pathname, showCameraView]);
 
     // --- Session Time Counter ---
     useEffect(() => {
@@ -523,9 +531,13 @@ const Dashboard = () => {
         }
 
         if (isActive) {
-            setIsActive(false);
+            // 점수 초기화 전에 최종 점수 저장
             const finalScore = Math.floor(score);
             const finalDuration = Math.floor(sessionTime);
+            
+            // 최종 점수를 ref와 state에 모두 저장 (ref는 즉시 접근 가능)
+            finalSessionScoreRef.current = finalScore;
+            setFinalSessionScore(finalScore);
             
             // 디버깅: 세션 종료 시 데이터 확인
             console.log('📊 세션 종료 데이터:', {
@@ -536,8 +548,13 @@ const Dashboard = () => {
                 gpsEvents: gpsEvents,
                 maxSpeed: Math.round(currentSpeed),
                 sessionTime: sessionTime,
-                scoreRef: scoreRef.current
+                scoreRef: scoreRef.current,
+                scoreState: score,
+                finalSessionScore: finalScore,
+                finalSessionScoreRef: finalSessionScoreRef.current
             });
+            
+            // setIsActive(false)는 나중에 호출 (모달이 먼저 렌더링되도록)
 
             const now = new Date();
             const newEntry = {
@@ -597,7 +614,13 @@ const Dashboard = () => {
                 console.warn('⚠️ 세션 시간이 너무 짧습니다 (3초 미만). 기록은 저장되지만 의미 있는 데이터가 아닐 수 있습니다.');
             }
 
+            // 모달을 먼저 열고, 약간의 지연 후에 isActive를 false로 설정하여 점수 초기화
             setShowSummary(true);
+            
+            // 다음 틱에서 점수 초기화 (모달이 먼저 렌더링되도록)
+            setTimeout(() => {
+                setIsActive(false);
+            }, 0);
         } else {
             // 모든 점수 초기화
             console.log('🚀 세션 시작:', {
@@ -617,6 +640,8 @@ const Dashboard = () => {
             setSessionTime(0);
             sessionTimeRef.current = 0;
             setShowSummary(false);
+            setFinalSessionScore(null); // 세션 시작 시 최종 점수 초기화
+            finalSessionScoreRef.current = null; // ref도 초기화
             setIsActive(true);
         }
     };
@@ -728,36 +753,144 @@ const Dashboard = () => {
     };
 
     const handlePageChange = (page) => {
-        setCurrentPage(page);
+        // React Router를 사용하여 페이지 이동
+        switch(page) {
+            case 'drive':
+                navigate('/drive');
+                break;
+            case 'insurance':
+                navigate('/insurance');
+                break;
+            case 'log':
+                navigate('/log');
+                break;
+            case 'mypage':
+                navigate('/mypage');
+                break;
+            default:
+                navigate('/drive');
+        }
         setSelectedLog(null);
     };
 
-    // 페이지별 렌더링
-    const renderPage = () => {
-        if (currentPage === 'insurance') {
-            // InsurancePage 내부에서 점수를 계산하므로 score prop은 참고용으로만 전달
-            const avgScore = getAverageScore() ?? score;
-            return <InsurancePage score={avgScore} history={history} userRegion={userRegion} onShowChallengeDetail={setShowChallengeDetail} onClaimReward={addCoupon} />;
+    // 페이지별 렌더링 컴포넌트
+    const DrivePageWrapper = () => (
+        <>
+            {!showCameraView && (
+                <Header isActive={isActive} averageScore={getAverageScore()} />
+            )}
+            <DrivePage
+                showCameraView={showCameraView}
+                setShowCameraView={setShowCameraView}
+                hasPermission={hasPermission}
+                videoRef={videoRef}
+                videoRef2={videoRef2}
+                isActive={isActive}
+                score={score}
+                sessionTime={sessionTime}
+                currentState={currentState}
+                eventCount={eventCount}
+                toggleSession={toggleSession}
+                formatTime={formatTime}
+                currentConfig={currentConfig}
+                CurrentIcon={CurrentIcon}
+                userRegion={userRegion}
+                currentSpeed={currentSpeed}
+                gpsAcceleration={gpsAcceleration}
+                gpsEvents={gpsEvents}
+                sensorStatus={sensorStatus}
+                gpsAccuracy={gpsAccuracy}
+                gpsStatus={gpsStatus}
+                speedLimit={speedLimit}
+                roadName={roadName}
+                speedLimitLoading={speedLimitLoading}
+                speedLimitDebug={speedLimitDebug}
+            />
+        </>
+    );
+
+    const InsurancePageWrapper = () => {
+        const avgScore = getAverageScore() ?? score;
+        return <InsurancePage score={avgScore} history={history} userRegion={userRegion} onShowChallengeDetail={setShowChallengeDetail} onClaimReward={addCoupon} />;
+    };
+
+    const LogPageWrapper = () => {
+        return <DrivingLogPage onSelectLog={(log) => {
+            setSelectedLog(log);
+            navigate(`/log/${log.logId || log.id || Date.now()}`);
+        }} history={history} />;
+    };
+
+    const LogDetailWrapper = () => {
+        const { logId } = useParams();
+        
+        // selectedLog가 있으면 사용, 없으면 history에서 찾기
+        const log = selectedLog || history.find(l => (l.logId || l.id) === logId);
+        
+        if (!log) {
+            return <div className="p-6">로그를 찾을 수 없습니다.</div>;
         }
-        if (currentPage === 'log') {
-            if (selectedLog) {
-                // 로그 데이터에 필요한 필드 추가
-                const enrichedLog = {
-                    ...selectedLog,
-                    msg: selectedLog.msg || `안전 운전 점수 ${selectedLog.score}점`,
-                    status: selectedLog.status || (selectedLog.score >= 90 ? 'perfect' : 'warning'),
-                    time: selectedLog.duration || 0,
-                    distance: selectedLog.distance || 0
-                };
-                return <LogDetailPage data={enrichedLog} onBack={() => setSelectedLog(null)} />;
-            }
-            return <DrivingLogPage onSelectLog={(log) => setSelectedLog(log)} history={history} />;
-        }
-        if (currentPage === 'mypage') {
-            const avgScore = history.length > 0 ? getAverageScore() : score;
-            return <MyPage user={user} score={avgScore} history={history} userRegion={userRegion} coupons={coupons} />;
-        }
-        return null;
+        
+        const enrichedLog = {
+            ...log,
+            msg: log.msg || `안전 운전 점수 ${log.score}점`,
+            status: log.status || (log.score >= 90 ? 'perfect' : 'warning'),
+            time: log.duration || 0,
+            distance: log.distance || 0
+        };
+        
+        return <LogDetailPage data={enrichedLog} onBack={() => {
+            setSelectedLog(null);
+            navigate('/log');
+        }} />;
+    };
+
+    const MyPageWrapper = () => {
+        const avgScore = history.length > 0 ? getAverageScore() : score;
+        return <MyPage user={user} score={avgScore} history={history} userRegion={userRegion} coupons={coupons} />;
+    };
+
+    const ChallengeDetailWrapper = () => {
+        const { challengeId } = useParams();
+        const navigate = useNavigate();
+        
+        // challenge를 찾거나 기본값 생성
+        const challengeData = challenge || {
+            challengeId: challengeId || `challenge_${userRegion?.name?.replace(/\s/g, '_') || 'default'}`,
+            region: userRegion?.name || '전국 공통',
+            name: userRegion?.campaign || '대한민국 안전운전 챌린지',
+            title: `${userRegion?.name || '전국 공통'} 안전운전 챌린지`,
+            targetScore: userRegion?.target || 90,
+            reward: userRegion?.reward || '안전운전 인증서 발급',
+            participants: 0,
+            startDate: new Date().toISOString(),
+            endDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+            description: `${userRegion?.name || '전국 공통'}에서 안전운전을 실천해주세요. 목표 점수 달성 시 혜택을 드립니다.`,
+            rules: ['지정된 기간 동안 안전운전 실천', `안전운전 점수 ${userRegion?.target || 90}점 이상 유지`, '급가속/급감속 최소화'],
+            conditions: [`${userRegion?.name || '전국 공통'} 거주자 또는 주 활동 운전자`, '최근 1년 내 중과실 사고 이력 없음', '마케팅 활용 동의 필수']
+        };
+        
+        return (
+            <ChallengeDetail
+                challenge={{
+                    region: challengeData.region,
+                    title: challengeData.name || challengeData.title,
+                    targetScore: challengeData.targetScore,
+                    myScore: score,
+                    reward: challengeData.reward,
+                    participants: challengeData.participants || 0,
+                    period: challengeData.period || `${challengeData.startDate?.split('T')[0] || new Date().toISOString().split('T')[0]} ~ ${challengeData.endDate?.split('T')[0] || new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}`,
+                    description: challengeData.description,
+                    rules: challengeData.rules || [],
+                    conditions: challengeData.conditions || []
+                }}
+                currentScore={score}
+                onBack={() => {
+                    navigate('/insurance');
+                    setShowChallengeDetail(false);
+                }}
+            />
+        );
     };
 
     /* ================================================================================== */
@@ -846,45 +979,17 @@ const Dashboard = () => {
                     <>
                         {/* 실제 앱 컨텐츠 영역 */}
                         <div className={`flex-1 scrollbar-hide bg-white relative ${showCameraView ? 'overflow-hidden' : 'overflow-y-auto pb-24'}`} style={showCameraView ? { height: '100%', minHeight: '100%', maxHeight: '100%' } : {}}>
-
-                            {/* 페이지별 컨텐츠 */}
-                            {currentPage === 'drive' && (
-                                <>
-                                    {!showCameraView && (
-                                        <Header isActive={isActive} averageScore={getAverageScore()} />
-                                    )}
-                                    <DrivePage
-                                        showCameraView={showCameraView}
-                                        setShowCameraView={setShowCameraView}
-                                        hasPermission={hasPermission}
-                                        videoRef={videoRef}
-                                        videoRef2={videoRef2}
-                                        isActive={isActive}
-                                        score={score}
-                                        sessionTime={sessionTime}
-                                        currentState={currentState}
-                                        eventCount={eventCount}
-                                        toggleSession={toggleSession}
-                                        formatTime={formatTime}
-                                        currentConfig={currentConfig}
-                                        CurrentIcon={CurrentIcon}
-                                        userRegion={userRegion}
-                                        currentSpeed={currentSpeed}
-                                        gpsAcceleration={gpsAcceleration}
-                                        gpsEvents={gpsEvents}
-                                        sensorStatus={sensorStatus}
-                                        gpsAccuracy={gpsAccuracy}
-                                        gpsStatus={gpsStatus}
-                                        speedLimit={speedLimit}
-                                        roadName={roadName}
-                                        speedLimitLoading={speedLimitLoading}
-                                        speedLimitDebug={speedLimitDebug}
-                                    />
-                                </>
-                            )}
-
-                            {/* 다른 페이지 렌더링 */}
-                            {renderPage()}
+                            {/* React Router를 사용한 페이지 라우팅 */}
+                            <Routes>
+                                <Route index element={<DrivePageWrapper />} />
+                                <Route path="drive" element={<DrivePageWrapper />} />
+                                <Route path="insurance" element={<InsurancePageWrapper />} />
+                                <Route path="challenge" element={<InsurancePageWrapper />} />
+                                <Route path="challenge/:challengeId" element={<ChallengeDetailWrapper />} />
+                                <Route path="log" element={<LogPageWrapper />} />
+                                <Route path="log/:logId" element={<LogDetailWrapper />} />
+                                <Route path="mypage" element={<MyPageWrapper />} />
+                            </Routes>
                         </div>
 
                         {/* Summary Modal (Inside Container) */}
@@ -895,7 +1000,7 @@ const Dashboard = () => {
                                         <div>
                                             <p className="text-gray-500 text-sm font-medium">Session Ended</p>
                                             <h2 className="text-3xl font-bold text-black mt-1">
-                                                {Math.floor(score)} <span className="text-lg text-gray-400 font-normal">pts</span>
+                                                {finalSessionScoreRef.current !== null ? finalSessionScoreRef.current : (finalSessionScore !== null ? finalSessionScore : Math.floor(score))} <span className="text-lg text-gray-400 font-normal">pts</span>
                                             </h2>
                                         </div>
                                         <button onClick={() => setShowSummary(false)} className="p-2 bg-gray-100 rounded-full">
@@ -909,7 +1014,7 @@ const Dashboard = () => {
                                                 <div>
                                                     <p className="text-sm font-bold">{userRegion.name} 챌린지</p>
                                                     <p className="text-xs text-white/80">
-                                                        {Math.floor(score) >= userRegion.target
+                                                        {(finalSessionScoreRef.current !== null ? finalSessionScoreRef.current : (finalSessionScore !== null ? finalSessionScore : Math.floor(score))) >= userRegion.target
                                                             ? "목표 점수 달성! 포인트가 적립되었습니다."
                                                             : `목표(${userRegion.target}점)까지 조금만 더 힘내세요!`}
                                                     </p>
@@ -921,7 +1026,7 @@ const Dashboard = () => {
                                             <div>
                                                 <p className="text-sm font-bold text-gray-900">Driving Tip</p>
                                                 <p className="text-xs text-gray-500">
-                                                    {Math.floor(score) > 90 ? "Excellent focus! Keep maintaining this rhythm." : "Try to reduce phone usage during stops."}
+                                                    {(finalSessionScoreRef.current !== null ? finalSessionScoreRef.current : (finalSessionScore !== null ? finalSessionScore : Math.floor(score))) > 90 ? "Excellent focus! Keep maintaining this rhythm." : "Try to reduce phone usage during stops."}
                                                 </p>
                                             </div>
                                         </div>
@@ -947,7 +1052,6 @@ const Dashboard = () => {
 
                         {/* Bottom Nav (Fixed to viewport) */}
                         <BottomNav
-                            currentPage={currentPage}
                             onPageChange={handlePageChange}
                             selectedLog={selectedLog}
                             showCameraView={showCameraView}

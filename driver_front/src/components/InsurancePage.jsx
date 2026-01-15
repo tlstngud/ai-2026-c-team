@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { TrendingUp, DollarSign, CheckCircle2, MapPin, Ticket, Award, Map } from 'lucide-react';
 import Header from './Header';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -6,8 +7,8 @@ import ChallengeDetail from './ChallengeDetail';
 import { storage } from '../utils/localStorage';
 
 const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChallengeDetail = null, onClaimReward = null }) => {
+    const navigate = useNavigate();
     const [discountRate, setDiscountRate] = useState(0);
-    const [showChallengeDetail, setShowChallengeDetail] = useState(false);
     const [isRewardClaimed, setIsRewardClaimed] = useState(false);
     const [showRewardCard, setShowRewardCard] = useState(true);
     const [challenge, setChallenge] = useState(null);
@@ -36,12 +37,14 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
     const displayScore = calculateDisplayScore();
     const isAnalyzing = history.length < MIN_RECORDS_FOR_SCORE && !hasNoData; // 7개 미만일 때만 "분석 중" 표시
     
-    // showChallengeDetail 상태 변경 시 부모 컴포넌트에 알림
-    useEffect(() => {
+    // 챌린지 상세 페이지로 이동
+    const handleShowChallengeDetail = () => {
+        const challengeId = challenge?.challengeId || `challenge_${region.name.replace(/\s/g, '_')}`;
+        navigate(`/challenge/${challengeId}`);
         if (onShowChallengeDetail) {
-            onShowChallengeDetail(showChallengeDetail);
+            onShowChallengeDetail(true);
         }
-    }, [showChallengeDetail, onShowChallengeDetail]);
+    };
 
     useEffect(() => {
         if (displayScore === null) {
@@ -133,43 +136,6 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
         });
     }, [history]);
 
-    // 챌린지 상세 페이지 표시 (조건부 렌더링)
-    if (showChallengeDetail) {
-        // challenge가 없어도 region 정보를 기반으로 기본 챌린지 데이터 생성
-        const challengeData = challenge || {
-            challengeId: `challenge_${region.name.replace(/\s/g, '_')}`,
-            region: region.name,
-            name: region.campaign,
-            title: `${region.name} 안전운전 챌린지`,
-            targetScore: region.target,
-            reward: region.reward,
-            participants: 0,
-            startDate: new Date().toISOString(),
-            endDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(), // 14일 후
-            description: `${region.name}에서 안전운전을 실천해주세요. 목표 점수 달성 시 혜택을 드립니다.`,
-            rules: ['지정된 기간 동안 안전운전 실천', `안전운전 점수 ${region.target}점 이상 유지`, '급가속/급감속 최소화'],
-            conditions: [`${region.name} 거주자 또는 주 활동 운전자`, '최근 1년 내 중과실 사고 이력 없음', '마케팅 활용 동의 필수']
-        };
-        
-        return (
-            <ChallengeDetail
-                challenge={{
-                    region: challengeData.region,
-                    title: challengeData.name || challengeData.title,
-                    targetScore: challengeData.targetScore,
-                    myScore: score,
-                    reward: challengeData.reward,
-                    participants: challengeData.participants || 0,
-                    period: challengeData.period || `${challengeData.startDate?.split('T')[0] || new Date().toISOString().split('T')[0]} ~ ${challengeData.endDate?.split('T')[0] || new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}`,
-                    description: challengeData.description,
-                    rules: challengeData.rules || [],
-                    conditions: challengeData.conditions || []
-                }}
-                currentScore={score}
-                onBack={() => setShowChallengeDetail(false)}
-            />
-        );
-    }
 
     return (
         <div className="min-h-full bg-[#F8FAFC] text-slate-800 font-sans">
@@ -179,7 +145,7 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
                 {/* 지자체 챌린지 Hero Card */}
                 <div 
                     className={`relative bg-gradient-to-br ${region.bgImage} rounded-[2rem] p-6 text-white overflow-hidden shadow-xl cursor-pointer active:scale-[0.98] transition-transform`}
-                    onClick={() => setShowChallengeDetail(true)}
+                    onClick={handleShowChallengeDetail}
                 >
                     <Map className="absolute right-[-20px] bottom-[-20px] text-white/5" size={140} />
                     <div className="relative z-10">

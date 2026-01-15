@@ -22,7 +22,7 @@ const LoginPage = () => {
         const result = await login(id, password);
 
         if (result.success) {
-            navigate('/');
+            navigate('/drive');
         } else {
             setError(result.message || '로그인 실패');
         }

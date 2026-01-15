@@ -1,4 +1,5 @@
 import React from 'react';
+import { useLocation } from 'react-router-dom';
 import { Video, ShieldCheck, History, Award, User } from 'lucide-react';
 
 const NavButton = ({ active, onClick, icon, label }) => (
@@ -8,8 +9,23 @@ const NavButton = ({ active, onClick, icon, label }) => (
     </button>
 );
 
-const BottomNav = ({ currentPage, onPageChange, selectedLog, showCameraView, showChallengeDetail = false }) => {
-    if (selectedLog) return null;
+const BottomNav = ({ onPageChange, selectedLog, showCameraView, showChallengeDetail = false }) => {
+    const location = useLocation();
+    
+    // URL 경로에서 현재 페이지 확인
+    const getCurrentPage = () => {
+        const path = location.pathname;
+        if (path.startsWith('/log/')) return 'log-detail';
+        if (path.startsWith('/challenge/')) return 'challenge-detail';
+        if (path === '/insurance' || path === '/challenge') return 'insurance';
+        if (path === '/log') return 'log';
+        if (path === '/mypage') return 'mypage';
+        return 'drive';
+    };
+    
+    const currentPage = getCurrentPage();
+    
+    if (selectedLog || currentPage === 'log-detail' || currentPage === 'challenge-detail') return null;
 
     return (
         <div
