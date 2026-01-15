@@ -2,12 +2,14 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TrendingUp, CheckCircle2, MapPin, Ticket, Award, Map } from 'lucide-react';
 import Header from './Header';
+import { useAuth } from '../contexts/AuthContext';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import ChallengeDetail from './ChallengeDetail';
 import { storage } from '../utils/localStorage';
 
 const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChallengeDetail = null, onClaimReward = null, showChallengeDetail = false }) => {
     const navigate = useNavigate();
+    const { user } = useAuth();
     const [discountRate, setDiscountRate] = useState(0);
     const [isRewardClaimed, setIsRewardClaimed] = useState(false);
     const [showRewardCard, setShowRewardCard] = useState(false); // [2026-01-15 수정] 초기 상태 false로 변경 (챌린지 시작 전 숨김)
@@ -15,13 +17,22 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
     const [challenge, setChallenge] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    // [2026-01-15 수정] 챌린지 시작/취소 토글 핸들러
-    // - status(boolean)를 인자로 받아 참여/취소 상태를 변경합니다.
-    // - true: 챌린지 시작 (리워드 박스 표시)
-    // - false: 챌린지 취소 (리워드 박스 숨김)
+    // [2026-01-16 수정] 챌린지 시작/취소 토글 핸들러 (localStorage 연동)
     const handleChallengeStart = (status) => {
-        setShowRewardCard(status);
-        setIsChallengeJoined(status);
+        if (!user) return;
+
+        // challenge가 아직 로드되지 않았을 경우를 대비
+        const currentChallengeId = challenge ? challenge.challengeId : `challenge_${region.name.replace(/\s/g, '_')}`;
+
+        if (status) {
+            storage.joinChallenge(user.id, currentChallengeId);
+            setIsChallengeJoined(true);
+            setShowRewardCard(true);
+        } else {
+            storage.leaveChallenge(user.id, currentChallengeId);
+            setIsChallengeJoined(false);
+            setShowRewardCard(false);
+        }
     };
 
     // 점수 계산: 7개 미만이면 전체 기록 평균, 7개 이상이면 최근 7개 평균
@@ -105,6 +116,31 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
         loadChallenge();
     }, [userRegion]);
 
+    // [2026-01-16 추가] 챌린지 참여 상태 동기화
+    useEffect(() => {
+        if (user && (challenge || userRegion)) {
+            // challenge가 없으면 userRegion으로 임시 ID 생성해서 체크
+            const currentChallengeId = challenge ? challenge.challengeId : `challenge_${region.name.replace(/\s/g, '_')}`;
+            const status = storage.getChallengeStatus(user.id, currentChallengeId);
+
+            if (status) {
+                // 이미 참여 중
+                if (status.status === 'REWARD_CLAIMED') {
+                    setIsChallengeJoined(true);
+                    setIsRewardClaimed(true);
+                    setShowRewardCard(false); // 이미 받았으면 숨김
+                } else {
+                    setIsChallengeJoined(true);
+                    setIsRewardClaimed(false);
+                    setShowRewardCard(true); // 진행 중이면 표시
+                }
+            } else {
+                setIsChallengeJoined(false);
+                setShowRewardCard(false);
+            }
+        }
+    }, [user, challenge, userRegion]);
+
     // 지자체 정보가 없으면 기본값 사용
     const region = challenge && challenge.region ? {
         name: challenge.region,
@@ -184,6 +220,7 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
                 }}
                 onJoin={handleChallengeStart}
                 isJoined={isChallengeJoined} // [2026-01-15 수정] 참여 상태 전달
+                isRewardClaimed={isRewardClaimed} // [2026-01-16 추가] 보상 수령 상태 전달
             />
         );
     }
@@ -309,12 +346,21 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
                                                     provider: region.name,
                                                     theme: region.color && region.color.includes('emerald') ? 'emerald'
                                                         : region.color && region.color.includes('indigo') ? 'indigo'
-                                                            : 'blue'
+                                                            : 'blue',
+                                                    challengeId: challenge ? challenge.challengeId : `challenge_${region.name.replace(/\s/g, '_')}`
                                                 };
                                                 onClaimReward(couponData);
+
+                                                // [2026-01-16 추가] 리워드 발급 상태 저장
+                                                if (user) {
+                                                    const currentChallengeId = challenge ? challenge.challengeId : `challenge_${region.name.replace(/\s/g, '_')}`;
+                                                    storage.claimChallengeReward(user.id, currentChallengeId);
+                                                }
+
                                                 // 2초 후에 카드가 사라지도록 설정
                                                 setTimeout(() => {
                                                     setIsRewardClaimed(true);
+                                                    setShowRewardCard(false);
                                                 }, 2000);
                                             }
                                         }}

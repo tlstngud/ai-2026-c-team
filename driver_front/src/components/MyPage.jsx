@@ -89,10 +89,10 @@ const MyPage = ({ user, score, history, userRegion, coupons = [] }) => {
 
     const monthlyProgress = Math.min((currentMonthData.driveTime / 10) * 100, 100);
 
-    // 쿠폰 데이터 (prop으로 받거나 기본값 사용)
-    const defaultCoupons = coupons.length > 0 ? coupons : [
+    // [2026-01-16 수정] 시뮬레이션용 기본 쿠폰 데이터 (항상 표시)
+    const simulationCoupons = [
         {
-            id: 1,
+            id: 'sim_1',
             type: 'VOUCHER',
             name: '춘천사랑 상품권',
             amount: '10,000원',
@@ -102,7 +102,7 @@ const MyPage = ({ user, score, history, userRegion, coupons = [] }) => {
             theme: 'emerald'
         },
         {
-            id: 2,
+            id: 'sim_2',
             type: 'PARKING',
             name: '공영주차장 50% 할인권',
             amount: '50% 할인',
@@ -112,7 +112,7 @@ const MyPage = ({ user, score, history, userRegion, coupons = [] }) => {
             theme: 'indigo'
         },
         {
-            id: 3,
+            id: 'sim_3',
             type: 'OIL',
             name: 'SK엔크린 주유 할인권',
             amount: '3,000원',
@@ -122,7 +122,7 @@ const MyPage = ({ user, score, history, userRegion, coupons = [] }) => {
             theme: 'orange'
         },
         {
-            id: 4,
+            id: 'sim_4',
             type: 'VOUCHER',
             name: '스타벅스 아메리카노',
             amount: '1잔',
@@ -133,9 +133,12 @@ const MyPage = ({ user, score, history, userRegion, coupons = [] }) => {
         }
     ];
 
+    // [2026-01-16 수정] 실제 쿠폰과 시뮬레이션 쿠폰 병합 (실제 쿠폰이 위로 오도록)
+    const allCoupons = [...coupons, ...simulationCoupons];
+
     const filteredCoupons = activeTab === 'ALL'
-        ? defaultCoupons
-        : defaultCoupons.filter(c => c.type === activeTab);
+        ? allCoupons
+        : allCoupons.filter(c => c.type === activeTab);
 
     // --- Styles Helpers ---
     const getStatusStyle = (status) => {
@@ -177,10 +180,10 @@ const MyPage = ({ user, score, history, userRegion, coupons = [] }) => {
                             <p className="text-sm font-medium text-slate-500 mt-0.5 flex items-center gap-1.5">
                                 {!hasNoData && (
                                     <span className={`w-1.5 h-1.5 rounded-full ${currentTier.color === 'yellow' ? 'bg-yellow-500' :
-                                            currentTier.color === 'slate' ? 'bg-slate-400' :
-                                                currentTier.color === 'orange' ? 'bg-orange-500' :
-                                                    currentTier.color === 'purple' ? 'bg-purple-500' :
-                                                        'bg-emerald-500'
+                                        currentTier.color === 'slate' ? 'bg-slate-400' :
+                                            currentTier.color === 'orange' ? 'bg-orange-500' :
+                                                currentTier.color === 'purple' ? 'bg-purple-500' :
+                                                    'bg-emerald-500'
                                         }`}></span>
                                 )}
                                 {userGrade}
