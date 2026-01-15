@@ -9,9 +9,36 @@ const MyPage = ({ user, score, history, userRegion, coupons = [] }) => {
 
     // --- Data ---
     const username = user?.name || '김운전';
-    const userGrade = `${userRegion?.name || '춘천'} 1등급 드라이버`;
-    const totalDistance = history.reduce((acc, curr) => acc + (curr.distance || 12), 0);
-    const safetyScore = Math.floor(score);
+    const totalDistance = history.reduce((acc, curr) => acc + (curr.distance || 0), 0);
+    
+    // 콜드 스타트 처리: 주행 거리가 30km 미만이면 점수 미노출
+    const MIN_DISTANCE_FOR_SCORE = 30;
+    const isAnalyzing = totalDistance < MIN_DISTANCE_FOR_SCORE;
+    const hasNoData = history.length === 0;
+    
+    // 등급 계산 (거리 + 점수 복합 평가)
+    const getTier = (dist, score) => {
+        if (dist < 50) {
+            return { name: 'Starter', level: 0, nextGoal: 50 - dist, color: 'gray', displayName: '스타터' };
+        }
+        if (dist < 300 || (score !== null && score < 70)) {
+            return { name: 'Bronze', level: 1, nextGoal: 300 - dist, color: 'orange', displayName: '브론즈' };
+        }
+        if (dist < 1000 || (score !== null && score < 85)) {
+            return { name: 'Silver', level: 2, nextGoal: 1000 - dist, color: 'slate', displayName: '실버' };
+        }
+        if (dist < 3000 || (score !== null && score < 95)) {
+            return { name: 'Gold', level: 3, nextGoal: 3000 - dist, color: 'yellow', displayName: '골드' };
+        }
+        return { name: 'Master', level: 4, nextGoal: 0, color: 'purple', displayName: '마스터' };
+    };
+    
+    const currentTier = getTier(totalDistance, score);
+    const userGrade = hasNoData 
+        ? '첫 주행을 시작해보세요!' 
+        : `${userRegion?.name || '전국'} ${currentTier.displayName} 드라이버`;
+    
+    const safetyScore = score !== null && score !== undefined ? Math.floor(score) : null;
 
     // --- Simulation Data ---
     // 할인율 계산 (InsurancePage와 동일한 로직)
@@ -140,7 +167,15 @@ const MyPage = ({ user, score, history, userRegion, coupons = [] }) => {
                         <div>
                             <h2 className="text-2xl font-bold tracking-tight text-slate-900">{username}님</h2>
                             <p className="text-sm font-medium text-slate-500 mt-0.5 flex items-center gap-1.5">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                {!hasNoData && (
+                                    <span className={`w-1.5 h-1.5 rounded-full ${
+                                        currentTier.color === 'yellow' ? 'bg-yellow-500' :
+                                        currentTier.color === 'slate' ? 'bg-slate-400' :
+                                        currentTier.color === 'orange' ? 'bg-orange-500' :
+                                        currentTier.color === 'purple' ? 'bg-purple-500' :
+                                        'bg-emerald-500'
+                                    }`}></span>
+                                )}
                                 {userGrade}
                             </p>
                         </div>
@@ -156,12 +191,37 @@ const MyPage = ({ user, score, history, userRegion, coupons = [] }) => {
                         </div>
                         <div className="bg-white p-5 rounded-[20px] shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] border border-slate-100">
                             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Safety Score</p>
-                            <div className="flex items-baseline gap-1">
-                                <span className={`text-2xl font-bold tracking-tight ${safetyScore >= 90 ? 'text-emerald-600' : 'text-slate-900'}`}>
-                                    {safetyScore}
-                                </span>
-                                <span className="text-sm font-medium text-slate-400">pts</span>
-                            </div>
+                            {hasNoData ? (
+                                // CASE 1: 기록 아예 없음 (가입 직후)
+                                <div className="flex flex-col items-start gap-1">
+                                    <span className="text-2xl font-bold text-slate-300">--</span>
+                                    <span className="text-xs text-slate-400">첫 주행을 시작해보세요!</span>
+                                </div>
+                            ) : isAnalyzing ? (
+                                // CASE 2: 기록은 있으나 분석 기준 미달
+                                <div className="flex flex-col items-start gap-1">
+                                    <span className="text-xl font-bold text-slate-600 animate-pulse">Analysing...</span>
+                                    <span className="text-xs text-blue-500 font-medium">
+                                        점수 산출까지 {MIN_DISTANCE_FOR_SCORE - totalDistance}km 남음
+                                    </span>
+                                </div>
+                            ) : (
+                                // CASE 3: 정상 점수 노출
+                                <div className="flex flex-col gap-1">
+                                    <div className="flex items-baseline gap-1">
+                                        <span className={`text-2xl font-bold tracking-tight ${safetyScore >= 90 ? 'text-emerald-600' : 'text-slate-900'}`}>
+                                            {safetyScore}
+                                        </span>
+                                        <span className="text-sm font-medium text-slate-400">pts</span>
+                                    </div>
+                                    {/* 다음 등급 동기 부여 */}
+                                    {currentTier.nextGoal > 0 && (
+                                        <p className="text-[10px] text-slate-400">
+                                            다음 등급까지 <span className="font-bold text-slate-600">{currentTier.nextGoal}km</span>
+                                        </p>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </div>
                 </section>

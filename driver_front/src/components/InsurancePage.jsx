@@ -13,6 +13,13 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
     const [challenge, setChallenge] = useState(null);
     const [loading, setLoading] = useState(true);
     
+    // 콜드 스타트 처리
+    const totalDistance = history.reduce((acc, curr) => acc + (curr.distance || 0), 0);
+    const MIN_DISTANCE_FOR_SCORE = 30;
+    const isAnalyzing = totalDistance < MIN_DISTANCE_FOR_SCORE;
+    const hasNoData = history.length === 0;
+    const displayScore = hasNoData || isAnalyzing ? null : score;
+    
     // showChallengeDetail 상태 변경 시 부모 컴포넌트에 알림
     useEffect(() => {
         if (onShowChallengeDetail) {
@@ -21,10 +28,16 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
     }, [showChallengeDetail, onShowChallengeDetail]);
 
     useEffect(() => {
-        if (score >= 110) setDiscountRate(10);
-        else if (score >= 100) setDiscountRate(5);
-        else setDiscountRate(0);
-    }, [score]);
+        if (displayScore === null) {
+            setDiscountRate(0);
+        } else if (displayScore >= 110) {
+            setDiscountRate(10);
+        } else if (displayScore >= 100) {
+            setDiscountRate(5);
+        } else {
+            setDiscountRate(0);
+        }
+    }, [displayScore]);
 
     // 챌린지 정보 API에서 불러오기
     useEffect(() => {
@@ -68,7 +81,7 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
         address: ''
     });
 
-    const isCompleted = score >= region.target;
+    const isCompleted = displayScore !== null && displayScore >= region.target;
 
     // 그래프 데이터 준비 (최근 10개 기록, 최신순)
     const chartData = useMemo(() => {
@@ -137,10 +150,24 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
                         <div className="flex justify-between items-start mt-6 mb-4">
                             <div>
                                 <h3 className="text-xs font-bold text-white/60 uppercase tracking-wider mb-1">Current Score</h3>
-                                <div className="flex items-baseline gap-1">
-                                    <span className="text-5xl font-black">{Math.floor(score)}</span>
-                                    <span className="text-sm font-medium text-white/60">/ {region.target}</span>
-                                </div>
+                                {hasNoData ? (
+                                    <div className="flex flex-col gap-1">
+                                        <span className="text-3xl font-black text-white/50">--</span>
+                                        <span className="text-xs text-white/50">첫 주행을 시작해보세요!</span>
+                                    </div>
+                                ) : isAnalyzing ? (
+                                    <div className="flex flex-col gap-1">
+                                        <span className="text-2xl font-black text-white/70 animate-pulse">Analysing...</span>
+                                        <span className="text-xs text-white/60">
+                                            점수 산출까지 {MIN_DISTANCE_FOR_SCORE - totalDistance}km 남음
+                                        </span>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-baseline gap-1">
+                                        <span className="text-5xl font-black">{Math.floor(displayScore)}</span>
+                                        <span className="text-sm font-medium text-white/60">/ {region.target}</span>
+                                    </div>
+                                )}
                             </div>
                             <div className="bg-white/10 backdrop-blur-md p-2 rounded-xl">
                                 <TrendingUp size={24} className="text-white" />
@@ -148,18 +175,20 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
                         </div>
 
                         {/* Progress Bar */}
-                        <div className="space-y-2">
-                            <div className="flex justify-between text-[10px] font-bold text-white/70">
-                                <span>Progress</span>
-                                <span>{isCompleted ? 'Target Reached!' : `${Math.floor((score / region.target) * 100)}%`}</span>
+                        {!hasNoData && !isAnalyzing && (
+                            <div className="space-y-2">
+                                <div className="flex justify-between text-[10px] font-bold text-white/70">
+                                    <span>Progress</span>
+                                    <span>{isCompleted ? 'Target Reached!' : `${Math.floor((displayScore / region.target) * 100)}%`}</span>
+                                </div>
+                                <div className="w-full bg-black/20 h-2 rounded-full overflow-hidden">
+                                    <div
+                                        className="bg-white h-full transition-all duration-1000"
+                                        style={{ width: `${Math.min(100, (displayScore / region.target) * 100)}%` }}
+                                    ></div>
+                                </div>
                             </div>
-                            <div className="w-full bg-black/20 h-2 rounded-full overflow-hidden">
-                                <div
-                                    className="bg-white h-full transition-all duration-1000"
-                                    style={{ width: `${Math.min(100, (score / region.target) * 100)}%` }}
-                                ></div>
-                            </div>
-                        </div>
+                        )}
                     </div>
                 </div>
 
@@ -256,22 +285,35 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
                     <div className="flex justify-between items-start mb-4">
                         <div>
                             <p className="text-[10px] font-bold text-blue-500 uppercase tracking-wider mb-1">Safety Score</p>
-                            <h2 className="text-4xl font-black text-slate-900 tracking-tighter">
-                                {parseFloat(score).toFixed(2)}<span className="text-base text-slate-300 ml-1 font-normal">pts</span>
-                            </h2>
+                            {hasNoData || isAnalyzing ? (
+                                <div className="flex flex-col gap-1">
+                                    <span className="text-2xl font-black text-slate-300">{hasNoData ? '--' : 'Analysing...'}</span>
+                                    {isAnalyzing && (
+                                        <span className="text-xs text-blue-500 font-medium">
+                                            점수 산출까지 {MIN_DISTANCE_FOR_SCORE - totalDistance}km 남음
+                                        </span>
+                                    )}
+                                </div>
+                            ) : (
+                                <h2 className="text-4xl font-black text-slate-900 tracking-tighter">
+                                    {parseFloat(displayScore).toFixed(2)}<span className="text-base text-slate-300 ml-1 font-normal">pts</span>
+                                </h2>
+                            )}
                         </div>
                         <div className="bg-blue-50 p-2 rounded-xl">
                             <TrendingUp className="text-blue-600" size={20} />
                         </div>
                     </div>
-                    <div className="space-y-2">
-                        <p className="text-xs font-bold text-slate-600">
-                            다음 할인까지 <span className="text-blue-600">{100 - score > 0 ? parseFloat(100 - score).toFixed(2) : 0}점</span>
-                        </p>
-                        <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                            <div className="bg-blue-600 h-full transition-all duration-700" style={{ width: `${(score / 120) * 100}%` }}></div>
+                    {!hasNoData && !isAnalyzing && (
+                        <div className="space-y-2">
+                            <p className="text-xs font-bold text-slate-600">
+                                다음 할인까지 <span className="text-blue-600">{100 - displayScore > 0 ? parseFloat(100 - displayScore).toFixed(2) : 0}점</span>
+                            </p>
+                            <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                                <div className="bg-blue-600 h-full transition-all duration-700" style={{ width: `${(displayScore / 120) * 100}%` }}></div>
+                            </div>
                         </div>
-                    </div>
+                    )}
                 </section>
 
                 <div className="relative aspect-[16/9] bg-white rounded-2xl overflow-hidden shadow-xl border-4 border-white">

@@ -28,9 +28,39 @@ const getStatistics = async (req, res) => {
         const totalDistance = logs.reduce((sum, log) => sum + (log.distance || 0), 0);
         const totalDuration = logs.reduce((sum, log) => sum + (log.duration || 0), 0);
         const totalTrips = logs.length;
-        const averageScore = logs.length > 0
+        
+        // 가중 이동 평균 점수 계산 (최근 주행일수록 가중치 높게)
+        const calculateWeightedScore = (logs) => {
+            if (logs.length === 0) return null;
+            
+            let totalWeightedScore = 0;
+            let totalWeight = 0;
+            
+            // 최근 10개 기록에 더 높은 가중치 (60% 반영)
+            const recentLogs = logs.slice(0, 10);
+            const olderLogs = logs.slice(10);
+            
+            // 최근 기록: 가중치 0.6
+            recentLogs.forEach((log, index) => {
+                const weight = Math.log((log.distance || 1) + 1) * 0.6; // 거리 가중치
+                totalWeightedScore += (log.score || 0) * weight;
+                totalWeight += weight;
+            });
+            
+            // 과거 기록: 가중치 0.4
+            olderLogs.forEach((log) => {
+                const weight = Math.log((log.distance || 1) + 1) * 0.4;
+                totalWeightedScore += (log.score || 0) * weight;
+                totalWeight += weight;
+            });
+            
+            return totalWeight > 0 ? Math.round(totalWeightedScore / totalWeight) : null;
+        };
+        
+        const weightedScore = calculateWeightedScore(logs);
+        const averageScore = weightedScore !== null ? weightedScore : (logs.length > 0
             ? Math.round(logs.reduce((sum, log) => sum + log.score, 0) / logs.length)
-            : user?.score || 80;
+            : null);
 
         // 할인율 계산
         const calculateDiscountRate = (score) => {
@@ -58,26 +88,50 @@ const getStatistics = async (req, res) => {
             score: log.score
         }));
 
-        // 등급 계산
-        const expectedDiscount = calculateDiscountRate(averageScore);
-        const tier = expectedDiscount >= 10 ? 'Gold' : expectedDiscount >= 5 ? 'Silver' : 'Bronze';
+        // 등급 계산 (거리 + 점수 복합 평가)
+        const calculateTier = (distance, score) => {
+            if (distance < 50) {
+                return { name: 'Starter', level: 0, nextGoal: 50 - distance, color: 'gray' };
+            }
+            if (distance < 300 || (score !== null && score < 70)) {
+                return { name: 'Bronze', level: 1, nextGoal: 300 - distance, color: 'orange' };
+            }
+            if (distance < 1000 || (score !== null && score < 85)) {
+                return { name: 'Silver', level: 2, nextGoal: 1000 - distance, color: 'slate' };
+            }
+            if (distance < 3000 || (score !== null && score < 95)) {
+                return { name: 'Gold', level: 3, nextGoal: 3000 - distance, color: 'yellow' };
+            }
+            return { name: 'Master', level: 4, nextGoal: 0, color: 'purple' };
+        };
+        
+        const tierInfo = calculateTier(totalDistance, averageScore);
+        const expectedDiscount = averageScore !== null ? calculateDiscountRate(averageScore) : 0;
 
         // 활성 개월 수 계산
         const monthsActive = Math.min(Math.ceil(totalTrips / 4), 12); // 대략적인 계산
 
+        // 콜드 스타트 체크: 주행 거리가 30km 미만이면 점수 미노출
+        const MIN_DISTANCE_FOR_SCORE = 30;
+        const isAnalyzing = totalDistance < MIN_DISTANCE_FOR_SCORE;
+        
         res.json({
             success: true,
             data: {
                 totalDistance: totalDistance,
                 totalDuration: totalDuration,
                 totalTrips: totalTrips,
-                averageScore: averageScore,
-                currentScore: user?.score || 80,
+                averageScore: averageScore, // null일 수 있음 (데이터 없음)
+                weightedScore: weightedScore, // 가중 평균 점수
+                currentScore: user?.score || null,
                 discountRate: discountRate,
                 monthlySavings: monthlySavings,
                 monthsActive: monthsActive,
-                tier: tier,
-                lastYearDiscount: calculateDiscountRate(averageScore - 5),
+                tier: tierInfo.name,
+                tierInfo: tierInfo, // 등급 상세 정보
+                isAnalyzing: isAnalyzing, // 분석 중 여부
+                minDistanceForScore: MIN_DISTANCE_FOR_SCORE,
+                lastYearDiscount: averageScore !== null ? calculateDiscountRate(averageScore - 5) : 0,
                 expectedDiscount: expectedDiscount,
                 violations: violations,
                 scoreHistory: scoreHistory
