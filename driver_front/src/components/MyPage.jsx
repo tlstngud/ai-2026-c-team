@@ -10,12 +10,12 @@ const MyPage = ({ user, score, history, userRegion, coupons = [] }) => {
     // --- Data ---
     const username = user?.name || '김운전';
     const totalDistance = history.reduce((acc, curr) => acc + (curr.distance || 0), 0);
-    
+
     // 콜드 스타트 처리: 최소 7개 기록 필요
     const MIN_RECORDS_FOR_SCORE = 7;
     const isAnalyzing = history.length < MIN_RECORDS_FOR_SCORE;
     const hasNoData = history.length === 0;
-    
+
     // 등급 계산 (거리 + 점수 복합 평가)
     const getTier = (dist, score) => {
         if (dist < 50) {
@@ -32,15 +32,11 @@ const MyPage = ({ user, score, history, userRegion, coupons = [] }) => {
         }
         return { name: 'Master', level: 4, nextGoal: 0, color: 'purple', displayName: '마스터' };
     };
-    
+
     const currentTier = getTier(totalDistance, score);
-    const userGrade = hasNoData 
-        ? '첫 주행을 시작해보세요!' 
+    const userGrade = hasNoData
+        ? '첫 주행을 시작해보세요!'
         : `${userRegion?.name || '전국'} ${currentTier.displayName} 드라이버`;
-    
-    // 점수 계산: 7개 미만이면 전체 기록 평균, 7개 이상이면 최근 7개 평균
-    const calculatedScore = calculateAvgScore();
-    const safetyScore = calculatedScore !== null && calculatedScore !== undefined ? Math.floor(calculatedScore) : null;
 
     // --- Simulation Data ---
     // 할인율 계산 (InsurancePage와 동일한 로직)
@@ -50,6 +46,24 @@ const MyPage = ({ user, score, history, userRegion, coupons = [] }) => {
         else return 0;
     };
 
+    // 평균 점수 계산
+    // 7개 미만: 전체 기록의 평균 점수
+    // 7개 이상: 최근 7개 기록의 평균 점수
+    const calculateAvgScore = () => {
+        if (history.length === 0) return score; // score prop 사용
+
+        const recordsToUse = history.length < MIN_RECORDS_FOR_SCORE
+            ? history  // 전체 기록 사용
+            : history.slice(0, 7);  // 최근 7개만 사용
+
+        const sum = recordsToUse.reduce((acc, curr) => acc + (curr.score || 0), 0);
+        return Math.floor(sum / recordsToUse.length);
+    };
+
+    // 점수 계산: 7개 미만이면 전체 기록 평균, 7개 이상이면 최근 7개 평균
+    const calculatedScore = calculateAvgScore();
+    const safetyScore = calculatedScore !== null && calculatedScore !== undefined ? Math.floor(calculatedScore) : null;
+
     const discountRate = calculateDiscountRate(safetyScore);
     const monthlySavings = discountRate * 1250; // InsurancePage와 동일한 계산
 
@@ -58,20 +72,6 @@ const MyPage = ({ user, score, history, userRegion, coupons = [] }) => {
         driveTime: 8.5,
         avgScore: safetyScore,
         isAchieved: false
-    };
-
-    // 평균 점수 계산
-    // 7개 미만: 전체 기록의 평균 점수
-    // 7개 이상: 최근 7개 기록의 평균 점수
-    const calculateAvgScore = () => {
-        if (history.length === 0) return safetyScore;
-        
-        const recordsToUse = history.length < MIN_RECORDS_FOR_SCORE 
-            ? history  // 전체 기록 사용
-            : history.slice(0, 7);  // 최근 7개만 사용
-        
-        const sum = recordsToUse.reduce((acc, curr) => acc + (curr.score || 0), 0);
-        return Math.floor(sum / recordsToUse.length);
     };
 
     const avgScore = calculateAvgScore();
@@ -176,13 +176,12 @@ const MyPage = ({ user, score, history, userRegion, coupons = [] }) => {
                             <h2 className="text-2xl font-bold tracking-tight text-slate-900">{username}님</h2>
                             <p className="text-sm font-medium text-slate-500 mt-0.5 flex items-center gap-1.5">
                                 {!hasNoData && (
-                                    <span className={`w-1.5 h-1.5 rounded-full ${
-                                        currentTier.color === 'yellow' ? 'bg-yellow-500' :
-                                        currentTier.color === 'slate' ? 'bg-slate-400' :
-                                        currentTier.color === 'orange' ? 'bg-orange-500' :
-                                        currentTier.color === 'purple' ? 'bg-purple-500' :
-                                        'bg-emerald-500'
-                                    }`}></span>
+                                    <span className={`w-1.5 h-1.5 rounded-full ${currentTier.color === 'yellow' ? 'bg-yellow-500' :
+                                            currentTier.color === 'slate' ? 'bg-slate-400' :
+                                                currentTier.color === 'orange' ? 'bg-orange-500' :
+                                                    currentTier.color === 'purple' ? 'bg-purple-500' :
+                                                        'bg-emerald-500'
+                                        }`}></span>
                                 )}
                                 {userGrade}
                             </p>
