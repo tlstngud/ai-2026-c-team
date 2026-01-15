@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { TrendingUp, DollarSign, CheckCircle2, MapPin, Ticket, Award, Map } from 'lucide-react';
+import { TrendingUp, CheckCircle2, MapPin, Ticket, Award, Map } from 'lucide-react';
 import Header from './Header';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import ChallengeDetail from './ChallengeDetail';
@@ -9,15 +9,25 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
     const [discountRate, setDiscountRate] = useState(0);
     const [showChallengeDetail, setShowChallengeDetail] = useState(false);
     const [isRewardClaimed, setIsRewardClaimed] = useState(false);
-    const [showRewardCard, setShowRewardCard] = useState(true);
+    const [showRewardCard, setShowRewardCard] = useState(false); // [2026-01-15 수정] 초기 상태 false로 변경 (챌린지 시작 전 숨김)
+    const [isChallengeJoined, setIsChallengeJoined] = useState(false); // [2026-01-15 수정] 챌린지 참여 상태 추가 (상세 화면 닫혀도 유지)
     const [challenge, setChallenge] = useState(null);
     const [loading, setLoading] = useState(true);
-    
+
+    // [2026-01-15 수정] 챌린지 시작/취소 토글 핸들러
+    // - status(boolean)를 인자로 받아 참여/취소 상태를 변경합니다.
+    // - true: 챌린지 시작 (리워드 박스 표시)
+    // - false: 챌린지 취소 (리워드 박스 숨김)
+    const handleChallengeStart = (status) => {
+        setShowRewardCard(status);
+        setIsChallengeJoined(status);
+    };
+
     // 점수 계산: 7개 미만이면 전체 기록 평균, 7개 이상이면 최근 7개 평균
     const totalDistance = history.reduce((acc, curr) => acc + (curr.distance || 0), 0);
     const MIN_RECORDS_FOR_SCORE = 7;
     const hasNoData = history.length === 0;
-    
+
     // 점수 계산 로직
     const calculateDisplayScore = () => {
         if (hasNoData) return null;
@@ -32,10 +42,12 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
             return Math.floor(sum / recentHistory.length);
         }
     };
-    
+
     const displayScore = calculateDisplayScore();
     const isAnalyzing = history.length < MIN_RECORDS_FOR_SCORE && !hasNoData; // 7개 미만일 때만 "분석 중" 표시
-    
+
+
+
     // showChallengeDetail 상태 변경 시 부모 컴포넌트에 알림
     useEffect(() => {
         if (onShowChallengeDetail) {
@@ -60,15 +72,15 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
         const loadChallenge = () => {
             try {
                 const challenges = storage.getChallenges();
-                
+
                 if (userRegion?.name) {
                     // 지역에 맞는 챌린지 찾기
-                    const matchedChallenge = challenges.find(c => 
-                        c.region === userRegion.name || 
+                    const matchedChallenge = challenges.find(c =>
+                        c.region === userRegion.name ||
                         userRegion.name.includes(c.region) ||
                         c.region.includes(userRegion.name)
                     );
-                    
+
                     if (matchedChallenge) {
                         setChallenge(matchedChallenge);
                     } else {
@@ -150,7 +162,7 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
             rules: ['지정된 기간 동안 안전운전 실천', `안전운전 점수 ${region.target}점 이상 유지`, '급가속/급감속 최소화'],
             conditions: [`${region.name} 거주자 또는 주 활동 운전자`, '최근 1년 내 중과실 사고 이력 없음', '마케팅 활용 동의 필수']
         };
-        
+
         return (
             <ChallengeDetail
                 challenge={{
@@ -167,6 +179,8 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
                 }}
                 currentScore={score}
                 onBack={() => setShowChallengeDetail(false)}
+                onJoin={handleChallengeStart}
+                isJoined={isChallengeJoined} // [2026-01-15 수정] 참여 상태 전달
             />
         );
     }
@@ -177,7 +191,7 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
 
             <main className="grid grid-cols-1 gap-4 p-4 sm:p-6 transition-all duration-500 ease-in-out">
                 {/* 지자체 챌린지 Hero Card */}
-                <div 
+                <div
                     className={`relative bg-gradient-to-br ${region.bgImage} rounded-[2rem] p-6 text-white overflow-hidden shadow-xl cursor-pointer active:scale-[0.98] transition-transform`}
                     onClick={() => setShowChallengeDetail(true)}
                 >
@@ -247,12 +261,11 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
 
                 {/* Reward Card */}
                 {showRewardCard && (
-                    <div 
-                        className={`bg-white rounded-2xl shadow-sm border border-slate-100 transition-all duration-500 ease-in-out overflow-hidden ${
-                            isRewardClaimed 
-                                ? 'opacity-0 -translate-y-4 max-h-0 p-0 mb-0' 
-                                : 'opacity-100 translate-y-0 max-h-[200px] p-6'
-                        }`}
+                    <div
+                        className={`bg-white rounded-2xl shadow-sm border border-slate-100 transition-all duration-500 ease-in-out overflow-hidden ${isRewardClaimed
+                            ? 'opacity-0 -translate-y-4 max-h-0 p-0 mb-0'
+                            : 'opacity-100 translate-y-0 max-h-[200px] p-6'
+                            }`}
                         onTransitionEnd={() => {
                             if (isRewardClaimed) {
                                 setShowRewardCard(false);
@@ -271,29 +284,29 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
                             </div>
                             {isCompleted ? (
                                 isRewardClaimed ? (
-                                    <button 
+                                    <button
                                         disabled
                                         className="bg-slate-200 text-slate-400 text-xs font-bold px-3 py-2 rounded-xl cursor-not-allowed"
                                     >
                                         발급완료
                                     </button>
                                 ) : (
-                                    <button 
+                                    <button
                                         onClick={() => {
                                             if (onClaimReward) {
                                                 // 쿠폰 데이터 생성
                                                 const couponData = {
                                                     type: 'VOUCHER',
                                                     name: region.reward || '안전운전 인증서',
-                                                    amount: region.reward && region.reward.includes('상품권') 
+                                                    amount: region.reward && region.reward.includes('상품권')
                                                         ? region.reward.match(/\d+만?원/)?.[0] || '10,000원'
-                                                        : region.reward && region.reward.includes('할인') 
-                                                        ? '50% 할인'
-                                                        : region.reward || '인증서',
+                                                        : region.reward && region.reward.includes('할인')
+                                                            ? '50% 할인'
+                                                            : region.reward || '인증서',
                                                     provider: region.name,
-                                                    theme: region.color && region.color.includes('emerald') ? 'emerald' 
-                                                        : region.color && region.color.includes('indigo') ? 'indigo' 
-                                                        : 'blue'
+                                                    theme: region.color && region.color.includes('emerald') ? 'emerald'
+                                                        : region.color && region.color.includes('indigo') ? 'indigo'
+                                                            : 'blue'
                                                 };
                                                 onClaimReward(couponData);
                                                 // 2초 후에 카드가 사라지도록 설정
@@ -316,24 +329,7 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
                     </div>
                 )}
 
-                {/* Economic Benefit Card */}
-                <section className="bg-slate-900 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden transition-all duration-500 ease-in-out">
-                    <DollarSign className="absolute -right-4 -bottom-4 text-white/5" size={80} />
-                    <h3 className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-4">Economic Benefit</h3>
-                    <div className="space-y-3 relative z-10">
-                        <div className="flex justify-between items-center border-b border-white/10 pb-3">
-                            <span className="text-slate-400 text-xs italic font-medium">예상 절감액 (월)</span>
-                            <span className="text-xl font-bold font-mono">₩{(discountRate * 1250).toLocaleString()}</span>
-                        </div>
-                        <div className="flex items-center gap-2 bg-white/10 p-3 rounded-xl">
-                            <CheckCircle2 className="text-green-400 shrink-0" size={16} />
-                            <p className="text-[10px] leading-relaxed text-slate-300 font-medium font-mono">
-                                갱신 시 <span className="text-white font-bold">{discountRate}% 할인</span> 자동 적용.
-                            </p>
-                        </div>
-                    </div>
-                </section>
-
+                {/* ECONOMIC BENEFIT 박스 코드 삭제됨 */}
                 <section className="bg-white rounded-2xl p-6 shadow-xl border-4 border-white overflow-hidden">
                     <div className="flex justify-between items-start mb-4">
                         <div>
