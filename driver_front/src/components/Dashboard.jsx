@@ -865,7 +865,7 @@ const Dashboard = () => {
 
     const InsurancePageWrapper = () => {
         const avgScore = getAverageScore() ?? score;
-        return <InsurancePage score={avgScore} history={history} userRegion={userRegion} onShowChallengeDetail={setShowChallengeDetail} onClaimReward={addCoupon} />;
+        return <InsurancePage score={avgScore} history={history} userRegion={userRegion} onShowChallengeDetail={setShowChallengeDetail} onClaimReward={addCoupon} showChallengeDetail={showChallengeDetail} />;
     };
 
     const LogPageWrapper = () => {

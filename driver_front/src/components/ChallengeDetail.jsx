@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
     ChevronLeft, MapPin, Calendar, Clock, AlertCircle,
     CheckCircle2, Trophy, ArrowRight, ShieldCheck, Users
@@ -9,6 +10,17 @@ const ChallengeDetail = ({ challenge, onBack, currentScore = 0, onJoin, isJoined
     // [2026-01-15 수정] 참여 여부 상태 (props로 초기값 설정하여 상태 유지)
     const [isJoined, setIsJoined] = useState(initialIsJoined || false);
     const [showCancelConfirm, setShowCancelConfirm] = useState(false); // [2026-01-15 수정] 취소 확인 모달 상태
+    const [mounted, setMounted] = useState(false);
+
+    // React Portal을 위한 마운트 처리
+    useEffect(() => {
+        setMounted(true);
+        // body 스크롤 방지
+        document.body.style.overflow = 'hidden';
+        return () => {
+            document.body.style.overflow = '';
+        };
+    }, []);
 
     // challenge가 없으면 기본값 사용
     const challengeData = challenge || {
@@ -101,10 +113,10 @@ const ChallengeDetail = ({ challenge, onBack, currentScore = 0, onJoin, isJoined
     const myScore = isJoined ? challengeData.myScore : 0;
     const progress = myScore > 0 ? Math.min(100, (myScore / challengeData.targetScore) * 100) : 0;
 
-    return (
-        <div className="fixed inset-0 bg-white font-sans text-slate-900 z-[100] overflow-y-auto">
+    const content = (
+        <div className="fixed inset-0 bg-white font-sans text-slate-900 z-[99999] overflow-y-auto" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
             {/* 1. Header (Floating) - Slide from top */}
-            <header className="fixed top-0 left-0 right-0 z-[999] flex items-center justify-between px-4 py-3 bg-white border-b border-slate-200 shadow-sm" style={{ backgroundColor: '#ffffff' }}>
+            <header className="fixed top-0 left-0 right-0 z-[10000] flex items-center justify-between px-4 py-3 bg-white border-b border-slate-200 shadow-sm" style={{ backgroundColor: '#ffffff' }}>
                 <button
                     onClick={onBack}
                     className="p-2 rounded-full hover:bg-slate-100 transition-colors text-slate-600"
@@ -120,7 +132,7 @@ const ChallengeDetail = ({ challenge, onBack, currentScore = 0, onJoin, isJoined
             </header>
 
             {/* Main Content - Slide Up from bottom */}
-            <main className="px-6 pt-20 pb-32 relative z-[100] animate-[slideUpFade_0.6s_cubic-bezier(0.16,1,0.3,1)_forwards] opacity-0">
+            <main className="px-6 pt-20 pb-32 relative z-[9999] animate-[slideUpFade_0.6s_cubic-bezier(0.16,1,0.3,1)_forwards] opacity-0">
 
                 {/* 2. Hero Section - Staggered Animation */}
                 <div className="mb-8 opacity-0 animate-[fadeInUp_0.6s_ease-out_0.1s_forwards]">
@@ -269,7 +281,7 @@ const ChallengeDetail = ({ challenge, onBack, currentScore = 0, onJoin, isJoined
             </main>
 
             {/* 6. Sticky Footer Action - Slide Up */}
-            <div className={`fixed bottom-0 left-0 right-0 p-6 pb-8 bg-gradient-to-t from-white via-white to-transparent z-[180] opacity-0 animate-[slideUpFade_0.5s_ease-out_1.1s_forwards]`}>
+            <div className={`fixed bottom-0 left-0 right-0 p-6 pb-8 bg-gradient-to-t from-white via-white to-transparent z-[10000] opacity-0 animate-[slideUpFade_0.5s_ease-out_1.1s_forwards]`}>
                 <button
                     onClick={handleJoin} // [수정] 참여 중이어도 클릭 가능 (토글)
                     className={`w-full h-14 rounded-[1.2rem] flex items-center justify-center gap-2 text-lg font-bold shadow-xl shadow-slate-200 transition-all active:scale-95
@@ -291,7 +303,7 @@ const ChallengeDetail = ({ challenge, onBack, currentScore = 0, onJoin, isJoined
             </div>
             {/* [2026-01-15 수정] 취소 확인 모달 */}
             {showCancelConfirm && (
-                <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+                <div className="fixed inset-0 z-[10001] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white w-[80%] max-w-sm rounded-[24px] p-6 shadow-2xl animate-in zoom-in-95 duration-200">
                         <div className="text-center mb-6">
                             <div className="w-12 h-12 rounded-full bg-red-100 text-red-500 flex items-center justify-center mx-auto mb-4">
@@ -321,6 +333,13 @@ const ChallengeDetail = ({ challenge, onBack, currentScore = 0, onJoin, isJoined
             )}
         </div>
     );
+
+    // React Portal을 사용하여 body에 직접 렌더링
+    if (!mounted) {
+        return null;
+    }
+
+    return createPortal(content, document.body);
 };
 
 // --- Helper Component ---

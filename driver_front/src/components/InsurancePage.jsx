@@ -6,10 +6,9 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import ChallengeDetail from './ChallengeDetail';
 import { storage } from '../utils/localStorage';
 
-const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChallengeDetail = null, onClaimReward = null }) => {
+const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChallengeDetail = null, onClaimReward = null, showChallengeDetail = false }) => {
     const navigate = useNavigate();
     const [discountRate, setDiscountRate] = useState(0);
-    const [showChallengeDetail, setShowChallengeDetail] = useState(false);
     const [isRewardClaimed, setIsRewardClaimed] = useState(false);
     const [showRewardCard, setShowRewardCard] = useState(false); // [2026-01-15 수정] 초기 상태 false로 변경 (챌린지 시작 전 숨김)
     const [isChallengeJoined, setIsChallengeJoined] = useState(false); // [2026-01-15 수정] 챌린지 참여 상태 추가 (상세 화면 닫혀도 유지)
@@ -48,20 +47,12 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
     const displayScore = calculateDisplayScore();
     const isAnalyzing = history.length < MIN_RECORDS_FOR_SCORE && !hasNoData; // 7개 미만일 때만 "분석 중" 표시
 
-    // 챌린지 상세 페이지로 이동 (모달 방식 유지)
+    // 챌린지 상세 페이지로 이동
     const handleShowChallengeDetail = () => {
-        setShowChallengeDetail(true);
         if (onShowChallengeDetail) {
             onShowChallengeDetail(true);
         }
     };
-
-    // showChallengeDetail 상태 변경 시 부모 컴포넌트에 알림
-    useEffect(() => {
-        if (onShowChallengeDetail) {
-            onShowChallengeDetail(showChallengeDetail);
-        }
-    }, [showChallengeDetail, onShowChallengeDetail]);
 
     useEffect(() => {
         if (displayScore === null) {
@@ -186,7 +177,11 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
                     conditions: challengeData.conditions || []
                 }}
                 currentScore={score}
-                onBack={() => setShowChallengeDetail(false)}
+                onBack={() => {
+                    if (onShowChallengeDetail) {
+                        onShowChallengeDetail(false);
+                    }
+                }}
                 onJoin={handleChallengeStart}
                 isJoined={isChallengeJoined} // [2026-01-15 수정] 참여 상태 전달
             />
