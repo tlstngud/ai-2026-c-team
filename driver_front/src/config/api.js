@@ -11,13 +11,12 @@ const getApiBaseUrl = () => {
         return envUrl;
     }
 
-    // 프로덕션 환경: 도메인 우선, 실패 시 IP 주소 fallback
+    // 프로덕션 환경: DNS 전파 완료 전까지 IP 주소 사용 (임시)
+    // TODO: DNS 전파 완료 후 도메인으로 변경
     if (import.meta.env.MODE === 'production') {
-        // 도메인을 먼저 시도하되, DNS 해석 실패 시 IP 주소 사용
-        // 브라우저에서 도메인을 먼저 시도하고, 실패하면 IP로 재시도하는 로직은
-        // 네트워크 레벨에서 처리되므로 여기서는 도메인을 반환
-        // 단, DNS 전파가 안 된 경우를 대비해 IP 주소도 제공
-        return 'https://api.c-team.cloud/api';
+        // DNS 전파가 완료되면 아래 주석을 해제하고 IP 주소를 주석 처리
+        // return 'https://api.c-team.cloud/api';
+        return 'https://15.134.130.219/api'; // 임시: IP 주소 사용
     }
 
     // 개발 환경
