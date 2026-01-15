@@ -11,6 +11,7 @@ import Header from './Header';
 import BottomNav from './BottomNav';
 import DrivePage from './DrivePage';
 import InsurancePage from './InsurancePage';
+import InsurancePolicyPage from './InsurancePolicyPage';
 import DrivingLogPage from './DrivingLogPage';
 import LogDetailPage from './LogDetailPage';
 import MyPage from './MyPage';
@@ -244,25 +245,46 @@ const Dashboard = () => {
 
     const startCamera = async () => {
         try {
-            // 이미 스트림이 있다면 재연결만 수행
+            // ???? ??????????? ??????????????????? ?????
             if (streamRef.current && streamRef.current.active) {
                 attachStreamToVideo(streamRef.current);
                 setHasPermission(true);
                 return;
             }
 
-            // 모바일 호환성을 위해 제약 완화 및 사용자 정의 제약 적용
-            const constraints = {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                console.error("Camera Error: mediaDevices.getUserMedia not available");
+                setHasPermission(false);
+                return;
+            }
+
+            // ?????????????????? ????? ????? ????? ??????????????? ????? ?????
+            const primaryConstraints = {
                 video: {
                     facingMode: "user",
-                    width: { ideal: 1280, min: 640 }, // 기본 720p, 최소 480p
+                    width: { ideal: 1280, min: 640 }, // ?????? 720p, ?????? 480p
                     height: { ideal: 720, min: 480 },
-                    frameRate: { ideal: 30, max: 30 } // FPS 30 고정
+                    frameRate: { ideal: 30, max: 30 } // FPS 30 ??????
                 },
                 audio: false
             };
+            const fallbackConstraints = { video: { facingMode: "user" }, audio: false };
+            const bareConstraints = { video: true, audio: false };
 
-            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            let stream;
+            try {
+                stream = await navigator.mediaDevices.getUserMedia(primaryConstraints);
+            } catch (err) {
+                if (err.name === 'OverconstrainedError' || err.name === 'NotFoundError') {
+                    try {
+                        stream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
+                    } catch (fallbackErr) {
+                        stream = await navigator.mediaDevices.getUserMedia(bareConstraints);
+                    }
+                } else {
+                    throw err;
+                }
+            }
             streamRef.current = stream;
             attachStreamToVideo(stream);
             setHasPermission(true);
@@ -270,11 +292,11 @@ const Dashboard = () => {
             console.error("Camera Error:", err);
             setHasPermission(false);
             if (err.name === 'NotAllowedError') {
-                console.error("카메라 권한이 거부되었습니다.");
+                console.error("?????????????????????????????????");
             } else if (err.name === 'NotFoundError') {
-                console.error("카메라를 찾을 수 없습니다.");
+                console.error("?????????? ?????? ????????????.");
             } else if (err.name === 'OverconstrainedError') {
-                console.error("카메라 제약 조건을 만족할 수 없습니다:", err.constraint);
+                console.error("????????????? ????????????????????????????:", err.constraint);
             }
         }
     };
@@ -861,6 +883,7 @@ const Dashboard = () => {
                 showCameraView={showCameraView}
                 setShowCameraView={setShowCameraView}
                 hasPermission={hasPermission}
+                onStartCamera={startCamera}
                 videoRef={videoRef}
                 videoRef2={videoRef2}
                 isActive={isActive}
@@ -1063,6 +1086,7 @@ const Dashboard = () => {
                                 <Route index element={<DrivePageWrapper />} />
                                 <Route path="drive" element={<DrivePageWrapper />} />
                                 <Route path="insurance" element={<InsurancePageWrapper />} />
+                                <Route path="insurance-policy" element={<InsurancePolicyPage />} />
                                 <Route path="challenge" element={<InsurancePageWrapper />} />
                                 <Route path="challenge/:challengeId" element={<ChallengeDetailWrapper />} />
                                 <Route path="log" element={<LogPageWrapper />} />

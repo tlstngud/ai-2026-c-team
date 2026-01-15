@@ -19,6 +19,7 @@ const BottomNav = ({ onPageChange, selectedLog, showCameraView, showChallengeDet
         if (path.startsWith('/challenge/')) return 'challenge-detail';
         if (path === '/insurance' || path === '/challenge') return 'insurance';
         if (path === '/log') return 'log';
+        if (path === '/insurance-policy') return 'mypage';
         if (path === '/mypage') return 'mypage';
         return 'drive';
     };
