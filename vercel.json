@@ -2,5 +2,11 @@
     "buildCommand": "cd driver_front && npm install && npm run build",
     "outputDirectory": "driver_front/dist",
     "installCommand": "cd driver_front && npm install",
-    "framework": "vite"
+    "framework": "vite",
+    "rewrites": [
+        {
+            "source": "/(.*)",
+            "destination": "/index.html"
+        }
+    ]
 }
