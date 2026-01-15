@@ -90,7 +90,9 @@ const Header = ({ type = 'drive', isActive, averageScore, discountRate }) => {
 
                 <div className="text-right">
                     <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-0.5">Avg Score</span>
-                    <p className="text-xl font-black text-slate-900 leading-none">{averageScore}</p>
+                    <p className="text-xl font-black text-slate-900 leading-none">
+                        {averageScore !== null && averageScore !== undefined ? averageScore : '--'}
+                    </p>
                 </div>
             </div>
         </header>

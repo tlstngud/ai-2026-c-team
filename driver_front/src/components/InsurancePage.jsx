@@ -13,12 +13,28 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
     const [challenge, setChallenge] = useState(null);
     const [loading, setLoading] = useState(true);
     
-    // 콜드 스타트 처리
+    // 점수 계산: 7개 미만이면 전체 기록 평균, 7개 이상이면 최근 7개 평균
     const totalDistance = history.reduce((acc, curr) => acc + (curr.distance || 0), 0);
-    const MIN_DISTANCE_FOR_SCORE = 30;
-    const isAnalyzing = totalDistance < MIN_DISTANCE_FOR_SCORE;
+    const MIN_RECORDS_FOR_SCORE = 7;
     const hasNoData = history.length === 0;
-    const displayScore = hasNoData || isAnalyzing ? null : score;
+    
+    // 점수 계산 로직
+    const calculateDisplayScore = () => {
+        if (hasNoData) return null;
+        if (history.length < MIN_RECORDS_FOR_SCORE) {
+            // 7개 미만: 전체 기록의 평균 점수
+            const sum = history.reduce((acc, curr) => acc + (curr.score || 0), 0);
+            return Math.floor(sum / history.length);
+        } else {
+            // 7개 이상: 최근 7개 기록의 평균 점수
+            const recentHistory = history.slice(0, 7);
+            const sum = recentHistory.reduce((acc, curr) => acc + (curr.score || 0), 0);
+            return Math.floor(sum / recentHistory.length);
+        }
+    };
+    
+    const displayScore = calculateDisplayScore();
+    const isAnalyzing = history.length < MIN_RECORDS_FOR_SCORE && !hasNoData; // 7개 미만일 때만 "분석 중" 표시
     
     // showChallengeDetail 상태 변경 시 부모 컴포넌트에 알림
     useEffect(() => {
@@ -164,9 +180,12 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
                                     </div>
                                 ) : isAnalyzing ? (
                                     <div className="flex flex-col gap-1">
-                                        <span className="text-2xl font-black text-white/70 animate-pulse">Analysing...</span>
+                                        <div className="flex items-baseline gap-1">
+                                            <span className="text-5xl font-black">{displayScore}</span>
+                                            <span className="text-sm font-medium text-white/60">/ {region.target}</span>
+                                        </div>
                                         <span className="text-xs text-white/60">
-                                            점수 산출까지 {MIN_DISTANCE_FOR_SCORE - totalDistance}km 남음
+                                            분석 중... ({history.length}/{MIN_RECORDS_FOR_SCORE}개 기록)
                                         </span>
                                     </div>
                                 ) : (
@@ -292,14 +311,19 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
                     <div className="flex justify-between items-start mb-4">
                         <div>
                             <p className="text-[10px] font-bold text-blue-500 uppercase tracking-wider mb-1">Safety Score</p>
-                            {hasNoData || isAnalyzing ? (
+                            {hasNoData ? (
                                 <div className="flex flex-col gap-1">
-                                    <span className="text-2xl font-black text-slate-300">{hasNoData ? '--' : 'Analysing...'}</span>
-                                    {isAnalyzing && (
-                                        <span className="text-xs text-blue-500 font-medium">
-                                            점수 산출까지 {MIN_DISTANCE_FOR_SCORE - totalDistance}km 남음
-                                        </span>
-                                    )}
+                                    <span className="text-2xl font-black text-slate-300">--</span>
+                                    <span className="text-xs text-slate-400">첫 주행을 시작해보세요!</span>
+                                </div>
+                            ) : isAnalyzing ? (
+                                <div className="flex flex-col gap-1">
+                                    <h2 className="text-4xl font-black text-slate-900 tracking-tighter">
+                                        {displayScore}<span className="text-base text-slate-300 ml-1 font-normal">pts</span>
+                                    </h2>
+                                    <span className="text-xs text-blue-500 font-medium">
+                                        분석 중... ({history.length}/{MIN_RECORDS_FOR_SCORE}개 기록)
+                                    </span>
                                 </div>
                             ) : (
                                 <h2 className="text-4xl font-black text-slate-900 tracking-tighter">

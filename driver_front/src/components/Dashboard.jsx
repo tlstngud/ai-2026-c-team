@@ -525,10 +525,26 @@ const Dashboard = () => {
         if (isActive) {
             setIsActive(false);
             const finalScore = Math.floor(score);
-            const newEntry = {
-                date: new Date().toLocaleString(),
+            const finalDuration = Math.floor(sessionTime);
+            
+            // 디버깅: 세션 종료 시 데이터 확인
+            console.log('📊 세션 종료 데이터:', {
+                user: user ? { id: user.id, name: user.name } : null,
                 score: finalScore,
-                duration: Math.floor(sessionTime),
+                duration: finalDuration,
+                events: eventCount,
+                gpsEvents: gpsEvents,
+                maxSpeed: Math.round(currentSpeed),
+                sessionTime: sessionTime,
+                scoreRef: scoreRef.current
+            });
+
+            const now = new Date();
+            const newEntry = {
+                date: now.toISOString(), // ISO 형식으로 저장 (파싱 안전)
+                dateDisplay: now.toLocaleString(), // 표시용 날짜 (선택적)
+                score: finalScore,
+                duration: finalDuration,
                 events: eventCount,
                 gpsEvents: {
                     hardAccel: gpsEvents.hardAccel,
@@ -540,10 +556,13 @@ const Dashboard = () => {
 
             // Save log for specific user (localStorage 기반)
             if (user) {
+                console.log('💾 기록 저장 시도:', { userId: user.id, entry: newEntry });
                 addLogByUserId(user.id, newEntry).then(updatedLogs => {
+                    console.log('✅ 기록 저장 성공:', { count: updatedLogs.length, logs: updatedLogs.slice(0, 3) });
                     setHistory(updatedLogs); // Update local state with returned logs
                 }).catch(error => {
-                    console.error('주행 기록 저장 오류:', error);
+                    console.error('❌ 주행 기록 저장 오류:', error);
+                    setToast({ isVisible: true, message: '기록 저장에 실패했습니다. 다시 시도해주세요.' });
                 });
 
                 // Update user score in localStorage and AuthContext
@@ -561,17 +580,30 @@ const Dashboard = () => {
                         score: updatedUser.score,
                         region: updatedUser.region
                     });
+                } else {
+                    console.warn('⚠️ localStorage에서 사용자 정보를 찾을 수 없습니다.');
                 }
             } else {
                 // Fallback for no user context (though should be protected)
+                console.warn('⚠️ 사용자 정보가 없어 기록이 저장되지 않습니다. 로그인 상태를 확인해주세요.');
+                setToast({ isVisible: true, message: '로그인이 필요합니다. 기록이 저장되지 않았습니다.' });
                 const newHistory = [newEntry, ...history].slice(0, 10);
                 setHistory(newHistory);
                 localStorage.setItem('drivingHistory', JSON.stringify(newHistory));
             }
 
+            // 세션 시간이 너무 짧으면 경고
+            if (finalDuration < 3) {
+                console.warn('⚠️ 세션 시간이 너무 짧습니다 (3초 미만). 기록은 저장되지만 의미 있는 데이터가 아닐 수 있습니다.');
+            }
+
             setShowSummary(true);
         } else {
             // 모든 점수 초기화
+            console.log('🚀 세션 시작:', {
+                user: user ? { id: user.id, name: user.name } : null,
+                timestamp: new Date().toISOString()
+            });
             driverBehaviorScoreRef.current = 100;
             speedLimitScoreRef.current = 100;
             accelDecelScoreRef.current = 100;
@@ -590,10 +622,17 @@ const Dashboard = () => {
     };
 
     const getAverageScore = () => {
-        if (history.length === 0) return 0;
-        const recentHistory = history.slice(0, 7);
-        const sum = recentHistory.reduce((acc, curr) => acc + curr.score, 0);
-        return Math.floor(sum / recentHistory.length);
+        const MIN_RECORDS_FOR_SCORE = 7;
+        if (history.length === 0) return null;
+        
+        // 7개 미만: 전체 기록의 평균 점수
+        // 7개 이상: 최근 7개 기록의 평균 점수
+        const recordsToUse = history.length < MIN_RECORDS_FOR_SCORE 
+            ? history  // 전체 기록 사용
+            : history.slice(0, 7);  // 최근 7개만 사용
+        
+        const sum = recordsToUse.reduce((acc, curr) => acc + (curr.score || 0), 0);
+        return Math.floor(sum / recordsToUse.length);
     };
 
     const formatTime = (seconds) => {
@@ -696,11 +735,22 @@ const Dashboard = () => {
     // 페이지별 렌더링
     const renderPage = () => {
         if (currentPage === 'insurance') {
-            const avgScore = history.length > 0 ? getAverageScore() : score;
+            // InsurancePage 내부에서 점수를 계산하므로 score prop은 참고용으로만 전달
+            const avgScore = getAverageScore() ?? score;
             return <InsurancePage score={avgScore} history={history} userRegion={userRegion} onShowChallengeDetail={setShowChallengeDetail} onClaimReward={addCoupon} />;
         }
         if (currentPage === 'log') {
-            if (selectedLog) return <LogDetailPage data={selectedLog} onBack={() => setSelectedLog(null)} />;
+            if (selectedLog) {
+                // 로그 데이터에 필요한 필드 추가
+                const enrichedLog = {
+                    ...selectedLog,
+                    msg: selectedLog.msg || `안전 운전 점수 ${selectedLog.score}점`,
+                    status: selectedLog.status || (selectedLog.score >= 90 ? 'perfect' : 'warning'),
+                    time: selectedLog.duration || 0,
+                    distance: selectedLog.distance || 0
+                };
+                return <LogDetailPage data={enrichedLog} onBack={() => setSelectedLog(null)} />;
+            }
             return <DrivingLogPage onSelectLog={(log) => setSelectedLog(log)} history={history} />;
         }
         if (currentPage === 'mypage') {

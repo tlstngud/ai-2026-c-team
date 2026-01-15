@@ -11,9 +11,9 @@ const MyPage = ({ user, score, history, userRegion, coupons = [] }) => {
     const username = user?.name || '김운전';
     const totalDistance = history.reduce((acc, curr) => acc + (curr.distance || 0), 0);
     
-    // 콜드 스타트 처리: 주행 거리가 30km 미만이면 점수 미노출
-    const MIN_DISTANCE_FOR_SCORE = 30;
-    const isAnalyzing = totalDistance < MIN_DISTANCE_FOR_SCORE;
+    // 콜드 스타트 처리: 최소 7개 기록 필요
+    const MIN_RECORDS_FOR_SCORE = 7;
+    const isAnalyzing = history.length < MIN_RECORDS_FOR_SCORE;
     const hasNoData = history.length === 0;
     
     // 등급 계산 (거리 + 점수 복합 평가)
@@ -38,7 +38,9 @@ const MyPage = ({ user, score, history, userRegion, coupons = [] }) => {
         ? '첫 주행을 시작해보세요!' 
         : `${userRegion?.name || '전국'} ${currentTier.displayName} 드라이버`;
     
-    const safetyScore = score !== null && score !== undefined ? Math.floor(score) : null;
+    // 점수 계산: 7개 미만이면 전체 기록 평균, 7개 이상이면 최근 7개 평균
+    const calculatedScore = calculateAvgScore();
+    const safetyScore = calculatedScore !== null && calculatedScore !== undefined ? Math.floor(calculatedScore) : null;
 
     // --- Simulation Data ---
     // 할인율 계산 (InsurancePage와 동일한 로직)
@@ -58,12 +60,18 @@ const MyPage = ({ user, score, history, userRegion, coupons = [] }) => {
         isAchieved: false
     };
 
-    // 평균 점수 계산 (최근 기록 기반)
+    // 평균 점수 계산
+    // 7개 미만: 전체 기록의 평균 점수
+    // 7개 이상: 최근 7개 기록의 평균 점수
     const calculateAvgScore = () => {
         if (history.length === 0) return safetyScore;
-        const recentHistory = history.slice(0, 7);
-        const sum = recentHistory.reduce((acc, curr) => acc + (curr.score || 0), 0);
-        return Math.floor(sum / recentHistory.length);
+        
+        const recordsToUse = history.length < MIN_RECORDS_FOR_SCORE 
+            ? history  // 전체 기록 사용
+            : history.slice(0, 7);  // 최근 7개만 사용
+        
+        const sum = recordsToUse.reduce((acc, curr) => acc + (curr.score || 0), 0);
+        return Math.floor(sum / recordsToUse.length);
     };
 
     const avgScore = calculateAvgScore();
@@ -198,15 +206,20 @@ const MyPage = ({ user, score, history, userRegion, coupons = [] }) => {
                                     <span className="text-xs text-slate-400">첫 주행을 시작해보세요!</span>
                                 </div>
                             ) : isAnalyzing ? (
-                                // CASE 2: 기록은 있으나 분석 기준 미달
+                                // CASE 2: 기록은 있으나 분석 기준 미달 (7개 미만)
                                 <div className="flex flex-col items-start gap-1">
-                                    <span className="text-xl font-bold text-slate-600 animate-pulse">Analysing...</span>
+                                    <div className="flex items-baseline gap-1">
+                                        <span className={`text-2xl font-bold tracking-tight ${safetyScore >= 90 ? 'text-emerald-600' : 'text-slate-900'}`}>
+                                            {safetyScore}
+                                        </span>
+                                        <span className="text-sm font-medium text-slate-400">pts</span>
+                                    </div>
                                     <span className="text-xs text-blue-500 font-medium">
-                                        점수 산출까지 {MIN_DISTANCE_FOR_SCORE - totalDistance}km 남음
+                                        분석 중... ({history.length}/{MIN_RECORDS_FOR_SCORE}개 기록)
                                     </span>
                                 </div>
                             ) : (
-                                // CASE 3: 정상 점수 노출
+                                // CASE 3: 정상 점수 노출 (7개 이상)
                                 <div className="flex flex-col gap-1">
                                     <div className="flex items-baseline gap-1">
                                         <span className={`text-2xl font-bold tracking-tight ${safetyScore >= 90 ? 'text-emerald-600' : 'text-slate-900'}`}>
