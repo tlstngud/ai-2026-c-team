@@ -223,6 +223,35 @@ export const storage = {
             return null;
         }
     },
+
+    leaveChallenge: (userId, challengeId) => {
+        try {
+            const statuses = JSON.parse(localStorage.getItem('challengeStatuses') || '[]');
+            const filtered = statuses.filter(s => !(s.userId === userId && s.challengeId === challengeId));
+            localStorage.setItem('challengeStatuses', JSON.stringify(filtered));
+            return true;
+        } catch (e) {
+            console.error('Error leaving challenge:', e);
+            return false;
+        }
+    },
+
+    claimChallengeReward: (userId, challengeId) => {
+        try {
+            const statuses = JSON.parse(localStorage.getItem('challengeStatuses') || '[]');
+            const index = statuses.findIndex(s => s.userId === userId && s.challengeId === challengeId);
+            if (index !== -1) {
+                statuses[index].status = 'REWARD_CLAIMED';
+                statuses[index].claimedAt = new Date().toISOString();
+                localStorage.setItem('challengeStatuses', JSON.stringify(statuses));
+                return statuses[index];
+            }
+            return null;
+        } catch (e) {
+            console.error('Error claiming reward:', e);
+            return null;
+        }
+    },
     
     // 통계 계산
     getStatistics: (userId) => {

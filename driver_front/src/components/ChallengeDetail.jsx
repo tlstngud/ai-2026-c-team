@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import {
     ChevronLeft, MapPin, Calendar, Clock, AlertCircle,
-    CheckCircle2, Trophy, ArrowRight, ShieldCheck, Users
+    CheckCircle2, Trophy, ArrowRight, ShieldCheck, Users, Award
 } from 'lucide-react';
 
 // [2026-01-15 수정] onJoin prop 추가 (챌린지 참여 시 콜백)
-const ChallengeDetail = ({ challenge, onBack, currentScore = 0, onJoin, isJoined: initialIsJoined }) => {
+const ChallengeDetail = ({ challenge, onBack, currentScore = 0, onJoin, isJoined: initialIsJoined, isRewardClaimed }) => {
     // [2026-01-15 수정] 참여 여부 상태 (props로 초기값 설정하여 상태 유지)
     const [isJoined, setIsJoined] = useState(initialIsJoined || false);
     const [showCancelConfirm, setShowCancelConfirm] = useState(false); // [2026-01-15 수정] 취소 확인 모달 상태
@@ -21,6 +21,13 @@ const ChallengeDetail = ({ challenge, onBack, currentScore = 0, onJoin, isJoined
             document.body.style.overflow = '';
         };
     }, []);
+
+    // [2026-01-16 추가] 부모로부터 전달받은 isJoined 상태 동기화
+    useEffect(() => {
+        if (initialIsJoined !== undefined) {
+            setIsJoined(initialIsJoined);
+        }
+    }, [initialIsJoined]);
 
     // challenge가 없으면 기본값 사용
     const challengeData = challenge || {
@@ -84,6 +91,8 @@ const ChallengeDetail = ({ challenge, onBack, currentScore = 0, onJoin, isJoined
 
     // --- Handlers ---
     const handleJoin = () => {
+        if (isRewardClaimed) return; // 보상 수령 시 변경 불가
+
         if (isJoined) {
             // [2026-01-15 수정] 이미 참여 중인 경우 -> 취소 확인 모달 표시
             // 바로 취소하지 않고 사용자 의사를 재확인함
@@ -284,13 +293,20 @@ const ChallengeDetail = ({ challenge, onBack, currentScore = 0, onJoin, isJoined
             <div className={`fixed bottom-0 left-0 right-0 p-6 pb-8 bg-gradient-to-t from-white via-white to-transparent z-[10000] opacity-0 animate-[slideUpFade_0.5s_ease-out_1.1s_forwards]`}>
                 <button
                     onClick={handleJoin} // [수정] 참여 중이어도 클릭 가능 (토글)
+                    disabled={isRewardClaimed}
                     className={`w-full h-14 rounded-[1.2rem] flex items-center justify-center gap-2 text-lg font-bold shadow-xl shadow-slate-200 transition-all active:scale-95
-                        ${isJoined
-                            ? 'bg-slate-900 text-white hover:bg-slate-800' // [수정] 참여 중일 때도 클릭 효과
-                            : `${theme.button} text-white hover:opacity-90`
+                        ${isRewardClaimed
+                            ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                            : isJoined
+                                ? 'bg-slate-900 text-white hover:bg-slate-800' // [수정] 참여 중일 때도 클릭 효과
+                                : `${theme.button} text-white hover:opacity-90`
                         }`}
                 >
-                    {isJoined ? (
+                    {isRewardClaimed ? (
+                        <>
+                            <Award size={20} /> 참여 완료
+                        </>
+                    ) : isJoined ? (
                         <>
                             <CheckCircle2 size={20} /> 참여 중입니다
                         </>
