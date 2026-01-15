@@ -5,12 +5,6 @@ import {
     CheckCircle2, Trophy, ArrowRight, ShieldCheck, Users, Award
 } from 'lucide-react';
 
-const POLICY_RULES = [
-    '1\uB144 \uB3C4\uC548 \uC6D4\uBCC4 \uACFC\uC18D 10\uD68C \uC774\uD558 \uC2DC \uAC10\uBA74',
-    '1\uB144 \uB3C4\uC548 \uC548\uC804 \uC810\uC218 90\uC810 \uC774\uC0C1 \uC720\uC9C0 \uC2DC \uAC10\uBA74',
-    '1\uB144 \uB3C4\uC548 \uC6D4\uBCC4 \uACFC\uC18D 20\uD68C \uC774\uD558 \uC2DC \uAC10\uBA74'
-];
-
 // [2026-01-15 수정] onJoin prop 추가 (챌린지 참여 시 콜백)
 const ChallengeDetail = ({ challenge, onBack, currentScore = 0, onJoin, isJoined: initialIsJoined, isRewardClaimed }) => {
     // [2026-01-15 수정] 참여 여부 상태 (props로 초기값 설정하여 상태 유지)
@@ -48,9 +42,9 @@ const ChallengeDetail = ({ challenge, onBack, currentScore = 0, onJoin, isJoined
         description: '지정된 기간 동안 안전운전을 실천해주세요. 목표 점수 달성 시 혜택을 드립니다.',
         reward: '안전운전 인증서 발급',
         rules: [
-            '1년 동안 월별 과속 10회 이하 시 감면',
-            '1년 동안 안전 점수 90점 이상 유지 시 감면',
-            '1년 동안 월별 과속 20회 이하 시 감면'
+            '지정된 기간 동안 50km 이상 주행',
+            '안전운전 점수 90점 이상 유지',
+            '급가속/급감속 최소화'
         ],
         conditions: [
             '최근 1년 내 중과실 사고 이력 없음',
@@ -260,7 +254,11 @@ const ChallengeDetail = ({ challenge, onBack, currentScore = 0, onJoin, isJoined
                             달성 조건 (Rules)
                         </h3>
                         <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm space-y-3">
-                            {POLICY_RULES.map((rule, idx) => (
+                            {(challengeData.rules || [
+                                '지정된 기간 동안 100km 이상 주행',
+                                '안전운전 점수 90점 이상 유지',
+                                '급가속/급감속 최소화'
+                            ]).map((rule, idx) => (
                                 <div key={idx} className="flex items-start gap-3">
                                     <div className={`mt-0.5 w-5 h-5 rounded-full ${theme.iconBg} flex items-center justify-center shrink-0`}>
                                         <span className={`text-[10px] font-bold ${theme.accent}`}>{idx + 1}</span>
