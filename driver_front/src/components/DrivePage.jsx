@@ -27,7 +27,8 @@ const DrivePage = ({
     speedLimit = null,
     roadName = null,
     speedLimitLoading = false,
-    speedLimitDebug = null
+    speedLimitDebug = null,
+    modelConnectionStatus = 'idle' // idle, connecting, connected, error
 }) => {
     const videoContainerRef = useRef(null);
     const modalRef = useRef(null);
@@ -432,6 +433,27 @@ const DrivePage = ({
                                         {gpsEvents.hardBrake} <span className="text-xs font-medium text-slate-400">회</span>
                                     </span>
                                 </div>
+                            </div>
+                        )}
+
+                        {/* AI 모델 연결 상태 */}
+                        {isActive && (
+                            <div className={`mb-4 px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-2 ${
+                                modelConnectionStatus === 'connected' ? 'bg-green-100 text-green-700' :
+                                modelConnectionStatus === 'connecting' ? 'bg-yellow-100 text-yellow-700' :
+                                modelConnectionStatus === 'error' ? 'bg-red-100 text-red-700' :
+                                'bg-slate-100 text-slate-500'
+                            }`}>
+                                <div className={`w-2 h-2 rounded-full ${
+                                    modelConnectionStatus === 'connected' ? 'bg-green-500 animate-pulse' :
+                                    modelConnectionStatus === 'connecting' ? 'bg-yellow-500 animate-ping' :
+                                    modelConnectionStatus === 'error' ? 'bg-red-500' :
+                                    'bg-slate-400'
+                                }`}></div>
+                                {modelConnectionStatus === 'connected' ? 'AI 분석 연결됨' :
+                                 modelConnectionStatus === 'connecting' ? 'AI 서버 연결 중...' :
+                                 modelConnectionStatus === 'error' ? 'AI 서버 미연결 (GPS 모드)' :
+                                 'AI 대기 중'}
                             </div>
                         )}
 

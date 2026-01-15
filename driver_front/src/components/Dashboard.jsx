@@ -532,8 +532,12 @@ const Dashboard = () => {
 
     // --- AI 모델 추론 연결 ---
     // 카메라 프레임 -> GPU 서버 -> 추론 결과 수신
+    const [modelConnectionStatus, setModelConnectionStatus] = useState('idle'); // idle, connecting, connected, error
+
     useEffect(() => {
         if (isActive && videoRef.current) {
+            setModelConnectionStatus('connecting');
+
             // 추론 결과 콜백
             const handleInferenceResult = (result) => {
                 // result: { class_id, class_name, confidence, probabilities }
@@ -563,13 +567,33 @@ const Dashboard = () => {
                 setScore(newScore);
             };
 
+            // 에러 콜백
+            const handleModelError = (error) => {
+                console.error('[Dashboard] AI 모델 에러:', error.message);
+                setModelConnectionStatus('error');
+                // 에러 발생해도 앱은 계속 동작 (GPS/센서 기반 점수 계산)
+            };
+
             // 프레임 캡처 및 전송 시작 (30fps)
-            modelAPI.startCapture(videoRef.current, handleInferenceResult, 30)
-                .then(() => console.log('AI 모델 연결됨'))
-                .catch(err => console.error('AI 모델 연결 실패:', err));
+            modelAPI.startCapture(videoRef.current, handleInferenceResult, 30, handleModelError)
+                .then((success) => {
+                    if (success) {
+                        console.log('[Dashboard] ✅ AI 모델 프레임 캡처 시작됨');
+                        const status = modelAPI.getStatus();
+                        setModelConnectionStatus(status.isConnected ? 'connected' : 'error');
+                    } else {
+                        console.warn('[Dashboard] ⚠️ AI 모델 프레임 캡처 실패');
+                        setModelConnectionStatus('error');
+                    }
+                })
+                .catch(err => {
+                    console.error('[Dashboard] AI 모델 연결 실패:', err);
+                    setModelConnectionStatus('error');
+                });
         } else {
             // 세션 종료시 연결 해제
             modelAPI.stopCapture();
+            setModelConnectionStatus('idle');
         }
 
         return () => {
@@ -859,6 +883,7 @@ const Dashboard = () => {
                 roadName={roadName}
                 speedLimitLoading={speedLimitLoading}
                 speedLimitDebug={speedLimitDebug}
+                modelConnectionStatus={modelConnectionStatus}
             />
         </>
     );
