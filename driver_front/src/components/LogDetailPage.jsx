@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronLeft, Clock, MapPin, Coffee, Smartphone } from 'lucide-react';
+import { ChevronLeft, Clock, MapPin, Coffee, Smartphone, Zap, AlertTriangle } from 'lucide-react';
 import { formatDate } from '../utils/dateFormatter';
 
 const DetailItem = ({ icon, title, count, desc }) => (
@@ -21,7 +21,7 @@ const LogDetailPage = ({ data, onBack }) => {
     const displayDate = dateInfo.date || (data.formattedDate || '');
     const displayTime = dateInfo.time || (data.formattedTime || '');
     const displayDateTime = dateInfo.dateTime || `${displayDate} ${displayTime}`;
-    
+
     // 시간 포맷팅 (duration을 분:초로 변환)
     const formatDuration = (seconds) => {
         if (!seconds) return '0분';
@@ -29,13 +29,13 @@ const LogDetailPage = ({ data, onBack }) => {
         const secs = seconds % 60;
         return mins > 0 ? `${mins}분 ${secs}초` : `${secs}초`;
     };
-    
+
     // 거리 포맷팅
     const formatDistance = (distance) => {
         if (!distance || distance === 0) return '0km';
         return `${distance.toFixed(1)}km`;
     };
-    
+
     return (
         <div className="animate-in slide-in-from-right duration-500 bg-white min-h-full">
             <div className="px-6 pt-6 pb-4 bg-white/90 backdrop-blur-xl z-30 sticky top-0 border-b border-gray-100 shadow-sm">
@@ -63,43 +63,52 @@ const LogDetailPage = ({ data, onBack }) => {
                 </div>
             </div>
 
-        <div className="p-6 pt-6 grid grid-cols-1 gap-4 mb-8">
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                <p className="text-[10px] font-bold text-slate-400 mb-2 uppercase">운행 평가</p>
-                <p className="text-lg font-black leading-tight text-slate-800">{data.msg}</p>
-            </div>
-            <div className="bg-slate-900 p-6 rounded-2xl shadow-xl text-white flex flex-col justify-between">
-                <p className="text-[10px] font-bold text-blue-400 mb-2 uppercase">보험료 변동</p>
-                <p className="text-xl font-black">{data.score >= 90 ? "-₩1,200" : "+₩0"}</p>
-            </div>
-
-            <section className="space-y-4 mt-4">
-                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Detection Details</h3>
-                <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 space-y-6">
-                    <DetailItem 
-                        icon={<Coffee className="text-orange-500" size={18} />} 
-                        title="졸음운전" 
-                        count={`${(data.gpsEvents?.hardAccel || 0) + (data.gpsEvents?.hardBrake || 0)}회`} 
-                        desc="눈 감음 지속 감지" 
-                    />
-                    <DetailItem 
-                        icon={<Smartphone className="text-blue-500" size={18} />} 
-                        title="휴대폰 조작" 
-                        count={`${data.events || 0}회`} 
-                        desc="전방 주시 태만" 
-                    />
-                    {data.gpsEvents?.overspeed > 0 && (
-                        <DetailItem 
-                            icon={<MapPin className="text-red-500" size={18} />} 
-                            title="과속" 
-                            count={`${data.gpsEvents.overspeed}회`} 
-                            desc="제한 속도 초과" 
-                        />
-                    )}
+            <div className="p-6 pt-6 grid grid-cols-1 gap-4 mb-8">
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                    <p className="text-[10px] font-bold text-slate-400 mb-2 uppercase">운행 평가</p>
+                    <p className="text-lg font-black leading-tight text-slate-800">{data.msg}</p>
                 </div>
-            </section>
+
+
+                <section className="space-y-4 mt-4">
+                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Detection Details</h3>
+                    <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 space-y-6">
+                        <DetailItem
+                            icon={<Coffee className="text-orange-500" size={18} />}
+                            title="졸음운전"
+                            count={`${data.drowsyCount || 0}회`}
+                            desc="눈 감음 지속 감지"
+                        />
+                        <DetailItem
+                            icon={<Smartphone className="text-blue-500" size={18} />}
+                            title="휴대폰 조작"
+                            count={`${data.phoneCount || 0}회`}
+                            desc="전방 주시 태만"
+                        />
+                        <DetailItem
+                            icon={<Zap className="text-yellow-500" size={18} />}
+                            title="급가속"
+                            count={`${data.gpsEvents?.hardAccel || 0}회`}
+                            desc="급격한 속도 증가"
+                        />
+                        <DetailItem
+                            icon={<AlertTriangle className="text-red-500" size={18} />}
+                            title="급감속"
+                            count={`${data.gpsEvents?.hardBrake || 0}회`}
+                            desc="급격한 속도 감소"
+                        />
+                        {data.gpsEvents?.overspeed > 0 && (
+                            <DetailItem
+                                icon={<MapPin className="text-red-500" size={18} />}
+                                title="과속"
+                                count={`${data.gpsEvents.overspeed}회`}
+                                desc="제한 속도 초과"
+                            />
+                        )}
+                    </div>
+                </section>
+            </div>
         </div>
-    </div>
     );
 };
 
