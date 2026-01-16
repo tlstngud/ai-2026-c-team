@@ -31,7 +31,7 @@ const InsurancePolicyPage = () => {
                 >
                     <ChevronLeft size={24} />
                 </button>
-                <span className="text-sm font-bold text-slate-800">insurance policy</span>
+                <span className="text-sm font-bold text-slate-800">보험료 상세 페이지</span>
                 <button className="p-2 rounded-full hover:bg-slate-100 transition-colors text-slate-400" type="button">
                     <AlertCircle size={20} />
                 </button>
