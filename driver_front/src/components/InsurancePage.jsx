@@ -197,7 +197,7 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
             rules: [
                 '1년 동안 월별 과속 10회 이하 시 감면',
                 '1년 동안 안전 점수 90점 이상 유지 시 감면',
-                '1년 동안 월별 과속 20회 이하 시 감면'
+                '1년 동안 월별 급감속 20회 이하 시 감면'
             ],
             conditions: [`${region.name} 거주자 또는 주 활동 운전자`, '최근 1년 내 중과실 사고 이력 없음', '마케팅 활용 동의 필수']
         };

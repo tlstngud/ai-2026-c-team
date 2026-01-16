@@ -8,7 +8,7 @@ import {
 const POLICY_RULES = [
     '1\uB144 \uB3C4\uC548 \uC6D4\uBCC4 \uACFC\uC18D 10\uD68C \uC774\uD558 \uC2DC \uAC10\uBA74',
     '1\uB144 \uB3C4\uC548 \uC548\uC804 \uC810\uC218 90\uC810 \uC774\uC0C1 \uC720\uC9C0 \uC2DC \uAC10\uBA74',
-    '1\uB144 \uB3C4\uC548 \uC6D4\uBCC4 \uACFC\uC18D 20\uD68C \uC774\uD558 \uC2DC \uAC10\uBA74'
+    '1\uB144 \uB3C4\uC548 \uC6D4\uBCC4 \uAE09\uAC10\uC18D 20\uD68C \uC774\uD558 \uC2DC \uAC10\uBA74'
 ];
 
 // [2026-01-15 수정] onJoin prop 추가 (챌린지 참여 시 콜백)
@@ -50,7 +50,7 @@ const ChallengeDetail = ({ challenge, onBack, currentScore = 0, onJoin, isJoined
         rules: [
             '1년 동안 월별 과속 10회 이하 시 감면',
             '1년 동안 안전 점수 90점 이상 유지 시 감면',
-            '1년 동안 월별 과속 20회 이하 시 감면'
+            '1년 동안 월별 급감속 20회 이하 시 감면'
         ],
         conditions: [
             '최근 1년 내 중과실 사고 이력 없음',
