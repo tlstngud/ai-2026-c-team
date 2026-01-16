@@ -367,9 +367,6 @@ const Dashboard = () => {
                 sessionTimeRef.current += 1;
                 setSessionTime(sessionTimeRef.current);
             }, 1000);
-        } else {
-            sessionTimeRef.current = 0;
-            setSessionTime(0);
         }
         return () => clearInterval(interval);
     }, [isActive]);
@@ -543,32 +540,6 @@ const Dashboard = () => {
             );
 
             gpsWatchIdRef.current = cleanup;
-        } else {
-            // GPS 모니터링 중지
-            if (gpsWatchIdRef.current !== null) {
-                stopGpsMonitoring(gpsWatchIdRef.current);
-                gpsWatchIdRef.current = null;
-            }
-            // 상태 초기화
-            setCurrentSpeed(0);
-            setGpsAcceleration(0);
-            setGpsEvents({ hardAccel: 0, hardBrake: 0, overspeed: 0 });
-            setSensorStatus({ gps: false, motion: false });
-            setSpeedLimit(null);
-            setRoadName(null);
-            // 점수 초기화
-            driverBehaviorScoreRef.current = 100;
-            speedLimitScoreRef.current = 100;
-            accelDecelScoreRef.current = 100;
-            setDriverBehaviorScore(100);
-            setSpeedLimitScore(100);
-            setAccelDecelScore(100);
-            scoreRef.current = 100;
-            setScore(100);
-
-            // 거리 초기화
-            accumulatedDistanceRef.current = 0;
-            lastGpsTimeRef.current = null;
         }
 
         return () => {
@@ -663,6 +634,34 @@ const Dashboard = () => {
         if (!isActive) {
             // 기록 시작 전: iOS 가속도 센서 권한 요청 (사용자 상호작용 이벤트 내에서만 가능)
             await requestMotionPermission();
+
+            // 새로운 세션 시작 시에만 상태 초기화
+            // 기존의 useEffect cleanup에서 초기화하던 로직을 여기로 이동
+            setSessionTime(0);
+            sessionTimeRef.current = 0;
+
+            // 점수 및 기타 상태 초기화
+            setScore(100);
+            scoreRef.current = 100;
+            setEventCount(0);
+
+            setDrowsyCount(0);
+            setPhoneCount(0);
+            setDistractedCount(0);
+
+            setGpsEvents({ hardAccel: 0, hardBrake: 0, overspeed: 0 });
+            setSensorStatus({ gps: false, motion: false });
+
+            driverBehaviorScoreRef.current = 100;
+            speedLimitScoreRef.current = 100;
+            accelDecelScoreRef.current = 100;
+            setDriverBehaviorScore(100);
+            setSpeedLimitScore(100);
+            setAccelDecelScore(100);
+
+            // 거리 초기화
+            accumulatedDistanceRef.current = 0;
+            lastGpsTimeRef.current = null;
         }
 
         if (isActive) {
