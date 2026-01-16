@@ -72,11 +72,24 @@ const Dashboard = () => {
     const videoRef = useRef(null);
     const videoRef2 = useRef(null);
     const streamRef = useRef(null);
+    const captureVideoRef = useRef(null);
+    const captureStreamRef = useRef(null);
+    const showCameraViewRef = useRef(false);
+    const cameraWasActiveRef = useRef(false);
+    const cameraRestartingRef = useRef(false);
+    const cameraWatchdogRef = useRef(null);
+    const cameraRestartAtRef = useRef(0);
+    const cameraMuteTimeoutRef = useRef(null);
+    const playbackRefreshAtRef = useRef(0);
 
     const [showCameraView, setShowCameraView] = useState(false);
     const [selectedLog, setSelectedLog] = useState(null);
     const [hasPermission, setHasPermission] = useState(false);
     const [isActive, setIsActive] = useState(false);
+
+    useEffect(() => {
+        showCameraViewRef.current = showCameraView;
+    }, [showCameraView]);
     // 가중치 기반 점수 계산을 위한 상태
     const [driverBehaviorScore, setDriverBehaviorScore] = useState(100); // 운전자 행동 점수 (40%)
     const [speedLimitScore, setSpeedLimitScore] = useState(100); // 제한속도 준수 점수 (35%)
@@ -191,6 +204,68 @@ const Dashboard = () => {
 
 
     // --- Camera Setup ---
+    const isStreamLive = (stream) => {
+        if (!stream || stream.active === false) return false;
+        const tracks = stream.getVideoTracks();
+        return tracks.length > 0 && tracks.some((track) => track.readyState === 'live');
+    };
+
+    const restartCamera = async (reason) => {
+        if (!showCameraViewRef.current) return;
+        if (!cameraWasActiveRef.current) return;
+        if (cameraRestartingRef.current) return;
+        const now = Date.now();
+        if (now - cameraRestartAtRef.current < 3000) return;
+        cameraRestartAtRef.current = now;
+        cameraRestartingRef.current = true;
+        console.warn(`[camera] restart requested: ${reason}`);
+        try {
+            stopCamera();
+            await startCamera();
+        } finally {
+            cameraRestartingRef.current = false;
+        }
+    };
+
+    const refreshVideoPlayback = (reason) => {
+        const stream = streamRef.current;
+        if (!stream) return;
+        const now = Date.now();
+        if (now - playbackRefreshAtRef.current < 500) return;
+        playbackRefreshAtRef.current = now;
+        if (!isStreamLive(stream)) {
+            restartCamera(`refresh fallback: ${reason}`);
+            return;
+        }
+        console.warn(`[camera] refresh playback: ${reason}`);
+        attachStreamToVideo(stream);
+        const activeVideo = showCameraViewRef.current ? videoRef.current : videoRef2.current;
+        if (activeVideo && activeVideo.paused && !activeVideo.ended) {
+            activeVideo.play().catch(() => { });
+        }
+    };
+
+    const bindStreamEvents = (stream) => {
+        if (!stream) return;
+        stream.oninactive = () => restartCamera('stream inactive');
+        stream.onremovetrack = () => restartCamera('stream track removed');
+        stream.getTracks().forEach((track) => {
+            track.onended = () => restartCamera(`track ended: ${track.kind}`);
+            track.onmute = () => {
+                if (track.kind === 'video') {
+                    if (cameraMuteTimeoutRef.current) {
+                        clearTimeout(cameraMuteTimeoutRef.current);
+                    }
+                    cameraMuteTimeoutRef.current = setTimeout(() => {
+                        if (track.muted) {
+                            refreshVideoPlayback('video track muted');
+                        }
+                    }, 800);
+                }
+            };
+        });
+    };
+
     const attachStreamToVideo = (stream) => {
         if (!stream) {
             console.error("❌ No stream");
@@ -222,36 +297,86 @@ const Dashboard = () => {
 
             videoEl.onplaying = () => console.log(`▶️ ${name} playing`);
             videoEl.onerror = (e) => console.error(`❌ ${name} error:`, videoEl.error);
+            const ensurePlaying = (reason) => {
+                if (!showCameraViewRef.current) return;
+                if (videoEl.paused && !videoEl.ended) {
+                    refreshVideoPlayback(`video ${name} ${reason}`);
+                }
+            };
+            videoEl.onpause = () => ensurePlaying('paused');
+            videoEl.onstalled = () => ensurePlaying('stalled');
+            videoEl.onwaiting = () => ensurePlaying('waiting');
+            videoEl.onended = () => restartCamera(`video ${name} ended`);
 
             // 즉시 재생
             videoEl.play().catch(() => { });
         };
 
         // 즉시 설정 시도
-        setupVideo(videoRef.current, "videoRef");
-        setupVideo(videoRef2.current, "videoRef2");
+        const shouldShowCamera = showCameraViewRef.current;
+
+        if (shouldShowCamera) {
+            setupVideo(videoRef.current, "videoRef");
+            if (videoRef2.current) videoRef2.current.srcObject = null;
+        } else {
+            setupVideo(videoRef2.current, "videoRef2");
+            if (videoRef.current) videoRef.current.srcObject = null;
+        }
 
         // videoRef가 null이면 DOM 렌더링 후 재시도
-        if (!videoRef.current || !videoRef2.current) {
-            console.log("🔄 Video refs not ready, retrying in 200ms...");
+        if (shouldShowCamera ? !videoRef.current : !videoRef2.current) {
+            console.log("Video refs not ready, retrying in 200ms...");
             setTimeout(() => {
-                setupVideo(videoRef.current, "videoRef-retry");
-                setupVideo(videoRef2.current, "videoRef2-retry");
+                if (shouldShowCamera) {
+                    setupVideo(videoRef.current, "videoRef-retry");
+                } else {
+                    setupVideo(videoRef2.current, "videoRef2-retry");
+                }
             }, 200);
 
             setTimeout(() => {
-                setupVideo(videoRef.current, "videoRef-retry2");
-                setupVideo(videoRef2.current, "videoRef2-retry2");
+                if (shouldShowCamera) {
+                    setupVideo(videoRef.current, "videoRef-retry2");
+                } else {
+                    setupVideo(videoRef2.current, "videoRef2-retry2");
+                }
             }, 500);
         }
+    };
+
+    const attachStreamToCapture = (stream) => {
+        if (!stream || !captureVideoRef.current) return;
+        const [videoTrack] = stream.getVideoTracks();
+        if (!videoTrack) return;
+
+        if (captureStreamRef.current) {
+            captureStreamRef.current.getTracks().forEach(track => track.stop());
+            captureStreamRef.current = null;
+        }
+
+        const clonedTrack = videoTrack.clone();
+        const captureStream = new MediaStream([clonedTrack]);
+        captureStreamRef.current = captureStream;
+
+        const captureVideo = captureVideoRef.current;
+        captureVideo.srcObject = captureStream;
+        captureVideo.muted = true;
+        captureVideo.autoplay = true;
+        captureVideo.playsInline = true;
+        captureVideo.onloadedmetadata = () => {
+            captureVideo.play().catch(() => { });
+        };
     };
 
     const startCamera = async () => {
         try {
             // ???? ??????????? ??????????????????? ?????
             if (streamRef.current && streamRef.current.active) {
+                bindStreamEvents(streamRef.current);
                 attachStreamToVideo(streamRef.current);
+                attachStreamToCapture(streamRef.current);
                 setHasPermission(true);
+                cameraWasActiveRef.current = true;
                 return;
             }
 
@@ -289,8 +414,11 @@ const Dashboard = () => {
                 }
             }
             streamRef.current = stream;
+            bindStreamEvents(stream);
             attachStreamToVideo(stream);
+            attachStreamToCapture(stream);
             setHasPermission(true);
+            cameraWasActiveRef.current = true;
         } catch (err) {
             console.error("Camera Error:", err);
             setHasPermission(false);
@@ -309,8 +437,17 @@ const Dashboard = () => {
             streamRef.current.getTracks().forEach(track => track.stop());
             streamRef.current = null;
         }
+        if (cameraMuteTimeoutRef.current) {
+            clearTimeout(cameraMuteTimeoutRef.current);
+            cameraMuteTimeoutRef.current = null;
+        }
+        if (captureStreamRef.current) {
+            captureStreamRef.current.getTracks().forEach(track => track.stop());
+            captureStreamRef.current = null;
+        }
         if (videoRef.current) videoRef.current.srcObject = null;
         if (videoRef2.current) videoRef2.current.srcObject = null;
+        if (captureVideoRef.current) captureVideoRef.current.srcObject = null;
         setHasPermission(false);
     };
 
@@ -322,10 +459,51 @@ const Dashboard = () => {
             // But based on user request, maybe we should keep it running if active?
             // For now, follow existing logic but startCamera handles existing stream.
             stopCamera();
+            cameraWasActiveRef.current = false;
         }
         return () => {
             // Cleanup only if component unmounts completely, or leave it to logic
             if (!showCameraView) stopCamera();
+        };
+    }, [showCameraView]);
+
+    useEffect(() => {
+        if (!showCameraView) {
+            if (cameraWatchdogRef.current) {
+                clearInterval(cameraWatchdogRef.current);
+                cameraWatchdogRef.current = null;
+            }
+            return;
+        }
+
+        cameraWatchdogRef.current = setInterval(() => {
+            const stream = streamRef.current;
+            const videoEl = videoRef.current;
+
+            if (!showCameraViewRef.current) return;
+
+            if (!stream) {
+                if (cameraWasActiveRef.current) {
+                    restartCamera('watchdog: missing stream');
+                }
+                return;
+            }
+
+            if (!isStreamLive(stream)) {
+                restartCamera('watchdog: stream inactive');
+                return;
+            }
+
+            if (videoEl && (videoEl.readyState < 2 || videoEl.paused)) {
+                refreshVideoPlayback('watchdog: playback stalled');
+            }
+        }, 2000);
+
+        return () => {
+            if (cameraWatchdogRef.current) {
+                clearInterval(cameraWatchdogRef.current);
+                cameraWatchdogRef.current = null;
+            }
         };
     }, [showCameraView]);
 
@@ -560,7 +738,11 @@ const Dashboard = () => {
     const [modelConnectionStatus, setModelConnectionStatus] = useState('idle'); // idle, connecting, connected, error
 
     useEffect(() => {
-        if (isActive && videoRef.current) {
+        const captureTarget = (captureVideoRef.current && captureVideoRef.current.srcObject)
+            ? captureVideoRef.current
+            : videoRef.current;
+
+        if (isActive && captureTarget) {
             setModelConnectionStatus('connecting');
 
             // 추론 결과 콜백
@@ -609,7 +791,7 @@ const Dashboard = () => {
             };
 
             // 프레임 캡처 및 전송 시작 (30fps)
-            modelAPI.startCapture(videoRef.current, handleInferenceResult, 30, handleModelError)
+            modelAPI.startCapture(captureTarget, handleInferenceResult, 15, handleModelError)
                 .then((success) => {
                     if (success) {
                         console.log('[Dashboard] ✅ AI 모델 프레임 캡처 시작됨');
@@ -892,7 +1074,7 @@ const Dashboard = () => {
     };
 
     // 페이지별 렌더링 컴포넌트
-    const DrivePageWrapper = () => (
+    const drivePageElement = (
         <>
             {!showCameraView && (
                 <Header isActive={isActive} averageScore={getAverageScore()} />
@@ -1101,8 +1283,8 @@ const Dashboard = () => {
                         <div className={`flex-1 scrollbar-hide bg-white relative ${showCameraView ? 'overflow-hidden' : 'overflow-y-auto pb-24'}`} style={showCameraView ? { height: '100%', minHeight: '100%', maxHeight: '100%' } : {}}>
                             {/* React Router를 사용한 페이지 라우팅 */}
                             <Routes>
-                                <Route index element={<DrivePageWrapper />} />
-                                <Route path="drive" element={<DrivePageWrapper />} />
+                                <Route index element={drivePageElement} />
+                                <Route path="drive" element={drivePageElement} />
                                 <Route path="insurance" element={<InsurancePageWrapper />} />
                                 <Route path="insurance-policy" element={<InsurancePolicyPage />} />
                                 <Route path="challenge" element={<InsurancePageWrapper />} />
@@ -1188,6 +1370,21 @@ const Dashboard = () => {
                     </>
                 )}
             </div>
+            <video
+                ref={captureVideoRef}
+                autoPlay
+                playsInline
+                muted
+                style={{
+                    position: 'fixed',
+                    width: 1,
+                    height: 1,
+                    opacity: 0,
+                    pointerEvents: 'none',
+                    left: 0,
+                    top: 0
+                }}
+            />
         </div>
     );
 };
