@@ -1,11 +1,10 @@
 // GPU 서버 모델 추론 API
 // 카메라 프레임 캡처 -> 224x224 전처리 -> WebSocket으로 서버 전송
 
-// GPU 서버 URL 설정 - Vite 프록시를 통해 연결
-// 상대 경로 사용으로 프록시가 자동 처리
-const GPU_SERVER_URL = '';  // 상대 경로 (vite proxy가 처리)
+// GPU 서버 URL 설정 - 같은 서버에서 서빙 (이중 프록시 제거)
+const GPU_SERVER_URL = '';  // 상대 경로
 
-// WebSocket URL 구성
+// WebSocket URL 구성 - 같은 서버로 직접 연결
 const getWsUrl = () => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
@@ -13,8 +12,8 @@ const getWsUrl = () => {
 };
 const WS_SERVER_URL = getWsUrl();
 
-console.log('GPU Server URL: (relative - via proxy)');
-console.log('WebSocket URL:', WS_SERVER_URL);
+console.log('[modelAPI] API/WebSocket: 같은 서버 직접 연결');
+console.log('[modelAPI] WebSocket URL:', WS_SERVER_URL);
 
 // 세션 및 WebSocket 관리
 let sessionId = null;
@@ -52,18 +51,35 @@ const isVideoReady = (videoElement) => {
         console.warn('[modelAPI] 비디오 요소가 없습니다');
         return false;
     }
+
+    // srcObject (스트림) 존재 확인
+    if (!videoElement.srcObject) {
+        console.warn('[modelAPI] 비디오에 스트림이 없습니다 (srcObject null)');
+        return false;
+    }
+
+    // 스트림이 활성 상태인지 확인
+    const stream = videoElement.srcObject;
+    if (stream.getTracks && stream.getTracks().length === 0) {
+        console.warn('[modelAPI] 비디오 스트림에 트랙이 없습니다');
+        return false;
+    }
+
+    // 비디오 크기 확인 (메타데이터 로드 완료)
     if (!videoElement.videoWidth || !videoElement.videoHeight) {
         console.warn('[modelAPI] 비디오 크기가 0입니다 (메타데이터 미로드)');
         return false;
     }
-    if (videoElement.readyState < 2) {  // HAVE_CURRENT_DATA 미만
+
+    // readyState 확인 (HAVE_CURRENT_DATA 이상)
+    if (videoElement.readyState < 2) {
         console.warn('[modelAPI] 비디오 준비 안됨 (readyState:', videoElement.readyState, ')');
         return false;
     }
-    if (videoElement.paused && !videoElement.ended) {
-        console.warn('[modelAPI] 비디오가 일시정지 상태입니다');
-        return false;
-    }
+
+    // 카메라 스트림의 경우 paused 상태여도 프레임 캡처 가능
+    // 따라서 paused 체크는 제거 (getUserMedia는 paused=true일 수 있음)
+
     return true;
 };
 
@@ -72,6 +88,11 @@ const isVideoReady = (videoElement) => {
  * @param {HTMLVideoElement} videoElement
  * @returns {string} base64 인코딩된 이미지
  */
+// 디버그: 프레임 변화 감지용
+let lastFrameHash = '';
+let sameFrameCount = 0;
+let frameDebugCounter = 0;
+
 const captureFrame = (videoElement) => {
     if (!isVideoReady(videoElement)) {
         return null;
@@ -95,7 +116,27 @@ const captureFrame = (videoElement) => {
         );
 
         // JPEG로 인코딩 (품질 0.8)
-        return captureCanvas.toDataURL('image/jpeg', 0.8);
+        const dataUrl = captureCanvas.toDataURL('image/jpeg', 0.8);
+
+        // 디버그: 프레임 변화 체크 (간단한 해시)
+        frameDebugCounter++;
+        const simpleHash = dataUrl.slice(-50);  // 마지막 50자로 간단 비교
+        if (simpleHash === lastFrameHash) {
+            sameFrameCount++;
+            if (sameFrameCount % 100 === 0) {
+                const stream = videoElement.srcObject;
+                const track = stream?.getVideoTracks?.()[0];
+                console.warn(`[modelAPI] ⚠️ ${sameFrameCount}회 동일 프레임! track.readyState: ${track?.readyState}, track.enabled: ${track?.enabled}, video.paused: ${videoElement.paused}`);
+            }
+        } else {
+            if (sameFrameCount > 30) {
+                console.log(`[modelAPI] ✅ 프레임 변화 감지 (${sameFrameCount}회 동일 후)`);
+            }
+            sameFrameCount = 0;
+            lastFrameHash = simpleHash;
+        }
+
+        return dataUrl;
     } catch (error) {
         console.error('[modelAPI] 프레임 캡처 오류:', error);
         return null;
@@ -213,22 +254,44 @@ const sendFrame = (base64Image) => {
  * @param {number} timeout - 타임아웃 (ms)
  * @returns {Promise<boolean>}
  */
-const waitForVideoReady = (videoElement, timeout = 5000) => {
+const waitForVideoReady = (videoElement, timeout = 10000) => {  // 10초로 증가 (모바일 대응)
     return new Promise((resolve) => {
+        // 현재 비디오 상태 로깅
+        console.log('[modelAPI] 비디오 대기 시작, 현재 상태:', {
+            element: !!videoElement,
+            srcObject: !!videoElement?.srcObject,
+            videoWidth: videoElement?.videoWidth,
+            videoHeight: videoElement?.videoHeight,
+            readyState: videoElement?.readyState,
+            paused: videoElement?.paused
+        });
+
         if (isVideoReady(videoElement)) {
+            console.log('[modelAPI] ✅ 비디오 즉시 준비됨');
             resolve(true);
             return;
         }
 
         const startTime = Date.now();
+        let checkCount = 0;
         const checkInterval = setInterval(() => {
+            checkCount++;
             if (isVideoReady(videoElement)) {
                 clearInterval(checkInterval);
-                console.log('[modelAPI] ✅ 비디오 준비 완료');
+                console.log('[modelAPI] ✅ 비디오 준비 완료 (', checkCount * 100, 'ms 후)');
                 resolve(true);
             } else if (Date.now() - startTime > timeout) {
                 clearInterval(checkInterval);
-                console.warn('[modelAPI] ⚠️ 비디오 준비 타임아웃');
+                // 타임아웃 시 상세 상태 로깅
+                console.warn('[modelAPI] ⚠️ 비디오 준비 타임아웃. 최종 상태:', {
+                    srcObject: !!videoElement?.srcObject,
+                    tracks: videoElement?.srcObject?.getTracks?.()?.length,
+                    videoWidth: videoElement?.videoWidth,
+                    videoHeight: videoElement?.videoHeight,
+                    readyState: videoElement?.readyState,
+                    paused: videoElement?.paused,
+                    networkState: videoElement?.networkState
+                });
                 resolve(false);
             }
         }, 100);
@@ -239,10 +302,10 @@ const waitForVideoReady = (videoElement, timeout = 5000) => {
  * 실시간 프레임 캡처 및 전송 시작
  * @param {HTMLVideoElement} videoElement - 비디오 요소
  * @param {Function} onResult - 추론 결과 콜백
- * @param {number} fps - 초당 프레임 수 (기본 30)
+ * @param {number} fps - 초당 프레임 수 (기본 60 - 백엔드 60프레임 버퍼와 맞춤)
  * @param {Function} onError - 에러 콜백 (선택)
  */
-const startCapture = async (videoElement, onResult, fps = 30, onError = null) => {
+const startCapture = async (videoElement, onResult, fps = 60, onError = null) => {
     if (frameInterval) {
         clearInterval(frameInterval);
     }

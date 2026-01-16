@@ -70,7 +70,6 @@ const Dashboard = () => {
 
     // --- Refs & State ---
     const videoRef = useRef(null);
-    const videoRef2 = useRef(null);
     const streamRef = useRef(null);
 
     const [showCameraView, setShowCameraView] = useState(false);
@@ -123,6 +122,14 @@ const Dashboard = () => {
     const accelDecelScoreRef = useRef(100);
     const scoreRef = useRef(100);
     const finalSessionScoreRef = useRef(null); // 세션 종료 시 최종 점수 저장 (ref로 즉시 접근 가능)
+
+    // 투표 시스템 설정
+    const VOTE_BUFFER_SIZE = 20;  // 투표에 사용할 추론 결과 개수
+    const CONSECUTIVE_THRESHOLD = 5;  // 연속 감지 시 즉시 감점 임계값
+    const inferenceBufferRef = useRef([]);  // 최근 추론 결과 버퍼
+    const consecutiveCountRef = useRef(0);  // 연속 동일 상태 카운트
+    const lastInferenceStateRef = useRef(0);  // 마지막 추론 상태
+    const lastVotedStateRef = useRef(0);  // 마지막 투표 결과 상태
 
     // 가중 평균 점수 계산 함수
     const calculateWeightedScore = () => {
@@ -229,21 +236,18 @@ const Dashboard = () => {
             videoEl.play().catch(() => { });
         };
 
-        // 즉시 설정 시도
+        // 즉시 설정 시도 (단일 비디오 요소)
         setupVideo(videoRef.current, "videoRef");
-        setupVideo(videoRef2.current, "videoRef2");
 
         // videoRef가 null이면 DOM 렌더링 후 재시도
-        if (!videoRef.current || !videoRef2.current) {
-            console.log("🔄 Video refs not ready, retrying in 200ms...");
+        if (!videoRef.current) {
+            console.log("🔄 Video ref not ready, retrying in 200ms...");
             setTimeout(() => {
                 setupVideo(videoRef.current, "videoRef-retry");
-                setupVideo(videoRef2.current, "videoRef2-retry");
             }, 200);
 
             setTimeout(() => {
                 setupVideo(videoRef.current, "videoRef-retry2");
-                setupVideo(videoRef2.current, "videoRef2-retry2");
             }, 500);
         }
     };
@@ -312,52 +316,34 @@ const Dashboard = () => {
             streamRef.current = null;
         }
         if (videoRef.current) videoRef.current.srcObject = null;
-        if (videoRef2.current) videoRef2.current.srcObject = null;
         setHasPermission(false);
     };
 
+    // 앱 시작 시 카메라 시작 (한번만)
     useEffect(() => {
-        if (showCameraView) {
-            startCamera();
-        } else {
-            // Stop camera only if we really want to stop it completely. 
-            // But based on user request, maybe we should keep it running if active?
-            // For now, follow existing logic but startCamera handles existing stream.
-            stopCamera();
+        startCamera();
+        return () => stopCamera();
+    }, []);
+
+    // showCameraView 변경 시 srcObject 재연결 (비디오 요소가 바뀌므로)
+    useEffect(() => {
+        if (streamRef.current && streamRef.current.active) {
+            // DOM 렌더링 후 연결
+            const timer = setTimeout(() => {
+                attachStreamToVideo(streamRef.current);
+            }, 50);
+            return () => clearTimeout(timer);
         }
-        return () => {
-            // Cleanup only if component unmounts completely, or leave it to logic
-            if (!showCameraView) stopCamera();
-        };
     }, [showCameraView]);
 
-    // 페이지 이동 후 돌아왔을 때 스트림 재연결 (카메라가 켜져있는 상태라면)
+    // 페이지 이동 후 돌아왔을 때 스트림 재연결
     useEffect(() => {
-        if ((location.pathname === '/drive' || location.pathname === '/') && showCameraView && streamRef.current && streamRef.current.active) {
-            // 약간의 지연을 주어 DOM이 확실히 렌더링 된 후 연결 시도
+        if ((location.pathname === '/drive' || location.pathname === '/') && streamRef.current && streamRef.current.active) {
             setTimeout(() => {
                 attachStreamToVideo(streamRef.current);
             }, 100);
         }
-    }, [location.pathname, showCameraView]);
-
-    // isActive 변경 시 스트림 재연결 (녹화 시작/종료 시 비디오가 끊기는 문제 방지)
-    useEffect(() => {
-        if (isActive && streamRef.current && streamRef.current.active) {
-            console.log("🔄 isActive 변경으로 스트림 재연결 시도...");
-            // DOM 렌더링 후 재연결
-            const retryAttach = () => {
-                if (videoRef.current && !videoRef.current.srcObject) {
-                    console.log("📹 videoRef에 스트림 재연결");
-                    videoRef.current.srcObject = streamRef.current;
-                    videoRef.current.play().catch(e => console.warn("Play failed:", e));
-                }
-            };
-            setTimeout(retryAttach, 50);
-            setTimeout(retryAttach, 150);
-            setTimeout(retryAttach, 300);
-        }
-    }, [isActive]);
+    }, [location.pathname]);
 
     // --- Session Time Counter ---
     useEffect(() => {
@@ -583,38 +569,41 @@ const Dashboard = () => {
     const [modelConnectionStatus, setModelConnectionStatus] = useState('idle'); // idle, connecting, connected, error
 
     useEffect(() => {
+        let isCancelled = false;
+
         if (isActive && videoRef.current) {
             setModelConnectionStatus('connecting');
 
-            // 추론 결과 콜백
-            const handleInferenceResult = (result) => {
-                // result: { class_id, class_name, confidence, probabilities }
-                const nextState = result.class_id;
-                setCurrentState(nextState);
+            // 먼저 srcObject 연결 확인 및 재연결
+            if (!videoRef.current.srcObject && streamRef.current && streamRef.current.active) {
+                console.log('[Dashboard] 🔧 isActive 시작 시 srcObject 재연결');
+                videoRef.current.srcObject = streamRef.current;
+                videoRef.current.play().catch(() => {});
+            }
 
-                // 운전자 행동 점수 감점 (40% 가중치)
-                let penalty = 0;
-                let recovery = 0.05;
-                if (nextState !== 0) {
-                    // 상태별 감점량: 0=Normal, 1=Drowsy, 2=Searching, 3=Phone, 4=Assault
-                    if (nextState === 1) {
-                        penalty = 5.0;  // 졸음
-                        setDrowsyCount(prev => prev + 1);
-                    }
-                    if (nextState === 2) {
-                        penalty = 3.0;  // 주시태만
-                        setDistractedCount(prev => prev + 1);
-                    }
-                    if (nextState === 3) {
-                        penalty = 4.0;  // 휴대폰
-                        setPhoneCount(prev => prev + 1);
-                    }
-                    if (nextState === 4) penalty = 10.0; // 폭행
-                    setEventCount(prev => prev + 1);
-                    recovery = 0;
+            // 상태별 감점량 계산 함수
+            const getPenaltyForState = (state) => {
+                // 0=Normal, 1=Drowsy, 2=Searching, 3=Phone, 4=Assault
+                const penalties = { 0: 0, 1: 5.0, 2: 3.0, 3: 4.0, 4: 10.0 };
+                return penalties[state] || 0;
+            };
+
+            // 점수 적용 함수
+            const applyPenalty = (state, isConsecutive = false) => {
+                let penalty = getPenaltyForState(state);
+                let recovery = state === 0 ? 0.05 : 0;
+
+                // 연속 감지 시 추가 감점 (1.5배)
+                if (isConsecutive && state !== 0) {
+                    penalty *= 1.5;
+                    console.log(`⚡ 연속 ${CONSECUTIVE_THRESHOLD}회 감지! 추가 감점 적용`);
                 }
 
-                // 운전자 행동 점수만 업데이트
+                if (state !== 0) {
+                    setEventCount(prev => prev + 1);
+                }
+
+                // 운전자 행동 점수 업데이트
                 driverBehaviorScoreRef.current = Math.max(0, Math.min(100, driverBehaviorScoreRef.current - penalty + recovery));
                 setDriverBehaviorScore(driverBehaviorScoreRef.current);
 
@@ -624,6 +613,83 @@ const Dashboard = () => {
                 setScore(newScore);
             };
 
+            // 투표로 최종 상태 결정
+            const getVotedState = (buffer) => {
+                if (buffer.length === 0) return 0;
+
+                // 각 상태별 카운트
+                const counts = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0 };
+                buffer.forEach(state => {
+                    counts[state] = (counts[state] || 0) + 1;
+                });
+
+                // 가장 많은 상태 찾기
+                let maxCount = 0;
+                let votedState = 0;
+                for (const [state, count] of Object.entries(counts)) {
+                    if (count > maxCount) {
+                        maxCount = count;
+                        votedState = parseInt(state);
+                    }
+                }
+
+                console.log(`🗳️ 투표 결과: ${['Normal', 'Drowsy', 'Searching', 'Phone', 'Assault'][votedState]} (${maxCount}/${buffer.length}표)`);
+                return votedState;
+            };
+
+            // 추론 결과 콜백 (투표 시스템 적용)
+            const handleInferenceResult = (result) => {
+                // result: { class_id, class_name, confidence, probabilities }
+                const rawState = result.class_id;
+
+                // 1. 연속 감지 체크
+                if (rawState === lastInferenceStateRef.current && rawState !== 0) {
+                    consecutiveCountRef.current += 1;
+                } else {
+                    consecutiveCountRef.current = rawState !== 0 ? 1 : 0;
+                }
+                lastInferenceStateRef.current = rawState;
+
+                // 2. 5회 연속 비정상 상태 → 즉시 감점
+                if (consecutiveCountRef.current >= CONSECUTIVE_THRESHOLD) {
+                    console.log(`🚨 ${CONSECUTIVE_THRESHOLD}회 연속 감지: ${['Normal', 'Drowsy', 'Searching', 'Phone', 'Assault'][rawState]}`);
+                    setCurrentState(rawState);
+                    applyPenalty(rawState, true);  // 연속 감지 추가 감점
+                    consecutiveCountRef.current = 0;  // 리셋
+                    inferenceBufferRef.current = [];  // 버퍼 클리어
+                    lastVotedStateRef.current = rawState;
+                    return;
+                }
+
+                // 3. 버퍼에 추가
+                inferenceBufferRef.current.push(rawState);
+                if (inferenceBufferRef.current.length > VOTE_BUFFER_SIZE) {
+                    inferenceBufferRef.current.shift();  // 오래된 것 제거
+                }
+
+                // 4. 20개 모이면 투표
+                if (inferenceBufferRef.current.length >= VOTE_BUFFER_SIZE) {
+                    const votedState = getVotedState(inferenceBufferRef.current);
+                    setCurrentState(votedState);
+
+                    // 투표 결과가 이전과 다를 때만 감점/회복 적용
+                    if (votedState !== lastVotedStateRef.current) {
+                        applyPenalty(votedState, false);
+                        lastVotedStateRef.current = votedState;
+                    } else if (votedState === 0) {
+                        // Normal 상태 유지 시 회복
+                        driverBehaviorScoreRef.current = Math.min(100, driverBehaviorScoreRef.current + 0.05);
+                        setDriverBehaviorScore(driverBehaviorScoreRef.current);
+                        const newScore = calculateWeightedScore();
+                        scoreRef.current = newScore;
+                        setScore(newScore);
+                    }
+
+                    // 버퍼 절반 클리어 (슬라이딩 윈도우)
+                    inferenceBufferRef.current = inferenceBufferRef.current.slice(VOTE_BUFFER_SIZE / 2);
+                }
+            };
+
             // 에러 콜백
             const handleModelError = (error) => {
                 console.error('[Dashboard] AI 모델 에러:', error.message);
@@ -631,9 +697,76 @@ const Dashboard = () => {
                 // 에러 발생해도 앱은 계속 동작 (GPS/센서 기반 점수 계산)
             };
 
-            // 프레임 캡처 및 전송 시작 (30fps)
-            modelAPI.startCapture(videoRef.current, handleInferenceResult, 30, handleModelError)
-                .then((success) => {
+            // srcObject가 설정될 때까지 대기하는 함수
+            const waitForSrcObject = () => {
+                return new Promise((resolve) => {
+                    const maxWait = 5000; // 최대 5초 대기
+                    const startTime = Date.now();
+                    let checkCount = 0;
+
+                    const checkSrcObject = () => {
+                        if (isCancelled) {
+                            resolve(false);
+                            return;
+                        }
+
+                        checkCount++;
+                        const video = videoRef.current;
+
+                        // srcObject와 active 상태만 확인 (readyState는 불필요)
+                        if (video && video.srcObject && video.srcObject.active) {
+                            console.log(`[Dashboard] ✅ srcObject 설정됨 (${checkCount * 100}ms 후, readyState: ${video.readyState})`);
+                            resolve(true);
+                            return;
+                        }
+
+                        // srcObject가 없으면 재연결 시도
+                        if (video && !video.srcObject && streamRef.current && streamRef.current.active) {
+                            console.log(`[Dashboard] 🔄 srcObject 재연결 시도...`);
+                            video.srcObject = streamRef.current;
+                            video.play().catch(() => {});
+                        }
+
+                        if (Date.now() - startTime > maxWait) {
+                            console.warn('[Dashboard] ⚠️ srcObject 대기 타임아웃', {
+                                hasVideo: !!video,
+                                hasSrcObject: !!video?.srcObject,
+                                isStreamActive: video?.srcObject?.active,
+                                streamActive: streamRef.current?.active,
+                                readyState: video?.readyState
+                            });
+                            resolve(false);
+                            return;
+                        }
+
+                        // 100ms마다 재확인
+                        setTimeout(checkSrcObject, 100);
+                    };
+
+                    // 초기 딜레이 후 시작 (DOM 렌더링 대기)
+                    setTimeout(checkSrcObject, 200);
+                });
+            };
+
+            // srcObject가 설정된 후 AI 모델 연결 시작
+            const startModelCapture = async () => {
+                console.log('[Dashboard] AI 모델 연결 시작 - srcObject 대기 중...');
+
+                // srcObject가 설정될 때까지 대기
+                const srcObjectReady = await waitForSrcObject();
+
+                if (isCancelled) return;
+
+                if (!srcObjectReady) {
+                    console.warn('[Dashboard] ⚠️ srcObject 설정 실패 - AI 모델 연결 취소');
+                    setModelConnectionStatus('error');
+                    return;
+                }
+
+                try {
+                    const success = await modelAPI.startCapture(videoRef.current, handleInferenceResult, 60, handleModelError);
+                    if (isCancelled) return;
+
                     if (success) {
                         console.log('[Dashboard] ✅ AI 모델 프레임 캡처 시작됨');
                         const status = modelAPI.getStatus();
@@ -642,11 +775,15 @@ const Dashboard = () => {
                         console.warn('[Dashboard] ⚠️ AI 모델 프레임 캡처 실패');
                         setModelConnectionStatus('error');
                     }
-                })
-                .catch(err => {
+                } catch (err) {
+                    if (isCancelled) return;
                     console.error('[Dashboard] AI 모델 연결 실패:', err);
                     setModelConnectionStatus('error');
-                });
+                }
+            };
+
+            // AI 모델 캡처 시작
+            startModelCapture();
         } else {
             // 세션 종료시 연결 해제
             modelAPI.stopCapture();
@@ -654,6 +791,7 @@ const Dashboard = () => {
         }
 
         return () => {
+            isCancelled = true;
             modelAPI.stopCapture();
         };
     }, [isActive]);
@@ -784,6 +922,11 @@ const Dashboard = () => {
             sessionTimeRef.current = 0;
             setShowSummary(false);
             setFinalSessionScore(null); // 세션 시작 시 최종 점수 초기화
+            // 투표 시스템 초기화
+            inferenceBufferRef.current = [];
+            consecutiveCountRef.current = 0;
+            lastInferenceStateRef.current = 0;
+            lastVotedStateRef.current = 0;
             finalSessionScoreRef.current = null; // ref도 초기화
             setIsActive(true);
         }
@@ -928,7 +1071,6 @@ const Dashboard = () => {
                 hasPermission={hasPermission}
                 onStartCamera={startCamera}
                 videoRef={videoRef}
-                videoRef2={videoRef2}
                 isActive={isActive}
                 score={score}
                 sessionTime={sessionTime}

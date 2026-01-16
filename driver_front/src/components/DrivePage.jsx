@@ -7,7 +7,6 @@ const DrivePage = ({
     setShowCameraView,
     hasPermission,
     videoRef,
-    videoRef2,
     isActive,
     score,
     sessionTime,
@@ -28,14 +27,15 @@ const DrivePage = ({
     roadName = null,
     speedLimitLoading = false,
     speedLimitDebug = null,
-    modelConnectionStatus = 'idle' // idle, connecting, connected, error
+    modelConnectionStatus = 'idle'
 }) => {
     const videoContainerRef = useRef(null);
     const modalRef = useRef(null);
-    const [modalHeight, setModalHeight] = useState(360); // 기본 높이
+    const [modalHeight, setModalHeight] = useState(360);
     const [isDragging, setIsDragging] = useState(false);
     const dragStartY = useRef(0);
     const dragStartHeight = useRef(0);
+    const isDraggingRef = useRef(false);
 
     // 모달 드래그 핸들러
     const handleTouchStart = (e) => {
@@ -47,37 +47,11 @@ const DrivePage = ({
         e.preventDefault();
     };
 
-    const isDraggingRef = useRef(false);
-
-    const handleTouchMove = (e) => {
-        if (!isDraggingRef.current) return;
-
-        const currentY = e.touches[0].clientY;
-        const deltaY = dragStartY.current - currentY; // 위로 드래그하면 양수
-        const newHeight = Math.max(200, Math.min(500, dragStartHeight.current + deltaY));
-        setModalHeight(newHeight);
-        e.preventDefault();
-    };
-
-    const handleTouchEnd = () => {
-        setIsDragging(false);
-        isDraggingRef.current = false;
-    };
-
-    // 마우스 드래그 지원 (데스크탑)
     const handleMouseDown = (e) => {
         setIsDragging(true);
         isDraggingRef.current = true;
         dragStartY.current = e.clientY;
         dragStartHeight.current = modalHeight;
-        e.preventDefault();
-    };
-
-    const handleMouseMove = (e) => {
-        if (!isDraggingRef.current) return;
-        const deltaY = dragStartY.current - e.clientY;
-        const newHeight = Math.max(200, Math.min(500, dragStartHeight.current + deltaY));
-        setModalHeight(newHeight);
         e.preventDefault();
     };
 
@@ -127,35 +101,18 @@ const DrivePage = ({
         }
     }, [isDragging, modalHeight]);
 
-    // 모바일에서 video 높이 동적 설정
-    useEffect(() => {
-        if (showCameraView && videoRef.current && videoContainerRef.current) {
-            const updateVideoHeight = () => {
-                const container = videoContainerRef.current;
-                const video = videoRef.current;
-                if (container && video) {
-                    const containerHeight = container.offsetHeight || container.clientHeight;
-                    if (containerHeight > 0) {
-                        video.style.height = `${containerHeight}px`;
-                        video.style.width = '100%';
-                    }
-                }
-            };
-
-            // 초기 설정
-            updateVideoHeight();
-
-            // 리사이즈 이벤트
-            const resizeObserver = new ResizeObserver(updateVideoHeight);
-            if (videoContainerRef.current) {
-                resizeObserver.observe(videoContainerRef.current);
-            }
-
-            return () => {
-                resizeObserver.disconnect();
-            };
-        }
-    }, [showCameraView, hasPermission, videoRef]);
+    // video 스타일 - CSS로 표시/숨김 (video는 항상 DOM에 존재)
+    const videoStyle = {
+        position: showCameraView ? 'absolute' : 'fixed',
+        top: 0, left: 0, width: '100%', height: '100%',
+        objectFit: 'cover',
+        transform: 'scaleX(-1)',
+        WebkitTransform: 'scaleX(-1)',
+        zIndex: showCameraView ? 10 : -9999,
+        opacity: showCameraView ? 1 : 0,
+        pointerEvents: showCameraView ? 'auto' : 'none',
+        visibility: showCameraView ? 'visible' : 'hidden',
+    };
 
     if (showCameraView) {
         return (
@@ -165,6 +122,18 @@ const DrivePage = ({
                 maxHeight: '100%',
                 overflow: 'hidden'
             }}>
+                {/* 단일 video 요소 - 항상 DOM에 존재 */}
+                <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    webkit-playsinline="true"
+                    x5-playsinline="true"
+                    x5-video-player-type="h5"
+                    x5-video-player-fullscreen="true"
+                    style={videoStyle}
+                />
                 <div
                     ref={videoContainerRef}
                     className="relative bg-black overflow-hidden flex-1"
@@ -183,58 +152,6 @@ const DrivePage = ({
                         </div>
                     )}
 
-                    <video
-                        ref={videoRef}
-                        autoPlay
-                        playsInline
-                        muted
-                        webkit-playsinline="true"
-                        x5-playsinline="true"
-                        x5-video-player-type="h5"
-                        x5-video-player-fullscreen="true"
-                        style={{
-                            transform: 'scaleX(-1)',
-                            WebkitTransform: 'scaleX(-1)',
-                            width: '100%',
-                            height: '100%',
-                            minWidth: '100%',
-                            minHeight: '100%',
-                            maxWidth: '100%',
-                            maxHeight: '100%',
-                            objectFit: 'cover',
-                            backgroundColor: '#000',
-                            zIndex: 0,
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
-                            display: 'block',
-                            visibility: 'visible',
-                            margin: 0,
-                            padding: 0
-                        }}
-                        onLoadedMetadata={(e) => {
-                            const video = e.target;
-                            // 모바일에서 높이 강제 설정
-                            const container = video.parentElement;
-                            if (container) {
-                                const updateVideoSize = () => {
-                                    const containerHeight = container.offsetHeight || container.clientHeight || window.innerHeight;
-                                    const containerWidth = container.offsetWidth || container.clientWidth || window.innerWidth;
-                                    video.style.height = `${containerHeight}px`;
-                                    video.style.width = `${containerWidth}px`;
-                                    video.style.minHeight = `${containerHeight}px`;
-                                    video.style.minWidth = `${containerWidth}px`;
-                                };
-                                updateVideoSize();
-                                // 리사이즈 이벤트 리스너 추가
-                                window.addEventListener('resize', updateVideoSize);
-                            }
-                            video.play().catch(err => console.warn("Auto-play failed:", err));
-                        }}
-                    />
-
                     <div className="absolute inset-0 pointer-events-none z-20 flex flex-col justify-between p-6 pb-28">
                         {/* 1. Top Header Area */}
                         <div className="flex justify-between items-start">
@@ -248,7 +165,6 @@ const DrivePage = ({
                                         </span>
                                     </div>
                                 )}
-                                {/* GPS Accuracy (Tiny) */}
                                 {gpsAccuracy !== null && (
                                     <div className="px-2">
                                         <span className={`text-[9px] font-medium ${gpsAccuracy < 20 ? 'text-green-400' : 'text-orange-400'}`}>
@@ -260,7 +176,6 @@ const DrivePage = ({
 
                             {/* Right: Score & Driving Stats */}
                             <div className="flex flex-col items-end gap-2">
-                                {/* Score Big Display */}
                                 <div className="flex flex-col items-end leading-none">
                                     <span className="text-5xl font-black tracking-tighter drop-shadow-xl text-white">
                                         {Math.floor(score)}
@@ -272,7 +187,6 @@ const DrivePage = ({
 
                                 {isActive && (
                                     <div className="flex flex-col items-end gap-2 mt-2">
-                                        {/* Speedometer Pill */}
                                         <div className="bg-black/40 backdrop-blur-xl pl-5 pr-4 py-2 rounded-2xl border border-white/10 shadow-lg flex items-center gap-3">
                                             <div className="flex flex-col items-end leading-tight">
                                                 <div className="flex items-baseline gap-1">
@@ -282,11 +196,7 @@ const DrivePage = ({
                                                     <span className="text-[10px] font-medium text-white/50">km/h</span>
                                                 </div>
                                             </div>
-
-                                            {/* Divider */}
                                             <div className="w-[1px] h-6 bg-white/10"></div>
-
-                                            {/* Speed Limit */}
                                             <div className="flex flex-col items-start leading-tight">
                                                 <span className="text-[9px] font-bold text-white/40 uppercase">Limit</span>
                                                 <div className="flex items-baseline gap-0.5">
@@ -301,7 +211,6 @@ const DrivePage = ({
                                             </div>
                                         </div>
 
-                                        {/* Road Name Badge */}
                                         {(roadName || speedLimitLoading) && (
                                             <div className="bg-black/20 backdrop-blur-md px-3 py-1 rounded-lg border border-white/5">
                                                 <span className="text-[10px] font-medium text-white/80 truncate max-w-[120px]">
@@ -310,7 +219,6 @@ const DrivePage = ({
                                             </div>
                                         )}
 
-                                        {/* Alerts (Hard Accel/Brake) */}
                                         {(gpsEvents.hardAccel > 0 || gpsEvents.hardBrake > 0) && (
                                             <div className="mt-1 flex flex-col gap-1 items-end">
                                                 {gpsEvents.hardAccel > 0 && (
@@ -330,26 +238,20 @@ const DrivePage = ({
                             </div>
                         </div>
 
-
                         {/* 2. Center Overlay: Face Bounding Box & Status */}
                         {isActive && (
-                            <>
-                                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-56 h-72 transition-all duration-300">
-                                    {/* Corner Brackets */}
-                                    <div className={`absolute top-0 left-0 w-6 h-6 border-t-2 border-l-2 rounded-tl-lg transition-colors duration-300 ${currentState === 0 ? 'border-white/40' : 'border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]'}`}></div>
-                                    <div className={`absolute top-0 right-0 w-6 h-6 border-t-2 border-r-2 rounded-tr-lg transition-colors duration-300 ${currentState === 0 ? 'border-white/40' : 'border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]'}`}></div>
-                                    <div className={`absolute bottom-0 left-0 w-6 h-6 border-b-2 border-l-2 rounded-bl-lg transition-colors duration-300 ${currentState === 0 ? 'border-white/40' : 'border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]'}`}></div>
-                                    <div className={`absolute bottom-0 right-0 w-6 h-6 border-b-2 border-r-2 rounded-br-lg transition-colors duration-300 ${currentState === 0 ? 'border-white/40' : 'border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]'}`}></div>
-
-                                    {/* Scanning Laser Effect (Only on Normal) */}
-                                    {currentState === 0 && (
-                                        <div className="w-full h-[1px] bg-green-400/40 shadow-[0_0_8px_#4ade80] animate-[scan_2.5s_ease-in-out_infinite]"></div>
-                                    )}
-                                </div>
-                            </>
+                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-56 h-72 transition-all duration-300">
+                                <div className={`absolute top-0 left-0 w-6 h-6 border-t-2 border-l-2 rounded-tl-lg transition-colors duration-300 ${currentState === 0 ? 'border-white/40' : 'border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]'}`}></div>
+                                <div className={`absolute top-0 right-0 w-6 h-6 border-t-2 border-r-2 rounded-tr-lg transition-colors duration-300 ${currentState === 0 ? 'border-white/40' : 'border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]'}`}></div>
+                                <div className={`absolute bottom-0 left-0 w-6 h-6 border-b-2 border-l-2 rounded-bl-lg transition-colors duration-300 ${currentState === 0 ? 'border-white/40' : 'border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]'}`}></div>
+                                <div className={`absolute bottom-0 right-0 w-6 h-6 border-b-2 border-r-2 rounded-br-lg transition-colors duration-300 ${currentState === 0 ? 'border-white/40' : 'border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]'}`}></div>
+                                {currentState === 0 && (
+                                    <div className="w-full h-[1px] bg-green-400/40 shadow-[0_0_8px_#4ade80] animate-[scan_2.5s_ease-in-out_infinite]"></div>
+                                )}
+                            </div>
                         )}
 
-                        {/* 3. Floating Status Pill (Center Bottom) */}
+                        {/* 3. Floating Status Pill */}
                         <div className="self-center mb-2">
                             <div className={`
                                 flex items-center gap-2.5 px-5 py-2.5 rounded-full backdrop-blur-xl border shadow-xl transition-all duration-300
@@ -365,7 +267,7 @@ const DrivePage = ({
                     </div>
                 </div>
 
-                {/* --- Bottom Modal Sheet (Interactive) --- */}
+                {/* Bottom Modal Sheet */}
                 <div
                     ref={modalRef}
                     className="bg-white rounded-t-[32px] z-30 shadow-[0_-8px_30px_rgba(0,0,0,0.15)] relative flex-shrink-0 flex flex-col"
@@ -378,7 +280,6 @@ const DrivePage = ({
                         touchAction: 'pan-y'
                     }}
                 >
-                    {/* Drag Handle */}
                     <div
                         className="w-full flex items-center justify-center pt-3 pb-6 cursor-grab active:cursor-grabbing touch-none"
                         onTouchStart={handleTouchStart}
@@ -399,10 +300,7 @@ const DrivePage = ({
                         <div className="w-10 h-1 bg-gray-300 rounded-full"></div>
                     </div>
 
-                    {/* Modal Content */}
                     <div className="px-6 pb-8 flex-1 flex flex-col justify-between">
-
-                        {/* Top Row: Session Time & Total Events */}
                         <div className="flex items-center justify-between mb-6">
                             <div>
                                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Session Time</p>
@@ -418,7 +316,6 @@ const DrivePage = ({
                             </div>
                         </div>
 
-                        {/* Grid Stats: Accel / Brake Counts */}
                         {isActive && (
                             <div className="grid grid-cols-2 gap-3 mb-6">
                                 <div className="bg-slate-50 rounded-2xl p-3 border border-slate-100 flex flex-col items-center">
@@ -436,7 +333,6 @@ const DrivePage = ({
                             </div>
                         )}
 
-                        {/* AI 모델 연결 상태 */}
                         {isActive && (
                             <div className={`mb-4 px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-2 ${
                                 modelConnectionStatus === 'connected' ? 'bg-green-100 text-green-700' :
@@ -457,9 +353,7 @@ const DrivePage = ({
                             </div>
                         )}
 
-                        {/* Action Button */}
                         <div className="mt-auto flex gap-3">
-                            {/* 녹화 전: [Back, Start] */}
                             {!isActive && sessionTime === 0 && (
                                 <>
                                     <button
@@ -477,7 +371,6 @@ const DrivePage = ({
                                 </>
                             )}
 
-                            {/* 녹화 중: [Stop] */}
                             {isActive && (
                                 <button
                                     onClick={toggleSession}
@@ -487,7 +380,6 @@ const DrivePage = ({
                                 </button>
                             )}
 
-                            {/* 녹화 후: [Back, Start] */}
                             {!isActive && sessionTime > 0 && (
                                 <>
                                     <button
@@ -507,7 +399,6 @@ const DrivePage = ({
                         </div>
                     </div>
                 </div>
-                {/* CSS Animations */}
                 <style>{`
                     @keyframes scan {
                         0%, 100% { transform: translateY(0); opacity: 0; }
@@ -520,28 +411,21 @@ const DrivePage = ({
         );
     }
 
+    // 메인 뷰 (showCameraView=false) - 홈 화면은 하얀 배경
     return (
-        <div className="min-h-full relative">
-            {hasPermission && (
-                <div className="absolute inset-0 z-0 h-[50vh]">
-                    <video
-                        ref={videoRef2}
-                        autoPlay
-                        playsInline
-                        muted
-                        webkit-playsinline="true"
-                        className="w-full h-full object-cover"
-                        style={{
-                            transform: 'scaleX(-1)',
-                            WebkitTransform: 'scaleX(-1)',
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover'
-                        }}
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-white"></div>
-                </div>
-            )}
+        <div className="min-h-full relative bg-white">
+            {/* 단일 video 요소 - 숨김 상태로 DOM에 유지 (srcObject 보존) */}
+            <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                webkit-playsinline="true"
+                x5-playsinline="true"
+                x5-video-player-type="h5"
+                x5-video-player-fullscreen="true"
+                style={videoStyle}
+            />
 
             <main className="flex-1 flex flex-col items-center justify-center p-6 relative z-10 mt-10">
                 <div className="relative w-48 h-48 flex items-center justify-center mb-10 transition-transform duration-500 will-change-transform">
@@ -558,7 +442,7 @@ const DrivePage = ({
                 </div>
 
                 <div className={`
-                    flex items-center gap-3 px-6 py-4 rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.08)] 
+                    flex items-center gap-3 px-6 py-4 rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.08)]
                     transition-all duration-300 transform backdrop-blur-md
                     ${hasPermission ? 'bg-white/90' : APPLE_STATE_CONFIG[currentState].bg}
                     ${currentState !== 0 ? 'scale-105' : 'scale-100'}
@@ -589,7 +473,6 @@ const DrivePage = ({
                     </div>
                 </div>
 
-                {/* 센서 작동 상태 뱃지 (메인 뷰) */}
                 {isActive && (sensorStatus.gps || sensorStatus.motion) && (
                     <div className="mt-6 w-full max-w-xs bg-green-500/90 backdrop-blur-md rounded-2xl p-3 shadow-lg border-2 border-green-400/50">
                         <div className="flex items-center justify-center gap-2">
@@ -599,33 +482,23 @@ const DrivePage = ({
                     </div>
                 )}
 
-                {/* GPS 정보 표시 */}
                 {isActive && (
                     <div className={`mt-6 w-full max-w-xs ${hasPermission ? 'bg-white/90 backdrop-blur-md rounded-2xl p-4 shadow-lg' : 'bg-white/95 backdrop-blur-md rounded-2xl p-4 shadow-lg'}`}>
                         <p className="text-xs font-semibold uppercase text-gray-400 mb-3 text-center">주행 정보</p>
-                        {/* 제한 속도 및 도로명 표시 */}
                         <div className="mb-3 pb-3 border-b border-gray-200">
                             <p className="text-[10px] font-semibold text-gray-400 mb-1">도로 정보</p>
                             {speedLimitLoading ? (
                                 <div className="flex items-center gap-2">
                                     <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                                    <p className="text-sm font-bold text-blue-500 animate-pulse">
-                                        조회 중...
-                                    </p>
+                                    <p className="text-sm font-bold text-blue-500 animate-pulse">조회 중...</p>
                                 </div>
                             ) : speedLimit ? (
                                 <>
-                                    <p className="text-sm font-bold text-blue-600">
-                                        제한 속도: {speedLimit}km/h
-                                    </p>
-                                    {roadName && (
-                                        <p className="text-[10px] text-gray-500 mt-1">{roadName}</p>
-                                    )}
+                                    <p className="text-sm font-bold text-blue-600">제한 속도: {speedLimit}km/h</p>
+                                    {roadName && <p className="text-[10px] text-gray-500 mt-1">{roadName}</p>}
                                 </>
                             ) : (
-                                <p className="text-sm font-medium text-gray-400">
-                                    도로 정보 없음
-                                </p>
+                                <p className="text-sm font-medium text-gray-400">도로 정보 없음</p>
                             )}
                         </div>
                         <div className="grid grid-cols-3 gap-4 text-center">
@@ -648,7 +521,6 @@ const DrivePage = ({
                                 </p>
                             </div>
                         </div>
-                        {/* GPS 상태 정보 */}
                         <div className="mt-3 pt-3 border-t border-gray-200">
                             <div className="flex items-center justify-between mb-1">
                                 <p className="text-[10px] font-semibold text-gray-400">GPS 상태</p>
@@ -674,7 +546,6 @@ const DrivePage = ({
                         )}
                     </div>
                 )}
-
             </main>
 
             <div className="p-6 bg-white/95 backdrop-blur-xl border-t border-gray-100 z-10 relative mt-4">
