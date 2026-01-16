@@ -71,11 +71,27 @@ const Dashboard = () => {
     // --- Refs & State ---
     const videoRef = useRef(null);
     const streamRef = useRef(null);
+    // 카메라 복구 시스템 refs (PR #14 카메라 버그 수정)
+    const captureVideoRef = useRef(null);  // 추론 전용 숨겨진 비디오
+    const captureStreamRef = useRef(null);  // 추론 전용 클론 스트림
+    const showCameraViewRef = useRef(false);
+    const cameraWasActiveRef = useRef(false);
+    const cameraRestartingRef = useRef(false);
+    const cameraWatchdogRef = useRef(null);
+    const cameraRestartAtRef = useRef(0);
+    const cameraMuteTimeoutRef = useRef(null);
+    const playbackRefreshAtRef = useRef(0);
 
     const [showCameraView, setShowCameraView] = useState(false);
     const [selectedLog, setSelectedLog] = useState(null);
     const [hasPermission, setHasPermission] = useState(false);
     const [isActive, setIsActive] = useState(false);
+
+    // showCameraView를 ref로 동기화 (이벤트 콜백에서 최신 값 접근용)
+    useEffect(() => {
+        showCameraViewRef.current = showCameraView;
+    }, [showCameraView]);
+
     // 가중치 기반 점수 계산을 위한 상태
     const [driverBehaviorScore, setDriverBehaviorScore] = useState(100); // 운전자 행동 점수 (40%)
     const [speedLimitScore, setSpeedLimitScore] = useState(100); // 제한속도 준수 점수 (35%)
@@ -199,6 +215,95 @@ const Dashboard = () => {
     };
 
 
+    // --- Camera Recovery System (PR #14 카메라 버그 수정) ---
+    const isStreamLive = (stream) => {
+        if (!stream || stream.active === false) return false;
+        const tracks = stream.getVideoTracks();
+        return tracks.length > 0 && tracks.some((track) => track.readyState === 'live');
+    };
+
+    const restartCamera = async (reason) => {
+        if (!showCameraViewRef.current) return;
+        if (!cameraWasActiveRef.current) return;
+        if (cameraRestartingRef.current) return;
+        const now = Date.now();
+        if (now - cameraRestartAtRef.current < 3000) return;  // 3초 쿨다운
+        cameraRestartAtRef.current = now;
+        cameraRestartingRef.current = true;
+        console.warn(`[camera] restart requested: ${reason}`);
+        try {
+            stopCamera();
+            await startCamera();
+        } finally {
+            cameraRestartingRef.current = false;
+        }
+    };
+
+    const refreshVideoPlayback = (reason) => {
+        const stream = streamRef.current;
+        if (!stream) return;
+        const now = Date.now();
+        if (now - playbackRefreshAtRef.current < 500) return;  // 500ms 쿨다운
+        playbackRefreshAtRef.current = now;
+        if (!isStreamLive(stream)) {
+            restartCamera(`refresh fallback: ${reason}`);
+            return;
+        }
+        console.warn(`[camera] refresh playback: ${reason}`);
+        attachStreamToVideo(stream);
+        if (videoRef.current && videoRef.current.paused && !videoRef.current.ended) {
+            videoRef.current.play().catch(() => { });
+        }
+    };
+
+    const bindStreamEvents = (stream) => {
+        if (!stream) return;
+        stream.oninactive = () => restartCamera('stream inactive');
+        stream.onremovetrack = () => restartCamera('stream track removed');
+        stream.getTracks().forEach((track) => {
+            track.onended = () => restartCamera(`track ended: ${track.kind}`);
+            track.onmute = () => {
+                if (track.kind === 'video') {
+                    if (cameraMuteTimeoutRef.current) {
+                        clearTimeout(cameraMuteTimeoutRef.current);
+                    }
+                    cameraMuteTimeoutRef.current = setTimeout(() => {
+                        if (track.muted) {
+                            refreshVideoPlayback('video track muted');
+                        }
+                    }, 800);
+                }
+            };
+        });
+    };
+
+    const attachStreamToCapture = (stream) => {
+        if (!stream || !captureVideoRef.current) return;
+        const [videoTrack] = stream.getVideoTracks();
+        if (!videoTrack) return;
+
+        // 기존 캡처 스트림 정리
+        if (captureStreamRef.current) {
+            captureStreamRef.current.getTracks().forEach(track => track.stop());
+            captureStreamRef.current = null;
+        }
+
+        // 트랙 클론하여 독립적인 스트림 생성
+        const clonedTrack = videoTrack.clone();
+        const captureStream = new MediaStream([clonedTrack]);
+        captureStreamRef.current = captureStream;
+
+        const captureVideo = captureVideoRef.current;
+        captureVideo.srcObject = captureStream;
+        captureVideo.muted = true;
+        captureVideo.autoplay = true;
+        captureVideo.playsInline = true;
+        captureVideo.onloadedmetadata = () => {
+            captureVideo.play().catch(() => { });
+        };
+        console.log('[camera] captureVideoRef attached');
+    };
+
     // --- Camera Setup ---
     const attachStreamToVideo = (stream) => {
         if (!stream) {
@@ -232,6 +337,18 @@ const Dashboard = () => {
             videoEl.onplaying = () => console.log(`▶️ ${name} playing`);
             videoEl.onerror = (e) => console.error(`❌ ${name} error:`, videoEl.error);
 
+            // 자동 복구 이벤트 핸들러 (PR #14)
+            const ensurePlaying = (reason) => {
+                if (!showCameraViewRef.current) return;
+                if (videoEl.paused && !videoEl.ended) {
+                    refreshVideoPlayback(`video ${name} ${reason}`);
+                }
+            };
+            videoEl.onpause = () => ensurePlaying('paused');
+            videoEl.onstalled = () => ensurePlaying('stalled');
+            videoEl.onwaiting = () => ensurePlaying('waiting');
+            videoEl.onended = () => restartCamera(`video ${name} ended`);
+
             // 즉시 재생
             videoEl.play().catch(() => { });
         };
@@ -254,10 +371,13 @@ const Dashboard = () => {
 
     const startCamera = async () => {
         try {
-            // ???? ??????????? ??????????????????? ?????
+            // 기존 스트림이 있으면 재사용
             if (streamRef.current && streamRef.current.active) {
+                bindStreamEvents(streamRef.current);
                 attachStreamToVideo(streamRef.current);
+                attachStreamToCapture(streamRef.current);
                 setHasPermission(true);
+                cameraWasActiveRef.current = true;
                 return;
             }
 
@@ -295,8 +415,11 @@ const Dashboard = () => {
                 }
             }
             streamRef.current = stream;
+            bindStreamEvents(stream);
             attachStreamToVideo(stream);
+            attachStreamToCapture(stream);
             setHasPermission(true);
+            cameraWasActiveRef.current = true;
         } catch (err) {
             console.error("Camera Error:", err);
             setHasPermission(false);
@@ -315,7 +438,18 @@ const Dashboard = () => {
             streamRef.current.getTracks().forEach(track => track.stop());
             streamRef.current = null;
         }
+        // 타임아웃 정리
+        if (cameraMuteTimeoutRef.current) {
+            clearTimeout(cameraMuteTimeoutRef.current);
+            cameraMuteTimeoutRef.current = null;
+        }
+        // 캡처 스트림 정리
+        if (captureStreamRef.current) {
+            captureStreamRef.current.getTracks().forEach(track => track.stop());
+            captureStreamRef.current = null;
+        }
         if (videoRef.current) videoRef.current.srcObject = null;
+        if (captureVideoRef.current) captureVideoRef.current.srcObject = null;
         setHasPermission(false);
     };
 
@@ -331,9 +465,52 @@ const Dashboard = () => {
             // DOM 렌더링 후 연결
             const timer = setTimeout(() => {
                 attachStreamToVideo(streamRef.current);
+                attachStreamToCapture(streamRef.current);
             }, 50);
             return () => clearTimeout(timer);
         }
+    }, [showCameraView]);
+
+    // 카메라 Watchdog (PR #14 카메라 버그 수정)
+    // 2초마다 카메라 상태 체크하여 문제 발생 시 자동 복구
+    useEffect(() => {
+        if (!showCameraView) {
+            if (cameraWatchdogRef.current) {
+                clearInterval(cameraWatchdogRef.current);
+                cameraWatchdogRef.current = null;
+            }
+            return;
+        }
+
+        cameraWatchdogRef.current = setInterval(() => {
+            const stream = streamRef.current;
+            const videoEl = videoRef.current;
+
+            if (!showCameraViewRef.current) return;
+
+            if (!stream) {
+                if (cameraWasActiveRef.current) {
+                    restartCamera('watchdog: missing stream');
+                }
+                return;
+            }
+
+            if (!isStreamLive(stream)) {
+                restartCamera('watchdog: stream inactive');
+                return;
+            }
+
+            if (videoEl && (videoEl.readyState < 2 || videoEl.paused)) {
+                refreshVideoPlayback('watchdog: playback stalled');
+            }
+        }, 2000);
+
+        return () => {
+            if (cameraWatchdogRef.current) {
+                clearInterval(cameraWatchdogRef.current);
+                cameraWatchdogRef.current = null;
+            }
+        };
     }, [showCameraView]);
 
     // 페이지 이동 후 돌아왔을 때 스트림 재연결
@@ -571,14 +748,23 @@ const Dashboard = () => {
     useEffect(() => {
         let isCancelled = false;
 
-        if (isActive && videoRef.current) {
+        // captureVideoRef 우선 사용 (추론 전용 안정적인 비디오)
+        const captureTarget = (captureVideoRef.current && captureVideoRef.current.srcObject)
+            ? captureVideoRef.current
+            : videoRef.current;
+
+        if (isActive && captureTarget) {
             setModelConnectionStatus('connecting');
 
             // 먼저 srcObject 연결 확인 및 재연결
-            if (!videoRef.current.srcObject && streamRef.current && streamRef.current.active) {
+            if (!captureTarget.srcObject && streamRef.current && streamRef.current.active) {
                 console.log('[Dashboard] 🔧 isActive 시작 시 srcObject 재연결');
-                videoRef.current.srcObject = streamRef.current;
-                videoRef.current.play().catch(() => {});
+                if (captureTarget === captureVideoRef.current) {
+                    attachStreamToCapture(streamRef.current);
+                } else {
+                    captureTarget.srcObject = streamRef.current;
+                    captureTarget.play().catch(() => {});
+                }
             }
 
             // 상태별 감점량 계산 함수
@@ -697,7 +883,7 @@ const Dashboard = () => {
                 // 에러 발생해도 앱은 계속 동작 (GPS/센서 기반 점수 계산)
             };
 
-            // srcObject가 설정될 때까지 대기하는 함수
+            // srcObject가 설정될 때까지 대기하는 함수 (captureTarget 우선 사용)
             const waitForSrcObject = () => {
                 return new Promise((resolve) => {
                     const maxWait = 5000; // 최대 5초 대기
@@ -711,7 +897,7 @@ const Dashboard = () => {
                         }
 
                         checkCount++;
-                        const video = videoRef.current;
+                        const video = captureTarget;  // captureVideoRef 우선 사용
 
                         // srcObject와 active 상태만 확인 (readyState는 불필요)
                         if (video && video.srcObject && video.srcObject.active) {
@@ -723,8 +909,12 @@ const Dashboard = () => {
                         // srcObject가 없으면 재연결 시도
                         if (video && !video.srcObject && streamRef.current && streamRef.current.active) {
                             console.log(`[Dashboard] 🔄 srcObject 재연결 시도...`);
-                            video.srcObject = streamRef.current;
-                            video.play().catch(() => {});
+                            if (video === captureVideoRef.current) {
+                                attachStreamToCapture(streamRef.current);
+                            } else {
+                                video.srcObject = streamRef.current;
+                                video.play().catch(() => {});
+                            }
                         }
 
                         if (Date.now() - startTime > maxWait) {
@@ -764,7 +954,8 @@ const Dashboard = () => {
                 }
 
                 try {
-                    const success = await modelAPI.startCapture(videoRef.current, handleInferenceResult, 60, handleModelError);
+                    // captureTarget 사용 (추론 전용 비디오 우선)
+                    const success = await modelAPI.startCapture(captureTarget, handleInferenceResult, 60, handleModelError);
                     if (isCancelled) return;
 
                     if (success) {
@@ -1355,6 +1546,22 @@ const Dashboard = () => {
                     </>
                 )}
             </div>
+            {/* 추론 전용 숨겨진 비디오 (PR #14 카메라 버그 수정) */}
+            <video
+                ref={captureVideoRef}
+                autoPlay
+                playsInline
+                muted
+                style={{
+                    position: 'fixed',
+                    width: 1,
+                    height: 1,
+                    opacity: 0,
+                    pointerEvents: 'none',
+                    left: 0,
+                    top: 0
+                }}
+            />
         </div>
     );
 };
