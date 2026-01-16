@@ -133,6 +133,8 @@ const Dashboard = () => {
         return Math.max(0, Math.min(100, weightedScore));
     };
     const sessionTimeRef = useRef(0);
+    const accumulatedDistanceRef = useRef(0); // 누적 거리 (미터 단위)
+    const lastGpsTimeRef = useRef(null); // 마지막 GPS 업데이트 시간
 
     // --- Initialize History & User Region ---
     useEffect(() => {
@@ -381,7 +383,24 @@ const Dashboard = () => {
                 (data) => {
                     if (data.type === 'GPS') {
                         // GPS 데이터: 속도 업데이트
+                        // GPS 데이터: 속도 업데이트
                         setCurrentSpeed(data.speed);
+
+                        // 거리 계산 (이전 시간 대비 이동 거리 누적)
+                        const now = Date.now();
+                        if (lastGpsTimeRef.current) {
+                            const timeDeltaSeconds = (now - lastGpsTimeRef.current) / 1000;
+                            // 속도 (km/h -> m/s) * 시간 (s) = 거리 (m)
+                            // 속도가 1km/h 미만인 경우(정지 상태 등)는 계산에서 제외하여 노이즈 감소
+                            if (data.speed > 1) {
+                                const speedMs = data.speed / 3.6;
+                                const distanceDelta = speedMs * timeDeltaSeconds;
+                                accumulatedDistanceRef.current += distanceDelta;
+                                // console.log(`📏 거리 증가: +${distanceDelta.toFixed(2)}m (총: ${accumulatedDistanceRef.current.toFixed(2)}m)`);
+                            }
+                        }
+                        lastGpsTimeRef.current = now;
+
                         setGpsAcceleration(0); // GPS 기반 가속도는 사용 안 함
                         setGpsAccuracy(data.accuracy);
                         setGpsStatus(data.status || 'GPS 검색중...');
@@ -546,6 +565,10 @@ const Dashboard = () => {
             setAccelDecelScore(100);
             scoreRef.current = 100;
             setScore(100);
+
+            // 거리 초기화
+            accumulatedDistanceRef.current = 0;
+            lastGpsTimeRef.current = null;
         }
 
         return () => {
@@ -658,6 +681,7 @@ const Dashboard = () => {
                 duration: finalDuration,
                 events: eventCount,
                 gpsEvents: gpsEvents,
+                distance: accumulatedDistanceRef.current / 1000, // 미터 -> km 변환
                 maxSpeed: Math.round(currentSpeed),
                 sessionTime: sessionTime,
                 scoreRef: scoreRef.current,
@@ -683,6 +707,7 @@ const Dashboard = () => {
                     hardBrake: gpsEvents.hardBrake,
                     overspeed: gpsEvents.overspeed
                 },
+                distance: accumulatedDistanceRef.current / 1000, // 미터 -> km 변환
                 maxSpeed: Math.round(currentSpeed)
             };
 
