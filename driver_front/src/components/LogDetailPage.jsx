@@ -65,8 +65,16 @@ const LogDetailPage = ({ data, onBack }) => {
 
             <div className="p-6 pt-6 grid grid-cols-1 gap-4 mb-8">
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                    <p className="text-[10px] font-bold text-slate-400 mb-2 uppercase">운행 평가</p>
-                    <p className="text-lg font-black leading-tight text-slate-800">{data.msg}</p>
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <p className="text-[10px] font-bold text-slate-400 mb-1 uppercase">운행 거리</p>
+                            <p className="text-2xl font-black text-slate-800">{formatDistance(data.distance)}</p>
+                        </div>
+                        <div className="text-right">
+                            <p className="text-[10px] font-bold text-slate-400 mb-1 uppercase">안전 운전 시간</p>
+                            <p className="text-2xl font-black text-slate-800">{formatDuration(data.duration)}</p>
+                        </div>
+                    </div>
                 </div>
 
 
