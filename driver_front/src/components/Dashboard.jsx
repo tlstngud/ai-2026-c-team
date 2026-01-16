@@ -52,7 +52,7 @@ const Dashboard = () => {
     // --- React Router ---
     const navigate = useNavigate();
     const location = useLocation();
-    
+
     // --- Onboarding & User Region State ---
     const { user, setUser } = useAuth();
     const [step, setStep] = useState(() => {
@@ -72,7 +72,7 @@ const Dashboard = () => {
     const videoRef = useRef(null);
     const videoRef2 = useRef(null);
     const streamRef = useRef(null);
-    
+
     const [showCameraView, setShowCameraView] = useState(false);
     const [selectedLog, setSelectedLog] = useState(null);
     const [hasPermission, setHasPermission] = useState(false);
@@ -87,6 +87,9 @@ const Dashboard = () => {
     const [sessionTime, setSessionTime] = useState(0);
     const [currentState, setCurrentState] = useState(0);
     const [eventCount, setEventCount] = useState(0);
+    const [drowsyCount, setDrowsyCount] = useState(0); // 졸음 횟수
+    const [phoneCount, setPhoneCount] = useState(0); // 휴대폰 사용 횟수
+    const [distractedCount, setDistractedCount] = useState(0); // 주시 태만 횟수
     const [showSummary, setShowSummary] = useState(false);
     const [finalSessionScore, setFinalSessionScore] = useState(null); // 세션 종료 시 최종 점수 저장
     const [history, setHistory] = useState([]);
@@ -221,7 +224,7 @@ const Dashboard = () => {
             videoEl.onerror = (e) => console.error(`❌ ${name} error:`, videoEl.error);
 
             // 즉시 재생
-            videoEl.play().catch(() => {});
+            videoEl.play().catch(() => { });
         };
 
         // 즉시 설정 시도
@@ -571,9 +574,18 @@ const Dashboard = () => {
                 let recovery = 0.05;
                 if (nextState !== 0) {
                     // 상태별 감점량: 0=Normal, 1=Drowsy, 2=Searching, 3=Phone, 4=Assault
-                    if (nextState === 1) penalty = 5.0;  // 졸음
-                    if (nextState === 2) penalty = 3.0;  // 주시태만
-                    if (nextState === 3) penalty = 4.0;  // 휴대폰
+                    if (nextState === 1) {
+                        penalty = 5.0;  // 졸음
+                        setDrowsyCount(prev => prev + 1);
+                    }
+                    if (nextState === 2) {
+                        penalty = 3.0;  // 주시태만
+                        setDistractedCount(prev => prev + 1);
+                    }
+                    if (nextState === 3) {
+                        penalty = 4.0;  // 휴대폰
+                        setPhoneCount(prev => prev + 1);
+                    }
                     if (nextState === 4) penalty = 10.0; // 폭행
                     setEventCount(prev => prev + 1);
                     recovery = 0;
@@ -634,11 +646,11 @@ const Dashboard = () => {
             // 점수 초기화 전에 최종 점수 저장
             const finalScore = Math.floor(score);
             const finalDuration = Math.floor(sessionTime);
-            
+
             // 최종 점수를 ref와 state에 모두 저장 (ref는 즉시 접근 가능)
             finalSessionScoreRef.current = finalScore;
             setFinalSessionScore(finalScore);
-            
+
             // 디버깅: 세션 종료 시 데이터 확인
             console.log('📊 세션 종료 데이터:', {
                 user: user ? { id: user.id, name: user.name } : null,
@@ -653,7 +665,7 @@ const Dashboard = () => {
                 finalSessionScore: finalScore,
                 finalSessionScoreRef: finalSessionScoreRef.current
             });
-            
+
             // setIsActive(false)는 나중에 호출 (모달이 먼저 렌더링되도록)
 
             const now = new Date();
@@ -663,6 +675,9 @@ const Dashboard = () => {
                 score: finalScore,
                 duration: finalDuration,
                 events: eventCount,
+                drowsyCount: drowsyCount,
+                phoneCount: phoneCount,
+                distractedCount: distractedCount,
                 gpsEvents: {
                     hardAccel: gpsEvents.hardAccel,
                     hardBrake: gpsEvents.hardBrake,
@@ -685,8 +700,8 @@ const Dashboard = () => {
                 // Update user score in localStorage and AuthContext
                 const savedUser = storage.getUser();
                 if (savedUser) {
-                    const updatedUser = { 
-                        ...savedUser, 
+                    const updatedUser = {
+                        ...savedUser,
                         score: finalScore,
                         updatedAt: new Date().toISOString()
                     };
@@ -716,7 +731,7 @@ const Dashboard = () => {
 
             // 모달을 먼저 열고, 약간의 지연 후에 isActive를 false로 설정하여 점수 초기화
             setShowSummary(true);
-            
+
             // 다음 틱에서 점수 초기화 (모달이 먼저 렌더링되도록)
             setTimeout(() => {
                 setIsActive(false);
@@ -737,6 +752,9 @@ const Dashboard = () => {
             setScore(100);
             setCurrentState(0);
             setEventCount(0);
+            setDrowsyCount(0);
+            setPhoneCount(0);
+            setDistractedCount(0);
             setSessionTime(0);
             sessionTimeRef.current = 0;
             setShowSummary(false);
@@ -749,13 +767,13 @@ const Dashboard = () => {
     const getAverageScore = () => {
         const MIN_RECORDS_FOR_SCORE = 7;
         if (history.length === 0) return null;
-        
+
         // 7개 미만: 전체 기록의 평균 점수
         // 7개 이상: 최근 7개 기록의 평균 점수
-        const recordsToUse = history.length < MIN_RECORDS_FOR_SCORE 
+        const recordsToUse = history.length < MIN_RECORDS_FOR_SCORE
             ? history  // 전체 기록 사용
             : history.slice(0, 7);  // 최근 7개만 사용
-        
+
         const sum = recordsToUse.reduce((acc, curr) => acc + (curr.score || 0), 0);
         return Math.floor(sum / recordsToUse.length);
     };
@@ -854,7 +872,7 @@ const Dashboard = () => {
 
     const handlePageChange = (page) => {
         // React Router를 사용하여 페이지 이동
-        switch(page) {
+        switch (page) {
             case 'drive':
                 navigate('/drive');
                 break;
@@ -925,14 +943,14 @@ const Dashboard = () => {
 
     const LogDetailWrapper = () => {
         const { logId } = useParams();
-        
+
         // selectedLog가 있으면 사용, 없으면 history에서 찾기
         const log = selectedLog || history.find(l => (l.logId || l.id) === logId);
-        
+
         if (!log) {
             return <div className="p-6">로그를 찾을 수 없습니다.</div>;
         }
-        
+
         const enrichedLog = {
             ...log,
             msg: log.msg || `안전 운전 점수 ${log.score}점`,
@@ -940,7 +958,7 @@ const Dashboard = () => {
             time: log.duration || 0,
             distance: log.distance || 0
         };
-        
+
         return <LogDetailPage data={enrichedLog} onBack={() => {
             setSelectedLog(null);
             navigate('/log');
@@ -955,7 +973,7 @@ const Dashboard = () => {
     const ChallengeDetailWrapper = () => {
         const { challengeId } = useParams();
         const navigate = useNavigate();
-        
+
         // challenge를 찾거나 기본값 생성
         const challengeData = challenge || {
             challengeId: challengeId || `challenge_${userRegion?.name?.replace(/\s/g, '_') || 'default'}`,
@@ -971,7 +989,7 @@ const Dashboard = () => {
             rules: ['지정된 기간 동안 안전운전 실천', `안전운전 점수 ${userRegion?.target || 90}점 이상 유지`, '급가속/급감속 최소화'],
             conditions: [`${userRegion?.name || '전국 공통'} 거주자 또는 주 활동 운전자`, '최근 1년 내 중과실 사고 이력 없음', '마케팅 활용 동의 필수']
         };
-        
+
         return (
             <ChallengeDetail
                 challenge={{

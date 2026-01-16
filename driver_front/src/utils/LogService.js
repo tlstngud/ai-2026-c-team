@@ -14,6 +14,9 @@ export const getLogsByUserId = async (userId) => {
             duration: log.duration,
             distance: log.distance || 0,
             events: log.events || 0,
+            drowsyCount: log.drowsyCount || 0,
+            phoneCount: log.phoneCount || 0,
+            distractedCount: log.distractedCount || 0,
             maxSpeed: log.maxSpeed || log.max_speed || 0,
             gpsEvents: log.gpsEvents || {
                 hardAccel: log.hardAccel || log.hard_accel || 0,
@@ -64,6 +67,9 @@ export const addLogByUserId = async (userId, newLog) => {
             duration: newLog.duration || 0,
             distance: newLog.distance || 0,
             events: newLog.events || 0,
+            drowsyCount: newLog.drowsyCount || 0,
+            phoneCount: newLog.phoneCount || 0,
+            distractedCount: newLog.distractedCount || 0,
             gpsEvents: newLog.gpsEvents || {
                 hardAccel: 0,
                 hardBrake: 0,
@@ -78,7 +84,7 @@ export const addLogByUserId = async (userId, newLog) => {
 
         console.log('💾 LogService: 저장할 로그 데이터:', logData);
         const savedLog = storage.addLog(logData);
-        
+
         if (savedLog) {
             console.log('✅ LogService: 로그 저장 성공:', savedLog.logId);
             // 새로 추가된 로그를 포함한 전체 목록 가져오기
