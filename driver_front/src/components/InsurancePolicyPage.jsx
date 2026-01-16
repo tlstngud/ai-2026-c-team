@@ -6,7 +6,7 @@ import { ChevronLeft, ShieldCheck, CheckCircle2, AlertCircle } from 'lucide-reac
 const POLICY_ITEMS = [
     { id: '1', text: '1\uB144 \uB3C4\uC548 \uC6D4\uBCC4 \uACFC\uC18D 10\uD68C \uC774\uD558 \uC2DC \uAC10\uBA74' },
     { id: '2', text: '1\uB144 \uB3C4\uC548 \uC548\uC804 \uC810\uC218 90\uC810 \uC774\uC0C1 \uC720\uC9C0 \uC2DC \uAC10\uBA74' },
-    { id: '3', text: '1\uB144 \uB3C4\uC548 \uC6D4\uBCC4 \uACFC\uC18D 20\uD68C \uC774\uD558 \uC2DC \uAC10\uBA74' }
+    { id: '3', text: '1\uB144 \uB3C4\uC548 \uC6D4\uBCC4 \uAE09\uAC10\uC18D 20\uD68C \uC774\uD558 \uC2DC \uAC10\uBA74' }
 ];
 
 const InsurancePolicyPage = () => {
