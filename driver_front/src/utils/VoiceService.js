@@ -15,6 +15,14 @@ class VoiceService {
         this.onError = null;
         this.onStateChange = null;
         this.koreanVoice = null;
+        this.availableVoices = []; // 사용 가능한 한국어 음성 목록
+
+        // TTS 설정 (자연스러운 음성을 위한 튜닝)
+        this.ttsConfig = {
+            rate: 0.92,      // 속도: 약간 느리게 (더 자연스러움)
+            pitch: 1.0,      // 음높이: 기본
+            volume: 1.0      // 볼륨: 최대
+        };
 
         // 초기화
         if (this.isSupported) {
@@ -135,21 +143,73 @@ class VoiceService {
     }
 
     /**
-     * 한국어 음성 로드
+     * 한국어 음성 로드 (프리미엄 음성 우선 선택)
      */
     loadKoreanVoice() {
         const loadVoices = () => {
             const voices = this.synthesis.getVoices();
 
-            // 한국어 음성 찾기 (우선순위: Google > Microsoft > 기타)
-            this.koreanVoice = voices.find(v => v.lang === 'ko-KR' && v.name.includes('Google')) ||
-                              voices.find(v => v.lang === 'ko-KR' && v.name.includes('Microsoft')) ||
-                              voices.find(v => v.lang === 'ko-KR') ||
-                              voices.find(v => v.lang.startsWith('ko')) ||
-                              null;
+            // 한국어 음성만 필터링
+            const koreanVoices = voices.filter(v =>
+                v.lang === 'ko-KR' || v.lang === 'ko_KR' || v.lang.startsWith('ko')
+            );
+
+            this.availableVoices = koreanVoices;
+            console.log('[VoiceService] 사용 가능한 한국어 음성:', koreanVoices.map(v => ({
+                name: v.name,
+                lang: v.lang,
+                local: v.localService
+            })));
+
+            // 음성 선택 우선순위 (여성 + 자연스러운 음성 우선)
+            // 1. 여성 이름 음성 (Yuna, Sora, SunHi 등)
+            // 2. Google 한국어 여성 (온라인, 자연스러움)
+            // 3. Microsoft 여성 Neural 음성 (고품질)
+            // 4. 온라인 여성 음성
+            // 5. 기타
+
+            // 여성 음성 이름 패턴 (한국어)
+            const femaleNames = ['Yuna', 'Sora', 'SunHi', 'Heami', 'Minji', 'Jiyun', 'Seoyeon', 'Heera'];
+            const isFemaleVoice = (v) => femaleNames.some(name => v.name.includes(name));
+
+            const voicePriority = [
+                // Apple 여성 음성 (Yuna, Sora - 가장 자연스러움)
+                v => v.name.includes('Yuna') && v.name.includes('Premium'),
+                v => v.name.includes('Yuna'),
+                v => v.name.includes('Sora'),
+                // Microsoft 여성 Neural 음성
+                v => isFemaleVoice(v) && (v.name.includes('Online') || v.name.includes('Neural')),
+                v => v.name.includes('SunHi'),
+                v => v.name.includes('Heami'),
+                // Google 한국어 (기본 여성)
+                v => v.name.includes('Google') && !v.localService,
+                v => v.name.includes('Google'),
+                // 기타 여성 음성
+                v => isFemaleVoice(v),
+                // Microsoft 온라인 음성
+                v => v.name.includes('Online') || v.name.includes('Neural'),
+                v => v.name.includes('Microsoft') && !v.localService,
+                // 온라인 음성 우선 (더 자연스러움)
+                v => !v.localService,
+                // 나머지
+                v => true
+            ];
+
+            for (const condition of voicePriority) {
+                const found = koreanVoices.find(condition);
+                if (found) {
+                    this.koreanVoice = found;
+                    break;
+                }
+            }
 
             if (this.koreanVoice) {
-                console.log('[VoiceService] 한국어 음성 로드됨:', this.koreanVoice.name);
+                console.log('[VoiceService] 선택된 음성:', {
+                    name: this.koreanVoice.name,
+                    lang: this.koreanVoice.lang,
+                    local: this.koreanVoice.localService,
+                    uri: this.koreanVoice.voiceURI
+                });
             } else {
                 console.warn('[VoiceService] 한국어 음성을 찾을 수 없습니다. 기본 음성 사용');
             }
@@ -161,6 +221,13 @@ class VoiceService {
         } else {
             this.synthesis.onvoiceschanged = loadVoices;
         }
+
+        // 일부 브라우저에서 onvoiceschanged가 안 불리는 경우 대비
+        setTimeout(() => {
+            if (!this.koreanVoice && this.synthesis.getVoices().length > 0) {
+                loadVoices();
+            }
+        }, 500);
     }
 
     /**
@@ -234,7 +301,7 @@ class VoiceService {
     }
 
     /**
-     * TTS로 텍스트 읽기
+     * TTS로 텍스트 읽기 (자연스러운 음성 설정 적용)
      */
     speak(text, options = {}) {
         if (!this.synthesis) {
@@ -247,9 +314,11 @@ class VoiceService {
 
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = 'ko-KR';
-        utterance.rate = options.rate || 1.0; // 속도 (0.1 ~ 10)
-        utterance.pitch = options.pitch || 1.0; // 음높이 (0 ~ 2)
-        utterance.volume = options.volume || 1.0; // 볼륨 (0 ~ 1)
+
+        // 튜닝된 기본 설정 사용 (옵션으로 덮어쓰기 가능)
+        utterance.rate = options.rate ?? this.ttsConfig.rate;
+        utterance.pitch = options.pitch ?? this.ttsConfig.pitch;
+        utterance.volume = options.volume ?? this.ttsConfig.volume;
 
         // 한국어 음성 사용
         if (this.koreanVoice) {
@@ -258,7 +327,7 @@ class VoiceService {
 
         // 이벤트
         utterance.onstart = () => {
-            console.log('[VoiceService] TTS 시작:', text.substring(0, 30) + '...');
+            console.log('[VoiceService] TTS 시작:', text.substring(0, 30) + (text.length > 30 ? '...' : ''));
             this.onStateChange?.({ type: 'speaking', text });
         };
 
@@ -269,9 +338,41 @@ class VoiceService {
 
         utterance.onerror = (event) => {
             console.error('[VoiceService] TTS 에러:', event.error);
+            this.onStateChange?.({ type: 'speakEnd' }); // 에러 시에도 상태 복구
         };
 
         this.synthesis.speak(utterance);
+    }
+
+    /**
+     * TTS 설정 변경
+     */
+    setTTSConfig(config) {
+        if (config.rate !== undefined) this.ttsConfig.rate = Math.max(0.1, Math.min(2, config.rate));
+        if (config.pitch !== undefined) this.ttsConfig.pitch = Math.max(0, Math.min(2, config.pitch));
+        if (config.volume !== undefined) this.ttsConfig.volume = Math.max(0, Math.min(1, config.volume));
+        console.log('[VoiceService] TTS 설정 변경:', this.ttsConfig);
+    }
+
+    /**
+     * 사용 가능한 한국어 음성 목록 반환
+     */
+    getAvailableVoices() {
+        return this.availableVoices;
+    }
+
+    /**
+     * 특정 음성으로 변경
+     */
+    setVoice(voiceName) {
+        const voice = this.availableVoices.find(v => v.name === voiceName);
+        if (voice) {
+            this.koreanVoice = voice;
+            console.log('[VoiceService] 음성 변경됨:', voice.name);
+            return true;
+        }
+        console.warn('[VoiceService] 음성을 찾을 수 없음:', voiceName);
+        return false;
     }
 
     /**
