@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Play, Square, Camera, CameraOff, MapPin, Mic, MicOff, Volume2 } from 'lucide-react';
 import { STATE_CONFIG, APPLE_STATE_CONFIG } from './constants';
 
@@ -41,6 +41,9 @@ const DrivePage = ({
     const dragStartY = useRef(0);
     const dragStartHeight = useRef(0);
     const isDraggingRef = useRef(false);
+
+    // TTS 엔진 라벨 (Web Speech API 전용)
+    const ttsEngineLabel = 'Web Speech';
 
     // 모달 드래그 핸들러
     const handleTouchStart = (e) => {
@@ -379,13 +382,13 @@ const DrivePage = ({
                                             ) : (
                                                 <Mic size={18} className={voiceStatus === 'listening' ? 'animate-pulse' : ''} />
                                             )}
-                                            {voiceStatus === 'speaking' ? '말하는 중...' :
-                                             voiceStatus === 'listening' ? '듣는 중... (말해보세요)' : '음성 대기 중'}
+                                            {voiceStatus === 'speaking' ? `말하는 중... (${ttsEngineLabel})` :
+                                             voiceStatus === 'listening' ? `듣는 중... (${ttsEngineLabel})` : `음성 대기 중 (${ttsEngineLabel})`}
                                         </>
                                     ) : (
                                         <>
                                             <MicOff size={18} />
-                                            음성 기능 켜기
+                                            음성 기능 켜기 ({ttsEngineLabel})
                                         </>
                                     )}
                                 </button>
