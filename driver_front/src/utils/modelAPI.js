@@ -1,18 +1,17 @@
 // GPU 서버 모델 추론 API
 // 카메라 프레임 캡처 -> 224x224 전처리 -> WebSocket으로 서버 전송
 
-// GPU 서버 URL 설정 - 같은 서버에서 서빙 (이중 프록시 제거)
-const GPU_SERVER_URL = '';  // 상대 경로
+// GPU 서버 URL 설정 - Vite 프록시를 통해 연결
+const GPU_SERVER_URL = '';  // 상대 경로 (Vite 프록시 사용)
 
-// WebSocket URL 구성 - 같은 서버로 직접 연결
+// WebSocket URL 구성 - 같은 서버로 연결 (Vite 프록시)
 const getWsUrl = () => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host;
-    return `${protocol}//${host}`;
+    return `${protocol}//${window.location.host}`;
 };
 const WS_SERVER_URL = getWsUrl();
 
-console.log('[modelAPI] API/WebSocket: 같은 서버 직접 연결');
+console.log('[modelAPI] API/WebSocket: Vite 프록시 사용');
 console.log('[modelAPI] WebSocket URL:', WS_SERVER_URL);
 
 // 세션 및 WebSocket 관리
@@ -23,7 +22,17 @@ let frameInterval = null;
 let onResultCallback = null;
 let onErrorCallback = null;  // 에러 콜백 추가
 let reconnectAttempts = 0;
-const MAX_RECONNECT_ATTEMPTS = 3;
+const MAX_RECONNECT_ATTEMPTS = 5;  // 재연결 시도 횟수 증가
+
+// Heartbeat 및 재연결 관리
+let heartbeatInterval = null;
+let lastPongTime = Date.now();
+const HEARTBEAT_INTERVAL = 5000;   // 5초마다 ping
+const PONG_TIMEOUT = 15000;        // 15초 내 pong 없으면 재연결
+let currentVideoElement = null;    // 재연결 시 사용
+let currentFps = 60;
+const RECONNECT_DELAYS = [1000, 2000, 5000, 10000];  // 점진적 재연결 딜레이
+let isReconnecting = false;
 
 // 캔버스 (프레임 캡처용)
 let captureCanvas = null;
@@ -179,6 +188,12 @@ const connect = async (onResult, onError = null) => {
                 console.log('[modelAPI] ✅ WebSocket 연결 성공');
                 isConnected = true;
                 reconnectAttempts = 0;
+                lastPongTime = Date.now();
+                isReconnecting = false;
+
+                // Heartbeat 시작
+                startHeartbeat();
+
                 resolve(sessionId);
             };
 
@@ -186,12 +201,31 @@ const connect = async (onResult, onError = null) => {
                 try {
                     const data = JSON.parse(event.data);
 
+                    // server_ping 메시지 처리 - pong 응답 전송
+                    if (data.type === 'server_ping') {
+                        if (websocket && websocket.readyState === WebSocket.OPEN) {
+                            websocket.send(JSON.stringify({
+                                type: 'pong',
+                                timestamp: data.timestamp
+                            }));
+                        }
+                        return;
+                    }
+
+                    // 서버의 pong 응답 처리 (클라이언트 ping에 대한)
+                    if (data.type === 'pong') {
+                        lastPongTime = Date.now();
+                        return;
+                    }
+
+                    // 추론 결과 처리
                     if (data.status === 'inference_complete' && onResultCallback) {
                         onResultCallback(data.result);
                     } else if (data.status === 'error') {
                         console.error('[modelAPI] 서버 추론 오류:', data.message);
                         if (onErrorCallback) onErrorCallback(new Error(data.message));
                     }
+                    // buffering, queued 상태는 정상 동작이므로 무시
                 } catch (e) {
                     console.error('[modelAPI] 메시지 파싱 오류:', e);
                 }
@@ -206,10 +240,12 @@ const connect = async (onResult, onError = null) => {
             websocket.onclose = (event) => {
                 console.log('[modelAPI] WebSocket 연결 종료 (code:', event.code, ', reason:', event.reason || 'none', ')');
                 isConnected = false;
+                stopHeartbeat();
 
-                // 비정상 종료 시 에러 콜백 호출
-                if (event.code !== 1000 && event.code !== 1001 && onErrorCallback) {
-                    onErrorCallback(new Error(`WebSocket 연결 종료 (code: ${event.code})`));
+                // 비정상 종료 시 자동 재연결
+                if (event.code !== 1000 && event.code !== 1001) {
+                    console.warn('[modelAPI] ⚠️ 비정상 종료 - 재연결 시도');
+                    handleReconnect();
                 }
             };
 
@@ -310,6 +346,10 @@ const startCapture = async (videoElement, onResult, fps = 60, onError = null) =>
         clearInterval(frameInterval);
     }
 
+    // 재연결 시 사용하기 위해 현재 상태 저장
+    currentVideoElement = videoElement;
+    currentFps = fps;
+
     console.log('[modelAPI] 프레임 캡처 시작 요청...');
 
     // 비디오 준비 대기
@@ -374,7 +414,105 @@ const stopCapture = () => {
         clearInterval(frameInterval);
         frameInterval = null;
     }
-    console.log('Frame capture stopped');
+    console.log('[modelAPI] Frame capture stopped');
+};
+
+/**
+ * Heartbeat ping 시작 - 연결 유지용
+ */
+const startHeartbeat = () => {
+    stopHeartbeat();
+
+    heartbeatInterval = setInterval(() => {
+        if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+            stopHeartbeat();
+            return;
+        }
+
+        // pong 타임아웃 체크
+        if (Date.now() - lastPongTime > PONG_TIMEOUT) {
+            console.warn('[modelAPI] ⚠️ Pong 타임아웃 - 재연결 시도');
+            handleReconnect();
+            return;
+        }
+
+        // ping 전송
+        try {
+            websocket.send(JSON.stringify({
+                type: 'ping',
+                timestamp: Date.now()
+            }));
+        } catch (e) {
+            console.error('[modelAPI] Ping 전송 실패:', e);
+        }
+    }, HEARTBEAT_INTERVAL);
+
+    console.log('[modelAPI] Heartbeat 시작 (5초 간격)');
+};
+
+/**
+ * Heartbeat 중지
+ */
+const stopHeartbeat = () => {
+    if (heartbeatInterval) {
+        clearInterval(heartbeatInterval);
+        heartbeatInterval = null;
+    }
+};
+
+/**
+ * 재연결 처리
+ */
+const handleReconnect = async () => {
+    // 이미 재연결 중이면 무시
+    if (isReconnecting) {
+        return;
+    }
+
+    if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+        console.error('[modelAPI] ❌ 최대 재연결 시도 횟수 초과');
+        isReconnecting = false;
+        if (onErrorCallback) {
+            onErrorCallback(new Error('WebSocket 재연결 실패 (최대 시도 횟수 초과)'));
+        }
+        return;
+    }
+
+    isReconnecting = true;
+    stopHeartbeat();
+    stopCapture();
+
+    if (websocket) {
+        try {
+            websocket.close();
+        } catch (e) {
+            // 이미 닫힌 경우 무시
+        }
+        websocket = null;
+    }
+    isConnected = false;
+
+    const delay = RECONNECT_DELAYS[Math.min(reconnectAttempts, RECONNECT_DELAYS.length - 1)];
+    reconnectAttempts++;
+
+    console.log(`[modelAPI] 🔄 ${delay}ms 후 재연결 시도 (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+
+    setTimeout(async () => {
+        try {
+            await connect(onResultCallback, onErrorCallback);
+            console.log('[modelAPI] ✅ 재연결 성공');
+
+            // 프레임 캡처 재시작
+            if (currentVideoElement) {
+                console.log('[modelAPI] 프레임 캡처 재시작...');
+                await startCapture(currentVideoElement, onResultCallback, currentFps, onErrorCallback);
+            }
+        } catch (error) {
+            console.error('[modelAPI] 재연결 실패:', error.message);
+            isReconnecting = false;
+            handleReconnect();
+        }
+    }, delay);
 };
 
 /**
@@ -382,6 +520,7 @@ const stopCapture = () => {
  */
 const disconnect = () => {
     stopCapture();
+    stopHeartbeat();
 
     if (websocket) {
         websocket.close();
@@ -389,8 +528,11 @@ const disconnect = () => {
     }
 
     isConnected = false;
+    isReconnecting = false;
+    reconnectAttempts = 0;
     sessionId = null;
-    console.log('Disconnected');
+    currentVideoElement = null;
+    console.log('[modelAPI] Disconnected');
 };
 
 /**
