@@ -62,17 +62,27 @@ class VoiceService {
         const cores = navigator.hardwareConcurrency || 4; // CPU 코어 수
         const hasWebGPU = !!navigator.gpu;
 
-        // 고사양 기준: 메모리 4GB 이상 AND 코어 4개 이상
-        const isHighEnd = memory >= 4 && cores >= 4;
+        // PC 감지: 모바일이 아니면 PC로 간주
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        const isPC = !isMobile;
+
+        // 고사양 기준:
+        // 1. PC는 무조건 고사양 (어지간하면 Supertonic 2 사용)
+        // 2. 모바일은 메모리 4GB 이상 AND 코어 4개 이상
+        const isHighEnd = isPC || (memory >= 4 && cores >= 4);
 
         const info = {
             memory,
             cores,
             hasWebGPU,
+            isPC,
+            isMobile,
             isHighEnd,
-            reason: isHighEnd
-                ? `고사양 (${memory}GB RAM, ${cores} cores${hasWebGPU ? ', WebGPU' : ''})`
-                : `저사양 (${memory}GB RAM, ${cores} cores)`
+            reason: isPC
+                ? `PC (${cores} cores${hasWebGPU ? ', WebGPU' : ''}) - Supertonic 2 사용`
+                : isHighEnd
+                    ? `고사양 모바일 (${memory}GB RAM, ${cores} cores${hasWebGPU ? ', WebGPU' : ''})`
+                    : `저사양 모바일 (${memory}GB RAM, ${cores} cores)`
         };
 
         console.log('[VoiceService] 기기 성능:', info);
