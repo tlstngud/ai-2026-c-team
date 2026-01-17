@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Play, Square, Camera, CameraOff, MapPin } from 'lucide-react';
+import { Play, Square, Camera, CameraOff, MapPin, Mic, MicOff, Volume2 } from 'lucide-react';
 import { STATE_CONFIG, APPLE_STATE_CONFIG } from './constants';
 
 const DrivePage = ({
@@ -27,7 +27,12 @@ const DrivePage = ({
     roadName = null,
     speedLimitLoading = false,
     speedLimitDebug = null,
-    modelConnectionStatus = 'idle'
+    modelConnectionStatus = 'idle',
+    voiceEnabled = false,
+    voiceStatus = 'idle',
+    lastTranscript = '',
+    interimTranscript = '',
+    toggleVoice = () => {}
 }) => {
     const videoContainerRef = useRef(null);
     const modalRef = useRef(null);
@@ -350,6 +355,52 @@ const DrivePage = ({
                                  modelConnectionStatus === 'connecting' ? 'AI 서버 연결 중...' :
                                  modelConnectionStatus === 'error' ? 'AI 서버 미연결 (GPS 모드)' :
                                  'AI 대기 중'}
+                            </div>
+                        )}
+
+                        {/* 음성 기능 UI */}
+                        {isActive && (
+                            <div className="mb-4">
+                                {/* 음성 활성화 버튼 */}
+                                <button
+                                    onClick={toggleVoice}
+                                    className={`w-full px-4 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all ${
+                                        voiceEnabled
+                                            ? voiceStatus === 'speaking'
+                                                ? 'bg-purple-100 text-purple-700 border-2 border-purple-300'
+                                                : 'bg-blue-100 text-blue-700 border-2 border-blue-300'
+                                            : 'bg-slate-100 text-slate-600 border border-slate-200'
+                                    }`}
+                                >
+                                    {voiceEnabled ? (
+                                        <>
+                                            {voiceStatus === 'speaking' ? (
+                                                <Volume2 size={18} className="animate-pulse" />
+                                            ) : (
+                                                <Mic size={18} className={voiceStatus === 'listening' ? 'animate-pulse' : ''} />
+                                            )}
+                                            {voiceStatus === 'speaking' ? '말하는 중...' :
+                                             voiceStatus === 'listening' ? '듣는 중... (말해보세요)' : '음성 대기 중'}
+                                        </>
+                                    ) : (
+                                        <>
+                                            <MicOff size={18} />
+                                            음성 기능 켜기
+                                        </>
+                                    )}
+                                </button>
+
+                                {/* 인식된 텍스트 표시 */}
+                                {voiceEnabled && (lastTranscript || interimTranscript) && (
+                                    <div className="mt-3 p-3 bg-white rounded-xl border border-slate-200 shadow-sm">
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">
+                                            {voiceStatus === 'speaking' ? '말하는 중' : '인식된 텍스트'}
+                                        </p>
+                                        <p className={`text-sm font-medium ${interimTranscript ? 'text-slate-400' : 'text-slate-800'}`}>
+                                            {interimTranscript || lastTranscript || '...'}
+                                        </p>
+                                    </div>
+                                )}
                             </div>
                         )}
 

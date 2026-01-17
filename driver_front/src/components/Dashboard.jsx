@@ -5,6 +5,7 @@ import { addLogByUserId, getLogsByUserId } from '../utils/LogService';
 import { storage } from '../utils/localStorage';
 import { startGpsMonitoring, stopGpsMonitoring, requestMotionPermission } from '../utils/GpsService';
 import { modelAPI } from '../utils/modelAPI';
+import { voiceService } from '../utils/VoiceService';
 import { AlertTriangle, X, MapPin, Search, Award } from 'lucide-react';
 import { STATE_CONFIG, APPLE_STATE_CONFIG } from './constants';
 import Header from './Header';
@@ -121,6 +122,12 @@ const Dashboard = () => {
     const [speedLimitLoading, setSpeedLimitLoading] = useState(false); // 제한 속도 조회 중 상태
     const [speedLimitDebug, setSpeedLimitDebug] = useState(null); // 디버깅 정보 (모바일용)
     const [showChallengeDetail, setShowChallengeDetail] = useState(false); // 챌린지 상세 페이지 표시 여부
+
+    // 음성 서비스 상태
+    const [voiceEnabled, setVoiceEnabled] = useState(false); // 음성 기능 활성화 여부
+    const [voiceStatus, setVoiceStatus] = useState('idle'); // idle, listening, speaking
+    const [lastTranscript, setLastTranscript] = useState(''); // 마지막 인식된 텍스트
+    const [interimTranscript, setInterimTranscript] = useState(''); // 중간 인식 텍스트
     const [coupons, setCoupons] = useState([]);
     const [toast, setToast] = useState({ isVisible: false, message: '' });
     const gpsWatchIdRef = useRef(null);
@@ -987,6 +994,68 @@ const Dashboard = () => {
         };
     }, [isActive]);
 
+    // --- 음성 서비스 (STT/TTS) 연동 ---
+    useEffect(() => {
+        if (isActive && voiceEnabled) {
+            console.log('[Dashboard] 음성 서비스 시작');
+
+            // 콜백 설정
+            voiceService.setCallbacks({
+                onResult: (result) => {
+                    if (result.isFinal) {
+                        setLastTranscript(result.text);
+                        setInterimTranscript('');
+                        console.log('[Dashboard] 음성 인식 완료:', result.text);
+                    } else {
+                        setInterimTranscript(result.text);
+                    }
+                },
+                onError: (error) => {
+                    console.error('[Dashboard] 음성 에러:', error);
+                    if (error.type === 'not-allowed') {
+                        setToast({ isVisible: true, message: '마이크 권한이 필요합니다.' });
+                    }
+                },
+                onStateChange: (state) => {
+                    console.log('[Dashboard] 음성 상태 변경:', state);
+                    if (state.type === 'listening') {
+                        setVoiceStatus('listening');
+                    } else if (state.type === 'speaking') {
+                        setVoiceStatus('speaking');
+                    } else if (state.type === 'speakEnd') {
+                        setVoiceStatus('listening');
+                    } else if (state.type === 'stopped') {
+                        setVoiceStatus('idle');
+                    }
+                }
+            });
+
+            // 음성 인식 시작
+            voiceService.start();
+            setVoiceStatus('listening');
+
+        } else {
+            // 세션 종료 또는 음성 비활성화 시 중지
+            voiceService.stop();
+            setVoiceStatus('idle');
+            setLastTranscript('');
+            setInterimTranscript('');
+        }
+
+        return () => {
+            voiceService.stop();
+        };
+    }, [isActive, voiceEnabled]);
+
+    // 음성 기능 토글 함수
+    const toggleVoice = () => {
+        if (!voiceService.isSupported) {
+            setToast({ isVisible: true, message: '이 브라우저에서는 음성 인식이 지원되지 않습니다.' });
+            return;
+        }
+        setVoiceEnabled(prev => !prev);
+    };
+
     // --- Handlers ---
     const toggleSession = async () => {
         if (!isActive) {
@@ -1283,6 +1352,11 @@ const Dashboard = () => {
                 speedLimitLoading={speedLimitLoading}
                 speedLimitDebug={speedLimitDebug}
                 modelConnectionStatus={modelConnectionStatus}
+                voiceEnabled={voiceEnabled}
+                voiceStatus={voiceStatus}
+                lastTranscript={lastTranscript}
+                interimTranscript={interimTranscript}
+                toggleVoice={toggleVoice}
             />
         </>
     );
