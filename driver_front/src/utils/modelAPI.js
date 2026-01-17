@@ -37,16 +37,28 @@ let isReconnecting = false;
 // 캔버스 (프레임 캡처용)
 let captureCanvas = null;
 let captureCtx = null;
+let supportsWebP = null;  // WebP 지원 여부 캐시
 
 /**
- * 캔버스 초기화 (224x224)
+ * 캔버스 초기화 (224x224) - GPU 가속 옵션 사용
  */
 const initCanvas = () => {
     if (!captureCanvas) {
         captureCanvas = document.createElement('canvas');
         captureCanvas.width = 224;
         captureCanvas.height = 224;
-        captureCtx = captureCanvas.getContext('2d', { willReadFrequently: true });
+        // desynchronized: GPU 가속, alpha: false: 불필요한 알파 채널 제거
+        captureCtx = captureCanvas.getContext('2d', {
+            alpha: false,
+            desynchronized: true,
+            willReadFrequently: true
+        });
+
+        // WebP 지원 여부 확인
+        if (supportsWebP === null) {
+            supportsWebP = captureCanvas.toDataURL('image/webp').startsWith('data:image/webp');
+            console.log(`[modelAPI] Canvas 초기화 완료 (WebP: ${supportsWebP ? '지원' : '미지원'})`);
+        }
     }
 };
 
@@ -124,8 +136,10 @@ const captureFrame = (videoElement) => {
             0, 0, 224, 224       // 대상 (224x224)
         );
 
-        // JPEG로 인코딩 (품질 0.8)
-        const dataUrl = captureCanvas.toDataURL('image/jpeg', 0.8);
+        // WebP 우선 사용 (JPEG보다 ~30% 작음), 미지원 시 JPEG fallback
+        const dataUrl = supportsWebP
+            ? captureCanvas.toDataURL('image/webp', 0.5)
+            : captureCanvas.toDataURL('image/jpeg', 0.5);
 
         // 디버그: 프레임 변화 체크 (간단한 해시)
         frameDebugCounter++;
@@ -220,7 +234,13 @@ const connect = async (onResult, onError = null) => {
 
                     // 추론 결과 처리
                     if (data.status === 'inference_complete' && onResultCallback) {
-                        onResultCallback(data.result);
+                        // 결과에 동적 설정 정보 포함
+                        const enrichedResult = {
+                            ...data.result,
+                            alert_threshold: data.alert_threshold || 20,
+                            interval_ms: data.interval_ms || 50
+                        };
+                        onResultCallback(enrichedResult);
                     } else if (data.status === 'error') {
                         console.error('[modelAPI] 서버 추론 오류:', data.message);
                         if (onErrorCallback) onErrorCallback(new Error(data.message));
@@ -338,7 +358,7 @@ const waitForVideoReady = (videoElement, timeout = 10000) => {  // 10초로 증�
  * 실시간 프레임 캡처 및 전송 시작
  * @param {HTMLVideoElement} videoElement - 비디오 요소
  * @param {Function} onResult - 추론 결과 콜백
- * @param {number} fps - 초당 프레임 수 (기본 60 - 백엔드 60프레임 버퍼와 맞춤)
+ * @param {number} fps - 초당 프레임 수 (기본 60 - 백엔드 30프레임 버퍼와 맞춤)
  * @param {Function} onError - 에러 콜백 (선택)
  */
 const startCapture = async (videoElement, onResult, fps = 60, onError = null) => {

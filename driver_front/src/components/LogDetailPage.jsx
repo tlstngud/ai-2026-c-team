@@ -1,6 +1,7 @@
-import React from 'react';
-import { ChevronLeft, Clock, MapPin, Coffee, Smartphone, Zap, AlertTriangle } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { ChevronLeft, Clock, MapPin, Coffee, Smartphone, Zap, AlertTriangle, Sparkles } from 'lucide-react';
 import { formatDate } from '../utils/dateFormatter';
+import { assessDrivingLog } from '../services/geminiService';
 
 const DetailItem = ({ icon, title, count, desc }) => (
     <div className="flex items-start gap-4">
@@ -35,6 +36,31 @@ const LogDetailPage = ({ data, onBack }) => {
         if (!distance || distance === 0) return '0km';
         return `${distance.toFixed(1)}km`;
     };
+
+    // AI 평가 상태
+    const [evaluation, setEvaluation] = useState('');
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    // AI 평가 호출
+    useEffect(() => {
+        const fetchEvaluation = async () => {
+            try {
+                setIsLoading(true);
+                const result = await assessDrivingLog(data);
+                setEvaluation(result);
+            } catch (err) {
+                console.error(err);
+                setError(err.message || '평가를 불러오지 못했습니다.');
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        if (data) {
+            fetchEvaluation();
+        }
+    }, [data]);
 
     return (
         <div className="animate-in slide-in-from-right duration-500 bg-white min-h-full">
@@ -77,6 +103,31 @@ const LogDetailPage = ({ data, onBack }) => {
                     </div>
                 </div>
 
+                {/* AI 주행 평가 섹션 */}
+                <section className="space-y-4 mt-4">
+                    <div className="flex items-center gap-2 ml-1">
+                        <Sparkles className="text-purple-500" size={16} />
+                        <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">주행 기록 평가</h3>
+                    </div>
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                        {isLoading ? (
+                            <div className="min-h-[100px] flex flex-col items-center justify-center text-slate-400 text-sm font-medium gap-2">
+                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-500"></div>
+                                AI 주행 코치가 데이터를 분석 중입니다...
+                            </div>
+                        ) : error ? (
+                            <div className="text-red-500 text-sm p-4 text-center bg-red-50 rounded-xl">
+                                {error}
+                                <br />
+                                <span className="text-xs text-red-400 mt-1 block">API 키를 확인해주세요.</span>
+                            </div>
+                        ) : (
+                            <div className="text-slate-700 text-sm leading-relaxed whitespace-pre-line">
+                                {evaluation}
+                            </div>
+                        )}
+                    </div>
+                </section>
 
                 <section className="space-y-4 mt-4">
                     <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Detection Details</h3>

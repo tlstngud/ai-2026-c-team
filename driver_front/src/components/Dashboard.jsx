@@ -150,9 +150,9 @@ const Dashboard = () => {
     const scoreRef = useRef(100);
     const finalSessionScoreRef = useRef(null); // 세션 종료 시 최종 점수 저장 (ref로 즉시 접근 가능)
 
-    // 투표 시스템 설정
-    const VOTE_BUFFER_SIZE = 20;  // 투표에 사용할 추론 결과 개수
-    const CONSECUTIVE_THRESHOLD = 5;  // 연속 감지 시 즉시 감점 임계값
+    // 투표 시스템 설정 (동적 - 백엔드에서 조절)
+    const alertThresholdRef = useRef(20);  // 기본값: 20회 (1초에 경고)
+    const voteBufferSizeRef = useRef(20);  // 기본값: 20 (alert_threshold와 동일)
     const inferenceBufferRef = useRef([]);  // 최근 추론 결과 버퍼
     const consecutiveCountRef = useRef(0);  // 연속 동일 상태 카운트
     const lastInferenceStateRef = useRef(0);  // 마지막 추론 상태
@@ -238,7 +238,7 @@ const Dashboard = () => {
         if (!cameraWasActiveRef.current) return;
         if (cameraRestartingRef.current) return;
         const now = Date.now();
-        if (now - cameraRestartAtRef.current < 3000) return;  // 3초 쿨다운
+        if (now - cameraRestartAtRef.current < 5000) return;  // 5초 쿨다운 (깜박임 방지)
         cameraRestartAtRef.current = now;
         cameraRestartingRef.current = true;
 
@@ -261,7 +261,7 @@ const Dashboard = () => {
         const stream = streamRef.current;
         if (!stream) return;
         const now = Date.now();
-        if (now - playbackRefreshAtRef.current < 500) return;  // 500ms 쿨다운
+        if (now - playbackRefreshAtRef.current < 2000) return;  // 2000ms 쿨다운 (깜박임 방지)
         playbackRefreshAtRef.current = now;
         if (!isStreamLive(stream)) {
             restartCamera(`refresh fallback: ${reason}`);
@@ -289,14 +289,19 @@ const Dashboard = () => {
             track.onended = () => restartCamera(`track ended: ${track.kind}`);
             track.onmute = () => {
                 if (track.kind === 'video') {
+                    // 백그라운드 상태에서는 무시 (iOS Safari 안정성)
+                    if (document.hidden) {
+                        console.log('[camera] track muted while backgrounded - ignoring');
+                        return;
+                    }
                     if (cameraMuteTimeoutRef.current) {
                         clearTimeout(cameraMuteTimeoutRef.current);
                     }
                     cameraMuteTimeoutRef.current = setTimeout(() => {
-                        if (track.muted) {
+                        if (track.muted && !document.hidden) {
                             refreshVideoPlayback('video track muted');
                         }
-                    }, 800);
+                    }, 2500);  // 2500ms 타임아웃 (깜박임 방지)
                 }
             };
         });
@@ -598,10 +603,12 @@ const Dashboard = () => {
                 watchdogPausedUntilRef.current = Date.now() + 2000;
                 consecutivePausedCountRef.current = 0;
 
-                // 비디오 재생 재시도
-                if (videoRef.current?.paused && streamRef.current?.active) {
-                    videoRef.current.play().catch(() => { });
-                }
+                // 포그라운드 복귀 후 1초 딜레이 후 비디오 재생 재시도 (안정성 개선)
+                setTimeout(() => {
+                    if (videoRef.current?.paused && streamRef.current?.active) {
+                        videoRef.current.play().catch(() => { });
+                    }
+                }, 1000);
             }
         };
 
@@ -878,7 +885,7 @@ const Dashboard = () => {
                 // 연속 감지 시 추가 감점 (1.5배)
                 if (isConsecutive && state !== 0) {
                     penalty *= 1.5;
-                    console.log(`⚡ 연속 ${CONSECUTIVE_THRESHOLD}회 감지! 추가 감점 적용`);
+                    console.log(`⚡ 연속 ${alertThresholdRef.current}회 감지! 추가 감점 적용`);
                 }
 
                 if (state !== 0) {
@@ -921,8 +928,15 @@ const Dashboard = () => {
 
             // 추론 결과 콜백 (투표 시스템 적용)
             const handleInferenceResult = (result) => {
-                // result: { class_id, class_name, confidence, probabilities }
+                // result: { class_id, class_name, confidence, probabilities, alert_threshold, interval_ms }
                 const rawState = result.class_id;
+
+                // 동적 설정 업데이트 (백엔드에서 사용자 수에 따라 조절)
+                if (result.alert_threshold && result.alert_threshold !== alertThresholdRef.current) {
+                    console.log(`⚙️ 동적 설정 변경: threshold=${result.alert_threshold}, interval=${result.interval_ms}ms`);
+                    alertThresholdRef.current = result.alert_threshold;
+                    voteBufferSizeRef.current = result.alert_threshold;  // 투표 버퍼도 동일하게
+                }
 
                 // 1. 연속 감지 체크
                 if (rawState === lastInferenceStateRef.current && rawState !== 0) {
@@ -932,9 +946,9 @@ const Dashboard = () => {
                 }
                 lastInferenceStateRef.current = rawState;
 
-                // 2. 5회 연속 비정상 상태 → 즉시 감점
-                if (consecutiveCountRef.current >= CONSECUTIVE_THRESHOLD) {
-                    console.log(`🚨 ${CONSECUTIVE_THRESHOLD}회 연속 감지: ${['Normal', 'Drowsy', 'Searching', 'Phone', 'Assault'][rawState]}`);
+                // 2. N회 연속 비정상 상태 → 즉시 감점 (동적 임계값)
+                if (consecutiveCountRef.current >= alertThresholdRef.current) {
+                    console.log(`🚨 ${alertThresholdRef.current}회 연속 감지: ${['Normal', 'Drowsy', 'Searching', 'Phone', 'Assault'][rawState]}`);
                     setCurrentState(rawState);
                     applyPenalty(rawState, true);  // 연속 감지 추가 감점
                     consecutiveCountRef.current = 0;  // 리셋
@@ -945,12 +959,12 @@ const Dashboard = () => {
 
                 // 3. 버퍼에 추가
                 inferenceBufferRef.current.push(rawState);
-                if (inferenceBufferRef.current.length > VOTE_BUFFER_SIZE) {
+                if (inferenceBufferRef.current.length > voteBufferSizeRef.current) {
                     inferenceBufferRef.current.shift();  // 오래된 것 제거
                 }
 
-                // 4. 20개 모이면 투표
-                if (inferenceBufferRef.current.length >= VOTE_BUFFER_SIZE) {
+                // 4. N개 모이면 투표 (동적 버퍼 크기)
+                if (inferenceBufferRef.current.length >= voteBufferSizeRef.current) {
                     const votedState = getVotedState(inferenceBufferRef.current);
                     setCurrentState(votedState);
 
@@ -968,7 +982,7 @@ const Dashboard = () => {
                     }
 
                     // 버퍼 절반 클리어 (슬라이딩 윈도우)
-                    inferenceBufferRef.current = inferenceBufferRef.current.slice(VOTE_BUFFER_SIZE / 2);
+                    inferenceBufferRef.current = inferenceBufferRef.current.slice(Math.floor(voteBufferSizeRef.current / 2));
                 }
             };
 
