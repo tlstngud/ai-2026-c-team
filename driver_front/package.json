@@ -10,6 +10,7 @@
     "dev:tunnel": "vite --host 0.0.0.0"
   },
   "dependencies": {
+    "@huggingface/transformers": "^3.8.1",
     "lucide-react": "^0.294.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

@@ -1,9 +1,16 @@
 /**
- * VoiceService - 브라우저 Web Speech API 기반 STT/TTS 서비스
- * 서버 없이 클라이언트에서 100% 실행
+ * VoiceService - 적응형 하이브리드 STT/TTS 서비스
  *
+ * 고사양 기기: Supertonic 2 (Transformers.js) - 고품질 AI 음성
+ * 저사양 기기: Web Speech API - 브라우저 내장 음성
+ *
+ * 서버 없이 클라이언트에서 100% 실행
  * 나중에 Gemini API나 Solar API 연동 시 processWithAI 함수만 수정하면 됨
  */
+
+// Supertonic 2 모델을 위한 동적 import (필요시에만 로드)
+let pipeline = null;
+let synthesizer = null;
 
 class VoiceService {
     constructor() {
@@ -15,19 +22,98 @@ class VoiceService {
         this.onError = null;
         this.onStateChange = null;
         this.koreanVoice = null;
-        this.availableVoices = []; // 사용 가능한 한국어 음성 목록
+        this.availableVoices = [];
 
-        // TTS 설정 (자연스러운 음성을 위한 튜닝)
+        // TTS 엔진 상태
+        this.ttsEngine = 'web-speech'; // 'web-speech' | 'supertonic'
+        this.supertonicReady = false;
+        this.supertonicLoading = false;
+        this.supertonicLoadError = null;
+
+        // 기기 성능 정보
+        this.deviceInfo = this.checkDevicePerformance();
+
+        // TTS 설정
         this.ttsConfig = {
-            rate: 0.92,      // 속도: 약간 느리게 (더 자연스러움)
-            pitch: 1.0,      // 음높이: 기본
-            volume: 1.0      // 볼륨: 최대
+            rate: 1.0,
+            pitch: 1.0,
+            volume: 1.0
         };
 
         // 초기화
         if (this.isSupported) {
             this.initRecognition();
             this.loadKoreanVoice();
+
+            // 고사양 기기에서만 Supertonic 2 백그라운드 로드
+            if (this.deviceInfo.isHighEnd) {
+                this.loadSupertonicInBackground();
+            } else {
+                console.log('[VoiceService] 저사양 기기 감지 - Web Speech API만 사용');
+            }
+        }
+    }
+
+    /**
+     * 기기 성능 감지
+     */
+    checkDevicePerformance() {
+        const memory = navigator.deviceMemory || 4; // GB (기본값 4GB)
+        const cores = navigator.hardwareConcurrency || 4; // CPU 코어 수
+        const hasWebGPU = !!navigator.gpu;
+
+        // 고사양 기준: 메모리 4GB 이상 AND 코어 4개 이상
+        const isHighEnd = memory >= 4 && cores >= 4;
+
+        const info = {
+            memory,
+            cores,
+            hasWebGPU,
+            isHighEnd,
+            reason: isHighEnd
+                ? `고사양 (${memory}GB RAM, ${cores} cores${hasWebGPU ? ', WebGPU' : ''})`
+                : `저사양 (${memory}GB RAM, ${cores} cores)`
+        };
+
+        console.log('[VoiceService] 기기 성능:', info);
+        return info;
+    }
+
+    /**
+     * Supertonic 2 백그라운드 로드 (UI 블로킹 없음)
+     */
+    async loadSupertonicInBackground() {
+        if (this.supertonicLoading || this.supertonicReady) return;
+
+        this.supertonicLoading = true;
+        console.log('[VoiceService] Supertonic 2 모델 백그라운드 로드 시작...');
+
+        try {
+            // 동적 import로 필요시에만 Transformers.js 로드
+            const transformers = await import('@huggingface/transformers');
+            pipeline = transformers.pipeline;
+
+            // Supertonic 2 TTS 파이프라인 생성
+            // 한국어 여성 음성 (F1)을 기본으로 사용
+            synthesizer = await pipeline(
+                'text-to-speech',
+                'onnx-community/Supertonic-TTS-2-ONNX',
+                {
+                    device: this.deviceInfo.hasWebGPU ? 'webgpu' : 'wasm',
+                    dtype: 'fp32'
+                }
+            );
+
+            this.supertonicReady = true;
+            this.ttsEngine = 'supertonic';
+            console.log('[VoiceService] ✅ Supertonic 2 모델 로드 완료! 고품질 TTS 활성화');
+
+        } catch (error) {
+            console.warn('[VoiceService] ⚠️ Supertonic 2 로드 실패, Web Speech API 사용:', error.message);
+            this.supertonicLoadError = error.message;
+            this.ttsEngine = 'web-speech';
+        } finally {
+            this.supertonicLoading = false;
         }
     }
 
@@ -59,12 +145,11 @@ class VoiceService {
         }
 
         this.recognition = new SpeechRecognition();
-        this.recognition.lang = 'ko-KR'; // 한국어
-        this.recognition.continuous = true; // 연속 인식
-        this.recognition.interimResults = true; // 중간 결과도 받기
+        this.recognition.lang = 'ko-KR';
+        this.recognition.continuous = true;
+        this.recognition.interimResults = true;
         this.recognition.maxAlternatives = 1;
 
-        // 이벤트 핸들러
         this.recognition.onstart = () => {
             console.log('[VoiceService] 음성 인식 시작됨');
             this.isListening = true;
@@ -73,7 +158,6 @@ class VoiceService {
 
         this.recognition.onend = () => {
             console.log('[VoiceService] 음성 인식 종료됨');
-            // continuous 모드에서 자동 재시작
             if (this.isListening) {
                 console.log('[VoiceService] 자동 재시작...');
                 setTimeout(() => {
@@ -111,7 +195,6 @@ class VoiceService {
                     this.speak(transcript);
                 }
             } else {
-                // 중간 결과 (실시간 표시용)
                 const interimTranscript = lastResult[0].transcript;
                 this.onResult?.({
                     text: interimTranscript,
@@ -124,7 +207,6 @@ class VoiceService {
         this.recognition.onerror = (event) => {
             console.error('[VoiceService] 인식 에러:', event.error);
 
-            // 특정 에러는 무시 (no-speech 등)
             if (event.error === 'no-speech') {
                 console.log('[VoiceService] 음성 없음 - 계속 대기');
                 return;
@@ -143,13 +225,11 @@ class VoiceService {
     }
 
     /**
-     * 한국어 음성 로드 (프리미엄 음성 우선 선택)
+     * 한국어 음성 로드 (Web Speech API용)
      */
     loadKoreanVoice() {
         const loadVoices = () => {
             const voices = this.synthesis.getVoices();
-
-            // 한국어 음성만 필터링
             const koreanVoices = voices.filter(v =>
                 v.lang === 'ko-KR' || v.lang === 'ko_KR' || v.lang.startsWith('ko')
             );
@@ -161,37 +241,22 @@ class VoiceService {
                 local: v.localService
             })));
 
-            // 음성 선택 우선순위 (여성 + 자연스러운 음성 우선)
-            // 1. 여성 이름 음성 (Yuna, Sora, SunHi 등)
-            // 2. Google 한국어 여성 (온라인, 자연스러움)
-            // 3. Microsoft 여성 Neural 음성 (고품질)
-            // 4. 온라인 여성 음성
-            // 5. 기타
-
-            // 여성 음성 이름 패턴 (한국어)
             const femaleNames = ['Yuna', 'Sora', 'SunHi', 'Heami', 'Minji', 'Jiyun', 'Seoyeon', 'Heera'];
             const isFemaleVoice = (v) => femaleNames.some(name => v.name.includes(name));
 
             const voicePriority = [
-                // Apple 여성 음성 (Yuna, Sora - 가장 자연스러움)
                 v => v.name.includes('Yuna') && v.name.includes('Premium'),
                 v => v.name.includes('Yuna'),
                 v => v.name.includes('Sora'),
-                // Microsoft 여성 Neural 음성
                 v => isFemaleVoice(v) && (v.name.includes('Online') || v.name.includes('Neural')),
                 v => v.name.includes('SunHi'),
                 v => v.name.includes('Heami'),
-                // Google 한국어 (기본 여성)
                 v => v.name.includes('Google') && !v.localService,
                 v => v.name.includes('Google'),
-                // 기타 여성 음성
                 v => isFemaleVoice(v),
-                // Microsoft 온라인 음성
                 v => v.name.includes('Online') || v.name.includes('Neural'),
                 v => v.name.includes('Microsoft') && !v.localService,
-                // 온라인 음성 우선 (더 자연스러움)
                 v => !v.localService,
-                // 나머지
                 v => true
             ];
 
@@ -204,25 +269,20 @@ class VoiceService {
             }
 
             if (this.koreanVoice) {
-                console.log('[VoiceService] 선택된 음성:', {
+                console.log('[VoiceService] 선택된 Web Speech 음성:', {
                     name: this.koreanVoice.name,
                     lang: this.koreanVoice.lang,
-                    local: this.koreanVoice.localService,
-                    uri: this.koreanVoice.voiceURI
+                    local: this.koreanVoice.localService
                 });
-            } else {
-                console.warn('[VoiceService] 한국어 음성을 찾을 수 없습니다. 기본 음성 사용');
             }
         };
 
-        // 음성 목록이 비동기로 로드될 수 있음
         if (this.synthesis.getVoices().length > 0) {
             loadVoices();
         } else {
             this.synthesis.onvoiceschanged = loadVoices;
         }
 
-        // 일부 브라우저에서 onvoiceschanged가 안 불리는 경우 대비
         setTimeout(() => {
             if (!this.koreanVoice && this.synthesis.getVoices().length > 0) {
                 loadVoices();
@@ -294,51 +354,100 @@ class VoiceService {
             console.warn('[VoiceService] 중지 중 오류:', e.message);
         }
 
-        // TTS도 중지
         this.synthesis.cancel();
-
         this.onStateChange?.({ type: 'stopped', isListening: false });
     }
 
     /**
-     * TTS로 텍스트 읽기 (자연스러운 음성 설정 적용)
+     * TTS로 텍스트 읽기 (적응형: Supertonic 2 우선, Web Speech API 폴백)
      */
-    speak(text, options = {}) {
+    async speak(text, options = {}) {
+        // Supertonic 2가 준비되었으면 사용
+        if (this.supertonicReady && synthesizer) {
+            await this.speakWithSupertonic(text, options);
+        } else {
+            // Web Speech API 폴백
+            this.speakWithWebSpeech(text, options);
+        }
+    }
+
+    /**
+     * Supertonic 2로 TTS (고품질)
+     */
+    async speakWithSupertonic(text, options = {}) {
+        try {
+            console.log('[VoiceService] Supertonic 2 TTS 시작:', text.substring(0, 30) + (text.length > 30 ? '...' : ''));
+            this.onStateChange?.({ type: 'speaking', text, engine: 'supertonic' });
+
+            // 한국어 음성 합성
+            const output = await synthesizer(text, {
+                language: 'ko',
+                speaker_id: 'F1' // 여성 음성
+            });
+
+            // 오디오 재생
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const audioBuffer = await audioContext.decodeAudioData(output.audio.buffer);
+
+            const source = audioContext.createBufferSource();
+            source.buffer = audioBuffer;
+            source.playbackRate.value = options.rate ?? this.ttsConfig.rate;
+
+            const gainNode = audioContext.createGain();
+            gainNode.gain.value = options.volume ?? this.ttsConfig.volume;
+
+            source.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            source.onended = () => {
+                console.log('[VoiceService] Supertonic 2 TTS 완료');
+                this.onStateChange?.({ type: 'speakEnd' });
+                audioContext.close();
+            };
+
+            source.start();
+
+        } catch (error) {
+            console.error('[VoiceService] Supertonic 2 TTS 에러, Web Speech로 폴백:', error);
+            // 에러 시 Web Speech API로 폴백
+            this.speakWithWebSpeech(text, options);
+        }
+    }
+
+    /**
+     * Web Speech API로 TTS (폴백)
+     */
+    speakWithWebSpeech(text, options = {}) {
         if (!this.synthesis) {
             console.error('[VoiceService] TTS not supported');
             return;
         }
 
-        // 현재 재생 중인 음성 취소
         this.synthesis.cancel();
 
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = 'ko-KR';
-
-        // 튜닝된 기본 설정 사용 (옵션으로 덮어쓰기 가능)
         utterance.rate = options.rate ?? this.ttsConfig.rate;
         utterance.pitch = options.pitch ?? this.ttsConfig.pitch;
         utterance.volume = options.volume ?? this.ttsConfig.volume;
 
-        // 한국어 음성 사용
         if (this.koreanVoice) {
             utterance.voice = this.koreanVoice;
         }
 
-        // 이벤트
         utterance.onstart = () => {
-            console.log('[VoiceService] TTS 시작:', text.substring(0, 30) + (text.length > 30 ? '...' : ''));
-            this.onStateChange?.({ type: 'speaking', text });
+            console.log('[VoiceService] Web Speech TTS 시작:', text.substring(0, 30) + (text.length > 30 ? '...' : ''));
+            this.onStateChange?.({ type: 'speaking', text, engine: 'web-speech' });
         };
 
         utterance.onend = () => {
-            console.log('[VoiceService] TTS 완료');
+            console.log('[VoiceService] Web Speech TTS 완료');
             this.onStateChange?.({ type: 'speakEnd' });
         };
 
         utterance.onerror = (event) => {
-            console.error('[VoiceService] TTS 에러:', event.error);
-            this.onStateChange?.({ type: 'speakEnd' }); // 에러 시에도 상태 복구
+            console.error('[VoiceService] Web Speech TTS 에러:', event.error);
+            this.onStateChange?.({ type: 'speakEnd' });
         };
 
         this.synthesis.speak(utterance);
@@ -355,6 +464,22 @@ class VoiceService {
     }
 
     /**
+     * 현재 상태 반환
+     */
+    getStatus() {
+        return {
+            isSupported: this.isSupported,
+            isListening: this.isListening,
+            isSpeaking: this.synthesis?.speaking || false,
+            hasKoreanVoice: !!this.koreanVoice,
+            ttsEngine: this.ttsEngine,
+            supertonicReady: this.supertonicReady,
+            supertonicLoading: this.supertonicLoading,
+            deviceInfo: this.deviceInfo
+        };
+    }
+
+    /**
      * 사용 가능한 한국어 음성 목록 반환
      */
     getAvailableVoices() {
@@ -362,7 +487,7 @@ class VoiceService {
     }
 
     /**
-     * 특정 음성으로 변경
+     * 특정 음성으로 변경 (Web Speech API용)
      */
     setVoice(voiceName) {
         const voice = this.availableVoices.find(v => v.name === voiceName);
@@ -376,18 +501,6 @@ class VoiceService {
     }
 
     /**
-     * 현재 상태 반환
-     */
-    getStatus() {
-        return {
-            isSupported: this.isSupported,
-            isListening: this.isListening,
-            isSpeaking: this.synthesis?.speaking || false,
-            hasKoreanVoice: !!this.koreanVoice
-        };
-    }
-
-    /**
      * 콜백 설정
      */
     setCallbacks({ onResult, onError, onStateChange }) {
@@ -398,12 +511,22 @@ class VoiceService {
 
     /**
      * AI 처리 함수 (나중에 Gemini/Solar API 연동용)
-     * 현재는 에코 모드 (입력 그대로 반환)
      */
     async processWithAI(text) {
         // TODO: Gemini API나 Solar API 연동 시 이 함수 수정
-        // 현재는 에코 모드
         return text;
+    }
+
+    /**
+     * Supertonic 2 수동 로드 (저사양 기기에서도 강제 로드)
+     */
+    async forceLoadSupertonic() {
+        if (this.supertonicReady) {
+            console.log('[VoiceService] Supertonic 2 이미 로드됨');
+            return true;
+        }
+        await this.loadSupertonicInBackground();
+        return this.supertonicReady;
     }
 }
 
