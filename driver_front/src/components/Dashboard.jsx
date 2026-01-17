@@ -78,14 +78,12 @@ const Dashboard = () => {
     const showCameraViewRef = useRef(false);
     const cameraWasActiveRef = useRef(false);
     const cameraRestartingRef = useRef(false);
-    const cameraWatchdogRef = useRef(null);
+
     const cameraRestartAtRef = useRef(0);
     const cameraMuteTimeoutRef = useRef(null);
     const playbackRefreshAtRef = useRef(0);
-    // 깜박임 방지를 위한 스트림 ID 추적 및 watchdog 제어
+    // 깜박임 방지를 위한 스트림 ID 추적
     const streamIdRef = useRef(null);
-    const watchdogPausedUntilRef = useRef(0);
-    const consecutivePausedCountRef = useRef(0);
 
     const [showCameraView, setShowCameraView] = useState(false);
     const [selectedLog, setSelectedLog] = useState(null);
@@ -238,22 +236,15 @@ const Dashboard = () => {
         if (!cameraWasActiveRef.current) return;
         if (cameraRestartingRef.current) return;
         const now = Date.now();
-        if (now - cameraRestartAtRef.current < 3000) return;  // 3초 쿨다운
+        if (now - cameraRestartAtRef.current < 5000) return;  // 3초 → 5초 쿨다운 (깜박임 방지)
         cameraRestartAtRef.current = now;
         cameraRestartingRef.current = true;
 
-        // Watchdog 일시 중지 (race condition 방지)
-        watchdogPausedUntilRef.current = now + 5000;
-        consecutivePausedCountRef.current = 0;
-
-        console.warn(`[camera] restart requested: ${reason}`);
         try {
             stopCamera();
             await startCamera();
         } finally {
             cameraRestartingRef.current = false;
-            // 재시작 완료 후 1초 뒤 watchdog 재개
-            watchdogPausedUntilRef.current = Date.now() + 1000;
         }
     };
 
@@ -261,7 +252,7 @@ const Dashboard = () => {
         const stream = streamRef.current;
         if (!stream) return;
         const now = Date.now();
-        if (now - playbackRefreshAtRef.current < 500) return;  // 500ms 쿨다운
+        if (now - playbackRefreshAtRef.current < 2000) return;  // 500ms → 2000ms 쿨다운 (깜박임 방지)
         playbackRefreshAtRef.current = now;
         if (!isStreamLive(stream)) {
             restartCamera(`refresh fallback: ${reason}`);
@@ -289,14 +280,22 @@ const Dashboard = () => {
             track.onended = () => restartCamera(`track ended: ${track.kind}`);
             track.onmute = () => {
                 if (track.kind === 'video') {
+                    // 백그라운드 상태에서는 무시 (iOS Safari 안정성)
+                    if (document.hidden) {
+                        console.log('[camera] track muted while backgrounded - ignoring');
+                        return;
+                    }
+
                     if (cameraMuteTimeoutRef.current) {
                         clearTimeout(cameraMuteTimeoutRef.current);
                     }
+                    // 타임아웃을 800ms → 2500ms로 증가 (모바일 복구 시간 확보)
                     cameraMuteTimeoutRef.current = setTimeout(() => {
-                        if (track.muted) {
+                        // 여전히 muted이고, 포그라운드 상태일 때만 refresh
+                        if (track.muted && !document.hidden && showCameraViewRef.current) {
                             refreshVideoPlayback('video track muted');
                         }
-                    }, 800);
+                    }, 2500);
                 }
             };
         });
@@ -373,16 +372,16 @@ const Dashboard = () => {
             videoEl.onplaying = () => console.log(`▶️ ${name} playing`);
             videoEl.onerror = (e) => console.error(`❌ ${name} error:`, videoEl.error);
 
-            // 자동 복구: 간단히 play()만 호출 (refreshVideoPlayback 호출하지 않음 - 깜박임 방지)
-            // Watchdog이 2초마다 상태 체크하므로 여기서는 단순 play() 재시도만 함
+            // 자동 복구: 간단히 play()만 호출
             videoEl.onpause = () => {
                 if (!showCameraViewRef.current) return;
                 if (!videoEl.ended) {
+                    console.log(`[camera] ${name} paused unexpected, replaying...`);
                     videoEl.play().catch(() => { });
                 }
             };
             videoEl.onstalled = () => videoEl.play().catch(() => { });
-            videoEl.onwaiting = () => {}; // 대기 상태는 무시 (버퍼링 중)
+            videoEl.onwaiting = () => { }; // 대기 상태는 무시 (버퍼링 중)
             videoEl.onended = () => restartCamera(`video ${name} ended`);
 
             // 즉시 재생
@@ -505,103 +504,57 @@ const Dashboard = () => {
 
     // 앱 시작 시 카메라 시작 (한번만)
     useEffect(() => {
+        console.log("🚀 [System] Camera Fix Applied (v2.0) - Watchdog Removed");
         startCamera();
         return () => stopCamera();
     }, []);
 
-    // NOTE: showCameraView 변경 시 srcObject 재연결 로직 제거됨
-    // DrivePage에서 video 요소가 단일 return으로 항상 DOM에 유지되므로 불필요
-    // 이전 로직이 깜박임의 원인이었음
-
-    // 카메라 Watchdog (PR #14 카메라 버그 수정)
-    // 2초마다 카메라 상태 체크하여 문제 발생 시 자동 복구
+    // showCameraView 변경 시 스트림 확인 (video 요소가 항상 DOM에 유지되므로 재연결 불필요)
     useEffect(() => {
-        if (!showCameraView) {
-            if (cameraWatchdogRef.current) {
-                clearInterval(cameraWatchdogRef.current);
-                cameraWatchdogRef.current = null;
-            }
-            return;
-        }
+        if (showCameraView && streamRef.current && streamRef.current.active) {
+            // 딜레이 없이 즉시 확인 (video 요소는 항상 DOM에 있음)
+            if (videoRef.current && streamRef.current) {
+                const currentStreamId = videoRef.current.dataset?.streamId;
+                const targetStreamId = streamIdRef.current;
 
-        cameraWatchdogRef.current = setInterval(() => {
-            const stream = streamRef.current;
-            const videoEl = videoRef.current;
-            const now = Date.now();
-
-            if (!showCameraViewRef.current) return;
-
-            // Watchdog 일시 중지 체크 (restart 중이거나 visibility 변경 직후)
-            if (now < watchdogPausedUntilRef.current) {
-                return;
-            }
-
-            if (!stream) {
-                if (cameraWasActiveRef.current) {
-                    restartCamera('watchdog: missing stream');
-                }
-                return;
-            }
-
-            if (!isStreamLive(stream)) {
-                restartCamera('watchdog: stream inactive');
-                return;
-            }
-
-            // 비디오 상태 체크 (덜 공격적으로)
-            if (videoEl) {
-                const isReadyStateStalled = videoEl.readyState < 2;
-                const isPausedAndNotEnded = videoEl.paused && !videoEl.ended;
-
-                if (isReadyStateStalled) {
-                    // readyState < 2 = 데이터 부족 - 즉시 조치
-                    refreshVideoPlayback('watchdog: insufficient data');
-                    consecutivePausedCountRef.current = 0;
-                } else if (isPausedAndNotEnded) {
-                    // paused 상태는 3회 연속 감지 후 play() 시도
-                    consecutivePausedCountRef.current += 1;
-
-                    if (consecutivePausedCountRef.current >= 3) {
-                        videoEl.play().catch(() => {
-                            // play 실패 5회 이상이면 refresh
-                            if (consecutivePausedCountRef.current >= 5) {
-                                refreshVideoPlayback('watchdog: play failed');
-                                consecutivePausedCountRef.current = 0;
-                            }
-                        });
+                // streamId로 비교 (객체 참조 비교보다 안정적)
+                if (currentStreamId === targetStreamId && videoRef.current.srcObject) {
+                    console.log('[camera] 스트림 이미 연결됨 - 스킵 (streamId:', targetStreamId, ')');
+                    // 혹시 paused 상태면 play 시도
+                    if (videoRef.current.paused) {
+                        videoRef.current.play().catch(() => {});
                     }
-                } else {
-                    // 정상 재생 중 - 카운터 리셋
-                    consecutivePausedCountRef.current = 0;
+                    return;
                 }
-            }
-        }, 2000);
 
-        return () => {
-            if (cameraWatchdogRef.current) {
-                clearInterval(cameraWatchdogRef.current);
-                cameraWatchdogRef.current = null;
+                // srcObject가 없거나 다른 스트림인 경우에만 재연결
+                console.log('[camera] 스트림 재연결 필요:', { currentStreamId, targetStreamId, hasSrcObject: !!videoRef.current.srcObject });
+                videoRef.current.srcObject = streamRef.current;
+                videoRef.current.dataset.streamId = targetStreamId;
+                videoRef.current.play().catch((e) => console.log('[camera] play error:', e.message));
             }
-        };
+        }
     }, [showCameraView]);
+
+    // 카메라 Watchdog 제거됨 (이벤트 기반으로 변경)
+    // 기존 Watchdog이 정상 재생 중에도 readyState < 2로 오판하여 불필요한 리프레시를 유발함
 
     // 앱 백그라운드/포그라운드 처리 (모바일 깜박임 방지)
     useEffect(() => {
         const handleVisibilityChange = () => {
             if (document.hidden) {
-                // 앱 백그라운드 - watchdog 일시 중지
-                console.log('[camera] App backgrounded, pausing watchdog');
-                watchdogPausedUntilRef.current = Date.now() + 60000;
+                // 앱 백그라운드
+                console.log('[camera] App backgrounded');
             } else {
-                // 앱 포그라운드 - 2초 후 watchdog 재개
-                console.log('[camera] App foregrounded, resuming in 2s');
-                watchdogPausedUntilRef.current = Date.now() + 2000;
-                consecutivePausedCountRef.current = 0;
+                // 앱 포그라운드
+                console.log('[camera] App foregrounded');
 
-                // 비디오 재생 재시도
-                if (videoRef.current?.paused && streamRef.current?.active) {
-                    videoRef.current.play().catch(() => { });
-                }
+                // 비디오 재생 재시도 (1초 딜레이로 안정성 확보)
+                setTimeout(() => {
+                    if (videoRef.current?.paused && streamRef.current?.active) {
+                        videoRef.current.play().catch(() => { });
+                    }
+                }, 1000);
             }
         };
 
@@ -859,7 +812,7 @@ const Dashboard = () => {
                     attachStreamToCapture(streamRef.current);
                 } else {
                     captureTarget.srcObject = streamRef.current;
-                    captureTarget.play().catch(() => {});
+                    captureTarget.play().catch(() => { });
                 }
             }
 
@@ -1009,7 +962,7 @@ const Dashboard = () => {
                                 attachStreamToCapture(streamRef.current);
                             } else {
                                 video.srcObject = streamRef.current;
-                                video.play().catch(() => {});
+                                video.play().catch(() => { });
                             }
                         }
 
@@ -1419,7 +1372,6 @@ const Dashboard = () => {
                 setShowCameraView={setShowCameraView}
                 hasPermission={hasPermission}
                 onStartCamera={startCamera}
-                videoRef={videoRef}
                 isActive={isActive}
                 score={score}
                 sessionTime={sessionTime}
@@ -1620,6 +1572,30 @@ const Dashboard = () => {
                     <>
                         {/* 실제 앱 컨텐츠 영역 */}
                         <div className={`flex-1 scrollbar-hide bg-white relative ${showCameraView ? 'overflow-hidden' : 'overflow-y-auto pb-24'}`} style={showCameraView ? { height: '100%', minHeight: '100%', maxHeight: '100%' } : {}}>
+                            {/* 카메라 video 요소 - 컨테이너 안에서 absolute로 위치 */}
+                            <video
+                                ref={videoRef}
+                                autoPlay
+                                playsInline
+                                muted
+                                webkit-playsinline="true"
+                                x5-playsinline="true"
+                                x5-video-player-type="h5"
+                                x5-video-player-fullscreen="true"
+                                style={{
+                                    position: 'absolute',
+                                    top: 0,
+                                    left: 0,
+                                    width: showCameraView ? '100%' : '1px',
+                                    height: showCameraView ? '100%' : '1px',
+                                    objectFit: 'cover',
+                                    transform: showCameraView ? 'scaleX(-1)' : 'none',
+                                    WebkitTransform: showCameraView ? 'scaleX(-1)' : 'none',
+                                    opacity: showCameraView ? 1 : 0,
+                                    pointerEvents: showCameraView ? 'auto' : 'none',
+                                    zIndex: showCameraView ? 5 : -1
+                                }}
+                            />
                             {/* React Router를 사용한 페이지 라우팅 */}
                             <Routes>
                                 <Route index element={<DrivePageWrapper />} />

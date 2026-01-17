@@ -6,7 +6,6 @@ const DrivePage = ({
     showCameraView,
     setShowCameraView,
     hasPermission,
-    videoRef,
     isActive,
     score,
     sessionTime,
@@ -31,7 +30,7 @@ const DrivePage = ({
     voiceStatus = 'idle',
     lastTranscript = '',
     interimTranscript = '',
-    toggleVoice = () => {}
+    toggleVoice = () => { }
 }) => {
     const videoContainerRef = useRef(null);
     const modalRef = useRef(null);
@@ -108,57 +107,31 @@ const DrivePage = ({
         }
     }, [isDragging, modalHeight]);
 
-    // video 스타일 - showCameraView에 따라 표시/숨김만 변경 (DOM은 유지)
-    const videoStyle = {
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        width: '100%',
-        height: '100%',
-        objectFit: 'cover',
-        transform: 'scaleX(-1)',
-        WebkitTransform: 'scaleX(-1)',
-        zIndex: showCameraView ? 10 : -9999,
-        opacity: showCameraView ? 1 : 0,
-        pointerEvents: showCameraView ? 'auto' : 'none',
-        visibility: showCameraView ? 'visible' : 'hidden',
-    };
-
-    // 단일 return - video는 항상 DOM에 유지되어 깜박임 방지
+    // video는 Dashboard에서 렌더링 (Routes 바깥에서 유지)
     return (
-        <>
-            {/* 단일 video 요소 - 항상 최상위에서 DOM 유지 (핵심: 언마운트 방지) */}
-            <video
-                key="main-camera-video"
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                webkit-playsinline="true"
-                x5-playsinline="true"
-                x5-video-player-type="h5"
-                x5-video-player-fullscreen="true"
-                style={videoStyle}
-            />
-
+        <div style={{ position: 'relative', width: '100%', height: '100dvh', backgroundColor: 'transparent' }}>
             {showCameraView ? (
                 /* ========== 카메라 뷰 (showCameraView === true) ========== */
-                <div className="bg-black text-white font-sans flex flex-col relative w-full" style={{
+                <div className="text-white font-sans flex flex-col w-full" style={{
                     height: '100dvh',
                     minHeight: '100%',
                     maxHeight: '100%',
-                    overflow: 'hidden'
+                    overflow: 'hidden',
+                    position: 'relative',
+                    zIndex: 10
                 }}>
                     <div
                         ref={videoContainerRef}
-                        className="relative bg-black overflow-hidden flex-1"
+                        className="overflow-hidden flex-1"
                         style={{
                             width: '100%',
                             height: '100%',
                             minHeight: 0,
                             flex: '1 1 0%',
                             position: 'relative',
-                            maxHeight: '100%'
+                            maxHeight: '100%',
+                            zIndex: 2,
+                            backgroundColor: 'transparent'
                         }}
                     >
                         {!hasPermission && (
@@ -292,7 +265,8 @@ const DrivePage = ({
                             minHeight: `${modalHeight}px`,
                             maxHeight: `${modalHeight}px`,
                             transition: isDragging ? 'none' : 'height 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)',
-                            touchAction: 'pan-y'
+                            touchAction: 'pan-y',
+                            pointerEvents: 'auto'
                         }}
                     >
                         <div
@@ -337,13 +311,12 @@ const DrivePage = ({
                                     {/* 음성 활성화 버튼 */}
                                     <button
                                         onClick={toggleVoice}
-                                        className={`w-full px-4 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all ${
-                                            voiceEnabled
+                                        className={`w-full px-4 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all ${voiceEnabled
                                                 ? voiceStatus === 'speaking'
                                                     ? 'bg-purple-100 text-purple-700 border-2 border-purple-300'
                                                     : 'bg-blue-100 text-blue-700 border-2 border-blue-300'
                                                 : 'bg-slate-100 text-slate-600 border border-slate-200'
-                                        }`}
+                                            }`}
                                     >
                                         {voiceEnabled ? (
                                             <>
@@ -353,7 +326,7 @@ const DrivePage = ({
                                                     <Mic size={18} className={voiceStatus === 'listening' ? 'animate-pulse' : ''} />
                                                 )}
                                                 {voiceStatus === 'speaking' ? `말하는 중... (${ttsEngineLabel})` :
-                                                 voiceStatus === 'listening' ? `듣는 중... (${ttsEngineLabel})` : `음성 대기 중 (${ttsEngineLabel})`}
+                                                    voiceStatus === 'listening' ? `듣는 중... (${ttsEngineLabel})` : `음성 대기 중 (${ttsEngineLabel})`}
                                             </>
                                         ) : (
                                             <>
@@ -378,22 +351,20 @@ const DrivePage = ({
                             )}
 
                             {isActive && (
-                                <div className={`mb-4 px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-2 ${
-                                    modelConnectionStatus === 'connected' ? 'bg-green-100 text-green-700' :
-                                    modelConnectionStatus === 'connecting' ? 'bg-yellow-100 text-yellow-700' :
-                                    modelConnectionStatus === 'error' ? 'bg-red-100 text-red-700' :
-                                    'bg-slate-100 text-slate-500'
-                                }`}>
-                                    <div className={`w-2 h-2 rounded-full ${
-                                        modelConnectionStatus === 'connected' ? 'bg-green-500 animate-pulse' :
-                                        modelConnectionStatus === 'connecting' ? 'bg-yellow-500 animate-ping' :
-                                        modelConnectionStatus === 'error' ? 'bg-red-500' :
-                                        'bg-slate-400'
-                                    }`}></div>
+                                <div className={`mb-4 px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-2 ${modelConnectionStatus === 'connected' ? 'bg-green-100 text-green-700' :
+                                        modelConnectionStatus === 'connecting' ? 'bg-yellow-100 text-yellow-700' :
+                                            modelConnectionStatus === 'error' ? 'bg-red-100 text-red-700' :
+                                                'bg-slate-100 text-slate-500'
+                                    }`}>
+                                    <div className={`w-2 h-2 rounded-full ${modelConnectionStatus === 'connected' ? 'bg-green-500 animate-pulse' :
+                                            modelConnectionStatus === 'connecting' ? 'bg-yellow-500 animate-ping' :
+                                                modelConnectionStatus === 'error' ? 'bg-red-500' :
+                                                    'bg-slate-400'
+                                        }`}></div>
                                     {modelConnectionStatus === 'connected' ? 'AI 분석 연결됨' :
-                                     modelConnectionStatus === 'connecting' ? 'AI 서버 연결 중...' :
-                                     modelConnectionStatus === 'error' ? 'AI 서버 미연결 (GPS 모드)' :
-                                     'AI 대기 중'}
+                                        modelConnectionStatus === 'connecting' ? 'AI 서버 연결 중...' :
+                                            modelConnectionStatus === 'error' ? 'AI 서버 미연결 (GPS 모드)' :
+                                                'AI 대기 중'}
                                 </div>
                             )}
 
@@ -455,6 +426,7 @@ const DrivePage = ({
             ) : (
                 /* ========== 메인 뷰 (showCameraView === false) ========== */
                 <div className="min-h-full relative bg-white">
+                    {/* video는 이제 최상위에서 렌더링됨 - 여기서 제거 */}
                     <main className="flex-1 flex flex-col items-center justify-center p-6 relative z-10 mt-10">
                         <div className="relative w-48 h-48 flex items-center justify-center mb-10 transition-transform duration-500 will-change-transform">
                             <svg className="absolute w-full h-full transform -rotate-90">
@@ -586,7 +558,7 @@ const DrivePage = ({
                     </div>
                 </div>
             )}
-        </>
+        </div>
     );
 };
 
