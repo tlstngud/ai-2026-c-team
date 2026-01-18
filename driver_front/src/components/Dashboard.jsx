@@ -140,6 +140,7 @@ const Dashboard = () => {
     const [interimTranscript, setInterimTranscript] = useState(''); // 중간 인식 텍스트
     const [coupons, setCoupons] = useState([]);
     const [toast, setToast] = useState({ isVisible: false, message: '' });
+    const [isWaitingForResponse, setIsWaitingForResponse] = useState(false); // 졸음 2회 누적 시 답변 대기 상태
     const gpsWatchIdRef = useRef(null);
 
     // 가중치 상수
@@ -905,13 +906,20 @@ const Dashboard = () => {
 
                     // 240프레임(4초) 시점에만 1회 카운트 및 알림
                     if (stateConsecutiveCountRef.current.drowsy === CONSECUTIVE_THRESHOLD) {
-                        setDrowsyCount(prev => prev + 1);
+                        setDrowsyCount(prev => {
+                            const newCount = prev + 1;
+                            // TTS 음성 알림 (2회 누적 시 질문, 그 외에는 경고)
+                            if (voiceEnabledRef.current) {
+                                if (newCount % 2 === 0) {
+                                    voiceService.speak("졸음운전이 반복되고 있어요. 근처 휴게소를 탐색할까요? 아니면 끝말잇기를 시작할까요?");
+                                    setIsWaitingForResponse(true);
+                                } else {
+                                    voiceService.speak("설마 자는거에요?");
+                                }
+                            }
+                            return newCount;
+                        });
                         console.log(`😴 졸음 4초 연속 감지 → 카운트 +1 (1회 한정)`);
-
-                        // TTS 음성 알림
-                        if (voiceEnabledRef.current) {
-                            voiceService.speak("설마 자는거에요?");
-                        }
                     }
                 } else if (rawState === 3) {  // Phone (휴대폰)
                     stateConsecutiveCountRef.current.phone += 1;
@@ -1192,6 +1200,25 @@ const Dashboard = () => {
             voiceService.stop();
         };
     }, [isActive, voiceEnabled]);
+
+    // --- 사용자 답변 처리 (졸음 2회 누적 질문에 대한 응답) ---
+    useEffect(() => {
+        if (isWaitingForResponse && lastTranscript) {
+            console.log(`🗣️ 답변 대기 중 인식된 텍스트: ${lastTranscript}`);
+
+            if (lastTranscript.includes('휴게소') || lastTranscript.includes('탐색')) {
+                voiceService.speak("휴게소를 검색합니다.");
+                setToast({ isVisible: true, message: '휴게소를 검색합니다.' });
+                setIsWaitingForResponse(false);
+                // TODO: 추후 TMAP API 연동하여 실제 검색 로직 추가
+            } else if (lastTranscript.includes('끝말잇기') || lastTranscript.includes('게임')) {
+                voiceService.speak("끝말잇기를 시작합니다.");
+                setToast({ isVisible: true, message: '끝말잇기를 시작합니다.' });
+                setIsWaitingForResponse(false);
+                // TODO: 끝말잇기 게임 로직 연동
+            }
+        }
+    }, [lastTranscript, isWaitingForResponse]);
 
     // 음성 기능 토글 함수
     const toggleVoice = () => {

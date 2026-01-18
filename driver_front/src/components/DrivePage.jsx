@@ -33,11 +33,11 @@ const DrivePage = ({
     voiceStatus = 'idle',
     lastTranscript = '',
     interimTranscript = '',
-    toggleVoice = () => {}
+    toggleVoice = () => { }
 }) => {
     const videoContainerRef = useRef(null);
     const modalRef = useRef(null);
-    const [modalHeight, setModalHeight] = useState(360);
+    const [modalHeight, setModalHeight] = useState(150);
     const [isDragging, setIsDragging] = useState(false);
     const [weatherLoading, setWeatherLoading] = useState(false);
     const [weatherError, setWeatherError] = useState('');
@@ -176,7 +176,7 @@ const DrivePage = ({
                 if (!isDraggingRef.current) return;
                 const currentY = e.touches[0].clientY;
                 const deltaY = dragStartY.current - currentY;
-                const newHeight = Math.max(200, Math.min(500, dragStartHeight.current + deltaY));
+                const newHeight = Math.max(140, Math.min(500, dragStartHeight.current + deltaY));
                 setModalHeight(newHeight);
                 e.preventDefault();
                 e.stopPropagation();
@@ -185,7 +185,7 @@ const DrivePage = ({
             const mouseMoveHandler = (e) => {
                 if (!isDraggingRef.current) return;
                 const deltaY = dragStartY.current - e.clientY;
-                const newHeight = Math.max(200, Math.min(500, dragStartHeight.current + deltaY));
+                const newHeight = Math.max(140, Math.min(500, dragStartHeight.current + deltaY));
                 setModalHeight(newHeight);
                 e.preventDefault();
             };
@@ -357,169 +357,152 @@ const DrivePage = ({
                                 </div>
                             </div>
                         </div>
-                    </div>
+                        {/* 4. DRIVING HUD OVERLAY (When Active) */}
+                        {isActive && (
+                            <div className="absolute inset-x-0 top-24 bottom-10 z-30 pointer-events-none flex flex-col justify-between p-6">
+                                {/* Top Area: Stats - Left Aligned Vertical */}
+                                <div className="pointer-events-auto mt-0 self-start">
+                                    <div className="bg-neutral-900/80 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/10 shadow-xl flex flex-col gap-3 min-w-[100px]">
+                                        {/* Time Section */}
+                                        <div className="flex flex-col gap-0.5">
+                                            <div className="flex items-center gap-1.5">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.6)] animate-pulse"></div>
+                                                <span className="text-[9px] font-bold text-neutral-400 uppercase tracking-wider">Time</span>
+                                            </div>
+                                            <span className="text-lg font-mono font-bold text-white tracking-wider tabular-nums">
+                                                {formatTime(sessionTime)}
+                                            </span>
+                                        </div>
 
-                    {/* Bottom Modal Sheet */}
-                    <div
-                        ref={modalRef}
-                        className="bg-white rounded-t-[32px] z-30 shadow-[0_-8px_30px_rgba(0,0,0,0.15)] relative flex-shrink-0 flex flex-col"
-                        style={{
-                            marginTop: '-24px',
-                            height: `${modalHeight}px`,
-                            minHeight: `${modalHeight}px`,
-                            maxHeight: `${modalHeight}px`,
-                            transition: isDragging ? 'none' : 'height 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)',
-                            touchAction: 'pan-y'
-                        }}
-                    >
-                        <div
-                            className="w-full flex items-center justify-center pt-3 pb-6 cursor-grab active:cursor-grabbing touch-none"
-                            onTouchStart={handleTouchStart}
-                            onMouseDown={handleMouseDown}
-                            onTouchMove={(e) => {
-                                if (isDraggingRef.current) {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                }
-                            }}
-                            style={{
-                                userSelect: 'none',
-                                WebkitUserSelect: 'none',
-                                touchAction: 'none',
-                                WebkitTouchCallout: 'none'
-                            }}
-                        >
-                            <div className="w-10 h-1 bg-gray-300 rounded-full"></div>
-                        </div>
+                                        {/* Divider */}
+                                        <div className="w-full h-px bg-white/10"></div>
 
-                        <div className="px-6 pb-8 flex-1 flex flex-col justify-between">
-                            <div className="flex items-center justify-between mb-6">
-                                <div>
-                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Session Time</p>
-                                    <p className="text-2xl font-bold text-gray-900 font-mono tracking-tight">
-                                        {isActive ? formatTime(sessionTime) : "00:00"}
-                                    </p>
+                                        {/* Events Section */}
+                                        <div className="flex flex-col gap-0.5">
+                                            <span className="text-[9px] font-bold text-neutral-400 uppercase tracking-wider">Events</span>
+                                            <div className="flex items-baseline gap-1">
+                                                <span className={`text-lg font-mono font-bold leading-none tabular-nums transition-colors duration-300 ${eventCount > 0 ? 'text-rose-500' : 'text-white'}`}>
+                                                    {eventCount}
+                                                </span>
+                                                <span className="text-[9px] font-medium text-neutral-600">ea</span>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="text-right">
-                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Total Events</p>
-                                    <p className={`text-2xl font-bold font-mono tracking-tight ${eventCount > 0 ? 'text-red-500' : 'text-gray-900'}`}>
-                                        {isActive ? eventCount : "-"}
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* 음성 기능 UI */}
-                            {isActive && (
-                                <div className="mb-4">
-                                    {/* 음성 활성화 버튼 */}
-                                    <button
-                                        onClick={toggleVoice}
-                                        className={`w-full px-4 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all ${
-                                            voiceEnabled
-                                                ? voiceStatus === 'speaking'
-                                                    ? 'bg-purple-100 text-purple-700 border-2 border-purple-300'
-                                                    : 'bg-blue-100 text-blue-700 border-2 border-blue-300'
-                                                : 'bg-slate-100 text-slate-600 border border-slate-200'
-                                        }`}
-                                    >
-                                        {voiceEnabled ? (
-                                            <>
-                                                {voiceStatus === 'speaking' ? (
-                                                    <Volume2 size={18} className="animate-pulse" />
-                                                ) : (
-                                                    <Mic size={18} className={voiceStatus === 'listening' ? 'animate-pulse' : ''} />
-                                                )}
-                                                {voiceStatus === 'speaking' ? `말하는 중... (${ttsEngineLabel})` :
-                                                 voiceStatus === 'listening' ? `듣는 중... (${ttsEngineLabel})` : `음성 대기 중 (${ttsEngineLabel})`}
-                                            </>
-                                        ) : (
-                                            <>
-                                                <MicOff size={18} />
-                                                음성 기능 켜기 ({ttsEngineLabel})
-                                            </>
-                                        )}
-                                    </button>
-
-                                    {/* 인식된 텍스트 표시 */}
+                                {/* Middle: Transcript */}
+                                <div className="flex-1 flex flex-col justify-end items-center pb-8 pointer-events-auto">
                                     {voiceEnabled && (lastTranscript || interimTranscript) && (
-                                        <div className="mt-3 p-3 bg-white rounded-xl border border-slate-200 shadow-sm">
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">
-                                                {voiceStatus === 'speaking' ? '말하는 중' : '인식된 텍스트'}
-                                            </p>
-                                            <p className={`text-sm font-medium ${interimTranscript ? 'text-slate-400' : 'text-slate-800'}`}>
-                                                {interimTranscript || lastTranscript || '...'}
+                                        <div className="mb-4 bg-black/60 backdrop-blur-md px-6 py-3 rounded-2xl max-w-[90%] text-center border border-white/10 animate-[fadeInUp_0.3s_ease-out]">
+                                            <p className="text-white/90 font-medium text-lg leading-relaxed">
+                                                "{interimTranscript || lastTranscript}"
                                             </p>
                                         </div>
                                     )}
                                 </div>
-                            )}
 
-                            {isActive && (
-                                <div className={`mb-4 px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-2 ${
-                                    modelConnectionStatus === 'connected' ? 'bg-green-100 text-green-700' :
-                                    modelConnectionStatus === 'connecting' ? 'bg-yellow-100 text-yellow-700' :
-                                    modelConnectionStatus === 'error' ? 'bg-red-100 text-red-700' :
-                                    'bg-slate-100 text-slate-500'
-                                }`}>
-                                    <div className={`w-2 h-2 rounded-full ${
-                                        modelConnectionStatus === 'connected' ? 'bg-green-500 animate-pulse' :
-                                        modelConnectionStatus === 'connecting' ? 'bg-yellow-500 animate-ping' :
-                                        modelConnectionStatus === 'error' ? 'bg-red-500' :
-                                        'bg-slate-400'
-                                    }`}></div>
-                                    {modelConnectionStatus === 'connected' ? 'AI 분석 연결됨' :
-                                     modelConnectionStatus === 'connecting' ? 'AI 서버 연결 중...' :
-                                     modelConnectionStatus === 'error' ? 'AI 서버 미연결 (GPS 모드)' :
-                                     'AI 대기 중'}
-                                </div>
-                            )}
+                                {/* Bottom: Controls */}
+                                <div className="flex items-end justify-between pointer-events-auto bg-transparent w-full">
+                                    {/* Left: Voice Control */}
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); toggleVoice(); }}
+                                        className={`relative w-14 h-14 rounded-full flex items-center justify-center backdrop-blur-xl border transition-all active:scale-95 shadow-lg ${voiceEnabled
+                                            ? voiceStatus === 'speaking'
+                                                ? 'bg-purple-500/20 border-purple-400 text-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.3)]'
+                                                : 'bg-blue-500/20 border-blue-400 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.3)]'
+                                            : 'bg-black/40 border-white/10 text-white/40 hover:bg-black/50 hover:text-white/60'
+                                            }`}
+                                    >
+                                        {voiceEnabled ? (
+                                            voiceStatus === 'speaking' ?
+                                                <Volume2 size={24} className="animate-pulse" /> :
+                                                <Mic size={24} className={voiceStatus === 'listening' ? 'animate-pulse' : ''} />
+                                        ) : (
+                                            <MicOff size={24} />
+                                        )}
+                                    </button>
 
-                            <div className="mt-auto flex gap-3">
-                                {!isActive && sessionTime === 0 && (
-                                    <>
-                                        <button
-                                            onClick={() => setShowCameraView(false)}
-                                            className="flex-1 h-14 rounded-2xl bg-gray-100 text-gray-900 font-bold flex items-center justify-center gap-2 transition-all active:scale-95 hover:bg-gray-200"
-                                        >
-                                            <CameraOff size={18} /> Back
-                                        </button>
+                                    {/* Center: Main STOP Button */}
+                                    <div className="absolute left-1/2 -translate-x-1/2 bottom-0">
                                         <button
                                             onClick={toggleSession}
-                                            className="flex-1 h-14 rounded-2xl flex items-center justify-center gap-2 font-bold text-lg shadow-lg active:scale-95 transition-all bg-black text-white shadow-black/20"
+                                            className="w-20 h-20 rounded-full bg-red-600 hover:bg-red-500 flex items-center justify-center shadow-[0_0_30px_rgba(220,38,38,0.5)] border-[4px] border-red-500/50 transition-all active:scale-95 hover:scale-105 group"
                                         >
-                                            <Play fill="currentColor" size={18} /> Start Driving
+                                            <Square fill="currentColor" size={32} className="text-white group-hover:scale-90 transition-transform" />
                                         </button>
-                                    </>
-                                )}
+                                    </div>
 
-                                {isActive && (
+                                    {/* Right: AI Status */}
+                                    <div className={`h-10 px-4 rounded-full flex items-center gap-2 backdrop-blur-xl border shadow-lg transition-colors duration-500 ${modelConnectionStatus === 'connected' ? 'bg-green-500/20 border-green-500/30 text-green-400' :
+                                        modelConnectionStatus === 'connecting' ? 'bg-yellow-500/20 border-yellow-500/30 text-yellow-400' :
+                                            'bg-red-500/20 border-red-500/30 text-red-400'
+                                        }`}>
+                                        <div className={`w-1.5 h-1.5 rounded-full ${modelConnectionStatus === 'connected' ? 'bg-green-400 animate-pulse' :
+                                            modelConnectionStatus === 'connecting' ? 'bg-yellow-400 animate-ping' :
+                                                'bg-red-400'
+                                            }`}></div>
+                                        <span className="text-[10px] font-bold uppercase tracking-wide">
+                                            {modelConnectionStatus === 'connected' ? 'AI ON' : 'AI OFF'}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                    </div>
+
+                    {/* Bottom Modal Sheet - Only visible when NOT driving */}
+                    {!isActive && (
+                        <div
+                            ref={modalRef}
+                            className="bg-white rounded-t-[32px] z-30 shadow-[0_-8px_30px_rgba(0,0,0,0.15)] relative flex-shrink-0 flex flex-col"
+                            style={{
+                                marginTop: '-24px',
+                                height: `${modalHeight}px`,
+                                minHeight: `${modalHeight}px`,
+                                maxHeight: `${modalHeight}px`,
+                                transition: isDragging ? 'none' : 'height 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)',
+                                touchAction: 'pan-y'
+                            }}
+                        >
+                            <div
+                                className="w-full flex items-center justify-center pt-3 pb-6 cursor-grab active:cursor-grabbing touch-none"
+                                onTouchStart={handleTouchStart}
+                                onMouseDown={handleMouseDown}
+                                onTouchMove={(e) => {
+                                    if (isDraggingRef.current) {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                    }
+                                }}
+                                style={{
+                                    userSelect: 'none',
+                                    WebkitUserSelect: 'none',
+                                    touchAction: 'none',
+                                    WebkitTouchCallout: 'none'
+                                }}
+                            >
+                                <div className="w-10 h-1 bg-gray-300 rounded-full"></div>
+                            </div>
+
+                            <div className="px-6 pb-8 flex-1 flex flex-col justify-end">
+                                {/* Only Show Start/Back Controls since HUD handles the rest */}
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={() => setShowCameraView(false)}
+                                        className="flex-1 h-14 rounded-2xl bg-gray-100 text-gray-900 font-bold flex items-center justify-center gap-2 transition-all active:scale-95 hover:bg-gray-200"
+                                    >
+                                        <CameraOff size={18} /> Back
+                                    </button>
                                     <button
                                         onClick={toggleSession}
-                                        className="w-full h-14 rounded-2xl flex items-center justify-center gap-2 font-bold text-lg shadow-lg active:scale-95 transition-all bg-black text-white shadow-black/20"
+                                        className="flex-1 h-14 rounded-2xl flex items-center justify-center gap-2 font-bold text-lg shadow-lg active:scale-95 transition-all bg-black text-white shadow-black/20"
                                     >
-                                        <Square fill="currentColor" size={18} /> Stop
+                                        <Play fill="currentColor" size={18} /> Start Driving
                                     </button>
-                                )}
-
-                                {!isActive && sessionTime > 0 && (
-                                    <>
-                                        <button
-                                            onClick={() => setShowCameraView(false)}
-                                            className="flex-1 h-14 rounded-2xl bg-gray-100 text-gray-900 font-bold flex items-center justify-center gap-2 transition-all active:scale-95 hover:bg-gray-200"
-                                        >
-                                            <CameraOff size={18} /> Back
-                                        </button>
-                                        <button
-                                            onClick={toggleSession}
-                                            className="flex-1 h-14 rounded-2xl flex items-center justify-center gap-2 font-bold text-lg shadow-lg active:scale-95 transition-all bg-black text-white shadow-black/20"
-                                        >
-                                            <Play fill="currentColor" size={18} /> Start Driving
-                                        </button>
-                                    </>
-                                )}
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    )}
                     <style>{`
                         @keyframes scan {
                             0%, 100% { transform: translateY(0); opacity: 0; }
@@ -658,9 +641,8 @@ const DrivePage = ({
                                 type="button"
                                 onClick={handleWeatherToggle}
                                 disabled={weatherLoading}
-                                className={`w-full h-12 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${
-                                    weatherLoading ? 'bg-gray-200 text-gray-500' : 'bg-black text-white hover:bg-gray-800'
-                                }`}
+                                className={`w-full h-12 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${weatherLoading ? 'bg-gray-200 text-gray-500' : 'bg-black text-white hover:bg-gray-800'
+                                    }`}
                             >
                                 {weatherLoading ? 'Loading...' : showWeather ? 'Hide Weather' : 'Get Current Weather'}
                             </button>
@@ -677,7 +659,7 @@ const DrivePage = ({
                                     <div className="flex items-center justify-between">
                                         <span className="font-semibold text-gray-400">Region</span>
                                         <span className="text-gray-700">{formatRegion(weatherInfo.region) || '-'}</span>
-                                            </div>
+                                    </div>
                                     <div className="flex items-center justify-between">
                                         <span className="font-semibold text-gray-400">Weather</span>
                                         <span className="text-gray-700">{weatherInfo.summary?.weather ?? 'Unknown'}</span>
