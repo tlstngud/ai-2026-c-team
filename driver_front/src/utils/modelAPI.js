@@ -41,9 +41,16 @@ let supportsWebP = null;  // WebP 지원 여부 캐시
 
 /**
  * 캔버스 초기화 (224x224) - GPU 가속 옵션 사용
+ * @param {boolean} forceReset - 강제 초기화 여부
  */
-const initCanvas = () => {
-    if (!captureCanvas) {
+const initCanvas = (forceReset = false) => {
+    // 강제 초기화 또는 캔버스가 없을 때
+    if (!captureCanvas || forceReset) {
+        // 기존 캔버스 정리
+        if (captureCtx) {
+            captureCtx.clearRect(0, 0, 224, 224);
+        }
+
         captureCanvas = document.createElement('canvas');
         captureCanvas.width = 224;
         captureCanvas.height = 224;
@@ -57,8 +64,8 @@ const initCanvas = () => {
         // WebP 지원 여부 확인
         if (supportsWebP === null) {
             supportsWebP = captureCanvas.toDataURL('image/webp').startsWith('data:image/webp');
-            console.log(`[modelAPI] Canvas 초기화 완료 (WebP: ${supportsWebP ? '지원' : '미지원'})`);
         }
+        console.log(`[modelAPI] Canvas ${forceReset ? '재' : ''}초기화 완료 (WebP: ${supportsWebP ? '지원' : '미지원'})`);
     }
 };
 
@@ -141,22 +148,36 @@ const captureFrame = (videoElement) => {
             ? captureCanvas.toDataURL('image/webp', 0.5)
             : captureCanvas.toDataURL('image/jpeg', 0.5);
 
-        // 디버그: 프레임 변화 체크 (간단한 해시)
+        // 디버그: 프레임 변화 체크 (개선된 해시 - 여러 위치 샘플링)
         frameDebugCounter++;
-        const simpleHash = dataUrl.slice(-50);  // 마지막 50자로 간단 비교
-        if (simpleHash === lastFrameHash) {
+
+        // 이미지 데이터에서 여러 위치의 샘플을 조합하여 해시 생성
+        const len = dataUrl.length;
+        const combinedHash = [
+            dataUrl.slice(Math.floor(len * 0.25), Math.floor(len * 0.25) + 50),  // 25% 위치
+            dataUrl.slice(Math.floor(len * 0.5), Math.floor(len * 0.5) + 50),    // 50% 위치
+            dataUrl.slice(-50)                                                     // 끝 50자
+        ].join('|');
+
+        if (combinedHash === lastFrameHash) {
             sameFrameCount++;
-            if (sameFrameCount % 100 === 0) {
+            // 10회마다 로그 (100회 → 10회로 변경하여 빠른 감지)
+            if (sameFrameCount % 10 === 0) {
                 const stream = videoElement.srcObject;
                 const track = stream?.getVideoTracks?.()[0];
-                console.warn(`[modelAPI] ⚠️ ${sameFrameCount}회 동일 프레임! track.readyState: ${track?.readyState}, track.enabled: ${track?.enabled}, video.paused: ${videoElement.paused}`);
+                console.warn(`[modelAPI] ⚠️ ${sameFrameCount}회 동일 프레임! track: ${track?.readyState}/${track?.enabled}, video: paused=${videoElement.paused}, width=${videoElement.videoWidth}`);
+
+                // 300회 이상 동일 프레임이면 비디오 스트림 문제로 판단
+                if (sameFrameCount >= 300) {
+                    console.error('[modelAPI] ❌ 프레임 고정 감지 - 비디오 스트림 문제 가능성');
+                }
             }
         } else {
-            if (sameFrameCount > 30) {
+            if (sameFrameCount > 5) {
                 console.log(`[modelAPI] ✅ 프레임 변화 감지 (${sameFrameCount}회 동일 후)`);
             }
             sameFrameCount = 0;
-            lastFrameHash = simpleHash;
+            lastFrameHash = combinedHash;
         }
 
         return dataUrl;
@@ -234,12 +255,23 @@ const connect = async (onResult, onError = null) => {
 
                     // 추론 결과 처리
                     if (data.status === 'inference_complete' && onResultCallback) {
-                        // 결과에 동적 설정 정보 포함
+                        // 결과에 동적 설정 및 프레임 신뢰성 정보 포함
                         const enrichedResult = {
                             ...data.result,
                             alert_threshold: data.alert_threshold || 20,
-                            interval_ms: data.interval_ms || 50
+                            interval_ms: data.interval_ms || 50,
+                            // 프레임 신뢰성 정보 (백엔드에서 전달)
+                            frame_reliability: data.frame_reliability || 'good',
+                            same_frame_count: data.same_frame_count || 0
                         };
+
+                        // 프레임 신뢰성 경고 로그
+                        if (enrichedResult.frame_reliability === 'frozen') {
+                            console.error(`[modelAPI] 🔴 프레임 FROZEN! (${enrichedResult.same_frame_count}회 동일) - 카메라 확인 필요`);
+                        } else if (enrichedResult.frame_reliability === 'stale') {
+                            console.warn(`[modelAPI] 🟡 프레임 STALE (${enrichedResult.same_frame_count}회 동일)`);
+                        }
+
                         onResultCallback(enrichedResult);
                     } else if (data.status === 'error') {
                         console.error('[modelAPI] 서버 추론 오류:', data.message);
@@ -362,9 +394,20 @@ const waitForVideoReady = (videoElement, timeout = 10000) => {  // 10초로 증�
  * @param {Function} onError - 에러 콜백 (선택)
  */
 const startCapture = async (videoElement, onResult, fps = 60, onError = null) => {
-    if (frameInterval) {
-        clearInterval(frameInterval);
-    }
+    // 기존 캡처 완전 정리 (새 세션 시작 전)
+    console.log('[modelAPI] startCapture() - 기존 상태 정리 중...');
+    stopCapture();
+
+    // 잠시 대기 (WebSocket 종료 완료 대기)
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // 캔버스 강제 재초기화 (이전 세션 데이터 제거)
+    initCanvas(true);
+
+    // 프레임 변화 감지 변수 초기화
+    lastFrameHash = '';
+    sameFrameCount = 0;
+    frameDebugCounter = 0;
 
     // 재연결 시 사용하기 위해 현재 상태 저장
     currentVideoElement = videoElement;
@@ -427,14 +470,55 @@ const startCapture = async (videoElement, onResult, fps = 60, onError = null) =>
 };
 
 /**
- * 프레임 캡처 중지
+ * 프레임 캡처 중지 및 완전 정리
  */
 const stopCapture = () => {
+    console.log('[modelAPI] stopCapture() 호출 - 모든 리소스 정리 시작');
+
+    // 1. 프레임 캡처 인터벌 정리
     if (frameInterval) {
         clearInterval(frameInterval);
         frameInterval = null;
+        console.log('[modelAPI] frameInterval 정리 완료');
     }
-    console.log('[modelAPI] Frame capture stopped');
+
+    // 2. Heartbeat 정리
+    stopHeartbeat();
+
+    // 3. WebSocket 연결 종료 (정상 종료 코드 1000 사용)
+    if (websocket) {
+        try {
+            if (websocket.readyState === WebSocket.OPEN ||
+                websocket.readyState === WebSocket.CONNECTING) {
+                websocket.close(1000, 'User stopped capture');
+                console.log('[modelAPI] WebSocket 정상 종료 요청');
+            }
+        } catch (e) {
+            console.warn('[modelAPI] WebSocket 종료 중 오류:', e);
+        }
+        websocket = null;
+    }
+
+    // 4. 연결 상태 플래그 초기화
+    isConnected = false;
+    isReconnecting = false;
+    reconnectAttempts = 0;
+
+    // 5. 세션 및 비디오 참조 정리
+    sessionId = null;
+    currentVideoElement = null;
+
+    // 6. 프레임 변화 감지용 변수 초기화
+    lastFrameHash = '';
+    sameFrameCount = 0;
+    frameDebugCounter = 0;
+
+    // 7. 캔버스 상태 초기화 (메모리 해제)
+    if (captureCtx) {
+        captureCtx.clearRect(0, 0, 224, 224);
+    }
+
+    console.log('[modelAPI] stopCapture() 완료 - 모든 리소스 정리됨');
 };
 
 /**

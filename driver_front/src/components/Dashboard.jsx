@@ -328,10 +328,19 @@ const Dashboard = () => {
         });
     };
 
-    const attachStreamToCapture = (stream) => {
-        if (!stream || !captureVideoRef.current) return;
+    const attachStreamToCapture = async (stream) => {
+        console.log('[camera] attachStreamToCapture 시작');
+
+        if (!stream || !captureVideoRef.current) {
+            console.warn('[camera] stream 또는 captureVideoRef 없음');
+            return false;
+        }
+
         const [videoTrack] = stream.getVideoTracks();
-        if (!videoTrack) return;
+        if (!videoTrack) {
+            console.warn('[camera] 비디오 트랙 없음');
+            return false;
+        }
 
         // 기존 캡처 스트림 정리
         if (captureStreamRef.current) {
@@ -349,10 +358,36 @@ const Dashboard = () => {
         captureVideo.muted = true;
         captureVideo.autoplay = true;
         captureVideo.playsInline = true;
-        captureVideo.onloadedmetadata = () => {
-            captureVideo.play().catch(() => { });
-        };
-        console.log('[camera] captureVideoRef attached');
+
+        // 메타데이터 로드 완료까지 대기 (Promise 기반)
+        return new Promise((resolve) => {
+            const timeout = setTimeout(() => {
+                console.warn('[camera] captureVideo 메타데이터 로드 타임아웃');
+                resolve(false);
+            }, 5000);  // 5초 타임아웃
+
+            captureVideo.onloadedmetadata = async () => {
+                clearTimeout(timeout);
+                try {
+                    await captureVideo.play();
+                    console.log('[camera] captureVideoRef 준비 완료', {
+                        width: captureVideo.videoWidth,
+                        height: captureVideo.videoHeight,
+                        readyState: captureVideo.readyState
+                    });
+                    resolve(true);
+                } catch (e) {
+                    console.error('[camera] captureVideo play 실패:', e);
+                    resolve(false);
+                }
+            };
+
+            captureVideo.onerror = () => {
+                clearTimeout(timeout);
+                console.error('[camera] captureVideo 오류 발생');
+                resolve(false);
+            };
+        });
     };
 
     // --- Camera Setup ---
@@ -437,7 +472,7 @@ const Dashboard = () => {
             if (streamRef.current && streamRef.current.active) {
                 bindStreamEvents(streamRef.current);
                 attachStreamToVideo(streamRef.current);
-                attachStreamToCapture(streamRef.current);
+                await attachStreamToCapture(streamRef.current);
                 setHasPermission(true);
                 cameraWasActiveRef.current = true;
                 return;
@@ -481,7 +516,7 @@ const Dashboard = () => {
             console.log(`[camera] New stream ID: ${streamIdRef.current}`);
             bindStreamEvents(stream);
             attachStreamToVideo(stream);
-            attachStreamToCapture(stream);
+            await attachStreamToCapture(stream);
             setHasPermission(true);
             cameraWasActiveRef.current = true;
         } catch (err) {
@@ -813,6 +848,7 @@ const Dashboard = () => {
     // --- AI 모델 추론 연결 ---
     // 카메라 프레임 -> GPU 서버 -> 추론 결과 수신
     const [modelConnectionStatus, setModelConnectionStatus] = useState('idle'); // idle, connecting, connected, error
+    const [frameReliability, setFrameReliability] = useState('good'); // good, stale, frozen
 
     useEffect(() => {
         let isCancelled = false;
@@ -825,11 +861,14 @@ const Dashboard = () => {
         if (isActive && captureTarget) {
             setModelConnectionStatus('connecting');
 
-            // 먼저 srcObject 연결 확인 및 재연결
+            // 먼저 srcObject 연결 확인 및 재연결 (비동기 처리)
             if (!captureTarget.srcObject && streamRef.current && streamRef.current.active) {
                 console.log('[Dashboard] 🔧 isActive 시작 시 srcObject 재연결');
                 if (captureTarget === captureVideoRef.current) {
-                    attachStreamToCapture(streamRef.current);
+                    // 비동기 함수이므로 await 처리
+                    (async () => {
+                        await attachStreamToCapture(streamRef.current);
+                    })();
                 } else {
                     captureTarget.srcObject = streamRef.current;
                     captureTarget.play().catch(() => {});
@@ -894,8 +933,19 @@ const Dashboard = () => {
 
             // 추론 결과 콜백 (투표 시스템 적용)
             const handleInferenceResult = (result) => {
-                // result: { class_id, class_name, confidence, probabilities, alert_threshold, interval_ms }
+                // result: { class_id, class_name, confidence, probabilities, alert_threshold, interval_ms, frame_reliability, same_frame_count }
                 const rawState = result.class_id;
+
+                // 프레임 신뢰성 상태 업데이트
+                if (result.frame_reliability) {
+                    setFrameReliability(result.frame_reliability);
+
+                    // frozen 상태일 때는 추론 결과를 무시 (신뢰할 수 없음)
+                    if (result.frame_reliability === 'frozen') {
+                        console.warn(`[Dashboard] 🔴 프레임 FROZEN - 추론 결과 무시 (${result.same_frame_count}회 동일)`);
+                        return;  // 추론 결과 처리 중단
+                    }
+                }
 
                 // 동적 설정 업데이트 (백엔드에서 사용자 수에 따라 조절)
                 if (result.alert_threshold && result.alert_threshold !== alertThresholdRef.current) {
@@ -982,11 +1032,14 @@ const Dashboard = () => {
                             return;
                         }
 
-                        // srcObject가 없으면 재연결 시도
+                        // srcObject가 없으면 재연결 시도 (비동기 처리)
                         if (video && !video.srcObject && streamRef.current && streamRef.current.active) {
                             console.log(`[Dashboard] 🔄 srcObject 재연결 시도...`);
                             if (video === captureVideoRef.current) {
-                                attachStreamToCapture(streamRef.current);
+                                // 비동기 함수이므로 IIFE로 처리
+                                (async () => {
+                                    await attachStreamToCapture(streamRef.current);
+                                })();
                             } else {
                                 video.srcObject = streamRef.current;
                                 video.play().catch(() => {});
@@ -1227,6 +1280,7 @@ const Dashboard = () => {
             // 다음 틱에서 점수 초기화 (모달이 먼저 렌더링되도록)
             setTimeout(() => {
                 setIsActive(false);
+                setFrameReliability('good');  // 프레임 신뢰성 상태 리셋
             }, 0);
         } else {
             // 모든 점수 초기화
@@ -1251,6 +1305,7 @@ const Dashboard = () => {
             sessionTimeRef.current = 0;
             setShowSummary(false);
             setFinalSessionScore(null); // 세션 시작 시 최종 점수 초기화
+            setFrameReliability('good');  // 프레임 신뢰성 상태 초기화
             // 투표 시스템 초기화
             inferenceBufferRef.current = [];
             consecutiveCountRef.current = 0;
@@ -1618,6 +1673,32 @@ const Dashboard = () => {
                                     pointerEvents: 'none'
                                 }}
                             />
+                            {/* 프레임 신뢰성 경고 배너 */}
+                            {isActive && frameReliability !== 'good' && (
+                                <div
+                                    className={`absolute top-4 left-4 right-4 z-50 p-3 rounded-xl flex items-center gap-2 animate-pulse ${
+                                        frameReliability === 'frozen'
+                                            ? 'bg-red-500/90 text-white'
+                                            : 'bg-yellow-500/90 text-white'
+                                    }`}
+                                >
+                                    <span className="text-xl">
+                                        {frameReliability === 'frozen' ? '🔴' : '🟡'}
+                                    </span>
+                                    <div className="flex-1">
+                                        <p className="font-bold text-sm">
+                                            {frameReliability === 'frozen'
+                                                ? '카메라 프레임 고정됨'
+                                                : '카메라 프레임 지연'}
+                                        </p>
+                                        <p className="text-xs opacity-90">
+                                            {frameReliability === 'frozen'
+                                                ? '카메라를 확인해주세요. AI 분석이 정확하지 않을 수 있습니다.'
+                                                : '프레임이 느리게 갱신되고 있습니다.'}
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
                             {/* React Router를 사용한 페이지 라우팅 */}
                             <Routes>
                                 <Route index element={<DrivePageWrapper />} />
