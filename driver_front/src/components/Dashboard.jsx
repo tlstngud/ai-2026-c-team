@@ -906,7 +906,6 @@ const Dashboard = () => {
 
                     // 240프레임(4초) 시점에만 1회 카운트 및 알림
                     if (stateConsecutiveCountRef.current.drowsy === CONSECUTIVE_THRESHOLD) {
-<<<<<<< HEAD
                         setDrowsyCount(prev => {
                             const newCount = prev + 1;
                             // TTS 음성 알림 (2회 누적 시 질문, 그 외에는 경고)
@@ -920,10 +919,7 @@ const Dashboard = () => {
                             }
                             return newCount;
                         });
-=======
-                        setDrowsyCount(prev => prev + 1);
-                        setEventCount(prev => prev + 1); // Total Events 연동
->>>>>>> origin/fix/pizza
+                        setEventCount(prev => prev + 1); // Total Events 연동 (from fix/pizza)
                         console.log(`😴 졸음 4초 연속 감지 → 카운트 +1 (1회 한정)`);
                     }
                 } else if (rawState === 3) {  // Phone (휴대폰)
