@@ -170,7 +170,7 @@ const Dashboard = () => {
         phone: 0,
         distracted: 0
     });
-    const CONSECUTIVE_THRESHOLD = 120; // 2초 = 120프레임 (60 FPS 기준)
+    const CONSECUTIVE_THRESHOLD = 240; // 4초 = 240프레임 (60 FPS 기준)
 
     // 가중 평균 점수 계산 함수
     const calculateWeightedScore = () => {
@@ -903,10 +903,10 @@ const Dashboard = () => {
                     stateConsecutiveCountRef.current.phone = 0;
                     stateConsecutiveCountRef.current.distracted = 0;
 
-                    // 120프레임(2초) 시점에만 1회 카운트 및 알림
+                    // 240프레임(4초) 시점에만 1회 카운트 및 알림
                     if (stateConsecutiveCountRef.current.drowsy === CONSECUTIVE_THRESHOLD) {
                         setDrowsyCount(prev => prev + 1);
-                        console.log(`😴 졸음 2초 연속 감지 → 카운트 +1 (1회 한정)`);
+                        console.log(`😴 졸음 4초 연속 감지 → 카운트 +1 (1회 한정)`);
 
                         // TTS 음성 알림
                         if (voiceEnabledRef.current) {
@@ -920,7 +920,7 @@ const Dashboard = () => {
 
                     if (stateConsecutiveCountRef.current.phone === CONSECUTIVE_THRESHOLD) {
                         setPhoneCount(prev => prev + 1);
-                        console.log(`📱 휴대폰 2초 연속 감지 → 카운트 +1 (1회 한정)`);
+                        console.log(`📱 휴대폰 4초 연속 감지 → 카운트 +1 (1회 한정)`);
 
                         // TTS 음성 알림
                         if (voiceEnabledRef.current) {
@@ -934,7 +934,7 @@ const Dashboard = () => {
 
                     if (stateConsecutiveCountRef.current.distracted === CONSECUTIVE_THRESHOLD) {
                         setDistractedCount(prev => prev + 1);
-                        console.log(`👀 주시태만 2초 연속 감지 → 카운트 +1 (1회 한정)`);
+                        console.log(`👀 주시태만 4초 연속 감지 → 카운트 +1 (1회 한정)`);
 
                         // TTS 음성 알림
                         if (voiceEnabledRef.current) {
@@ -997,7 +997,7 @@ const Dashboard = () => {
             // 🧪 시뮬레이션용 함수 (테스트용)
             // 5초간 졸음(1) 신호를 60FPS로 주입
             window.simulateDrowsy5Sec = () => {
-                console.log("🧪 5초 졸음 시뮬레이션 시작 (예상: 카운트 2회, 음성 2회)");
+                console.log("🧪 5초 졸음 시뮬레이션 시작 (예상: 카운트 1회, 음성 1회 - 4초 시점)");
                 let frame = 0;
                 const totalFrames = 300; // 60fps * 5초
 
