@@ -6,7 +6,6 @@ const DrivePage = ({
     showCameraView,
     setShowCameraView,
     hasPermission,
-    videoRef,
     isActive,
     score,
     sessionTime,
@@ -108,57 +107,31 @@ const DrivePage = ({
         }
     }, [isDragging, modalHeight]);
 
-    // video 스타일 - showCameraView에 따라 표시/숨김만 변경 (DOM은 유지)
-    const videoStyle = {
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        width: '100%',
-        height: '100%',
-        objectFit: 'cover',
-        transform: 'scaleX(-1)',
-        WebkitTransform: 'scaleX(-1)',
-        zIndex: showCameraView ? 10 : -9999,
-        opacity: showCameraView ? 1 : 0,
-        pointerEvents: showCameraView ? 'auto' : 'none',
-        visibility: showCameraView ? 'visible' : 'hidden',
-    };
-
-    // 단일 return - video는 항상 DOM에 유지되어 깜박임 방지
+    // PR #16 - video 요소는 Dashboard.jsx로 이동됨
     return (
         <>
-            {/* 단일 video 요소 - 항상 최상위에서 DOM 유지 (핵심: 언마운트 방지) */}
-            <video
-                key="main-camera-video"
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                webkit-playsinline="true"
-                x5-playsinline="true"
-                x5-video-player-type="h5"
-                x5-video-player-fullscreen="true"
-                style={videoStyle}
-            />
-
             {showCameraView ? (
                 /* ========== 카메라 뷰 (showCameraView === true) ========== */
-                <div className="bg-black text-white font-sans flex flex-col relative w-full" style={{
+                <div className="text-white font-sans flex flex-col w-full" style={{
                     height: '100dvh',
                     minHeight: '100%',
                     maxHeight: '100%',
-                    overflow: 'hidden'
+                    overflow: 'hidden',
+                    position: 'relative',
+                    zIndex: 10
                 }}>
                     <div
                         ref={videoContainerRef}
-                        className="relative bg-black overflow-hidden flex-1"
+                        className="overflow-hidden flex-1"
                         style={{
                             width: '100%',
                             height: '100%',
                             minHeight: 0,
                             flex: '1 1 0%',
                             position: 'relative',
-                            maxHeight: '100%'
+                            maxHeight: '100%',
+                            backgroundColor: 'transparent',
+                            zIndex: 2
                         }}
                     >
                         {!hasPermission && (
