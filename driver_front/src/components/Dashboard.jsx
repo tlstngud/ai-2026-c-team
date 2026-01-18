@@ -62,6 +62,16 @@ const Dashboard = () => {
         return savedRegion ? 'dashboard' : 'onboarding';
     });
     const [inputAddress, setInputAddress] = useState('');
+    const [voiceEnabled, setVoiceEnabled] = useState(() => {
+        return localStorage.getItem('voiceEnabled') !== 'false';
+    });
+    const voiceEnabledRef = useRef(voiceEnabled); // Ref로 최신 상태 추적
+
+    // voiceEnabled 변경 시 ref 업데이트
+    useEffect(() => {
+        voiceEnabledRef.current = voiceEnabled;
+    }, [voiceEnabled]);
+
     const [userRegion, setUserRegion] = useState(() => {
         // localStorage에서 지역 정보 확인
         const saved = localStorage.getItem('userRegion');
@@ -125,7 +135,6 @@ const Dashboard = () => {
     const [showChallengeDetail, setShowChallengeDetail] = useState(false); // 챌린지 상세 페이지 표시 여부
 
     // 음성 서비스 상태
-    const [voiceEnabled, setVoiceEnabled] = useState(false); // 음성 기능 활성화 여부
     const [voiceStatus, setVoiceStatus] = useState('idle'); // idle, listening, speaking
     const [lastTranscript, setLastTranscript] = useState(''); // 마지막 인식된 텍스트
     const [interimTranscript, setInterimTranscript] = useState(''); // 중간 인식 텍스트
@@ -894,28 +903,43 @@ const Dashboard = () => {
                     stateConsecutiveCountRef.current.phone = 0;
                     stateConsecutiveCountRef.current.distracted = 0;
 
-                    // 120프레임(2초)마다 카운트 증가
-                    if (stateConsecutiveCountRef.current.drowsy % CONSECUTIVE_THRESHOLD === 0) {
+                    // 120프레임(2초) 시점에만 1회 카운트 및 알림
+                    if (stateConsecutiveCountRef.current.drowsy === CONSECUTIVE_THRESHOLD) {
                         setDrowsyCount(prev => prev + 1);
-                        console.log(`😴 졸음 ${stateConsecutiveCountRef.current.drowsy / CONSECUTIVE_THRESHOLD}회 (${stateConsecutiveCountRef.current.drowsy / 60}초) → 카운트 +1`);
+                        console.log(`😴 졸음 2초 연속 감지 → 카운트 +1 (1회 한정)`);
+
+                        // TTS 음성 알림
+                        if (voiceEnabledRef.current) {
+                            voiceService.speak("설마 자는거에요?");
+                        }
                     }
                 } else if (rawState === 3) {  // Phone (휴대폰)
                     stateConsecutiveCountRef.current.phone += 1;
                     stateConsecutiveCountRef.current.drowsy = 0;
                     stateConsecutiveCountRef.current.distracted = 0;
 
-                    if (stateConsecutiveCountRef.current.phone % CONSECUTIVE_THRESHOLD === 0) {
+                    if (stateConsecutiveCountRef.current.phone === CONSECUTIVE_THRESHOLD) {
                         setPhoneCount(prev => prev + 1);
-                        console.log(`📱 휴대폰 ${stateConsecutiveCountRef.current.phone / CONSECUTIVE_THRESHOLD}회 (${stateConsecutiveCountRef.current.phone / 60}초) → 카운트 +1`);
+                        console.log(`📱 휴대폰 2초 연속 감지 → 카운트 +1 (1회 한정)`);
+
+                        // TTS 음성 알림
+                        if (voiceEnabledRef.current) {
+                            voiceService.speak("누구랑 연락하세요?");
+                        }
                     }
                 } else if (rawState === 2) {  // Distracted (주시태만)
                     stateConsecutiveCountRef.current.distracted += 1;
                     stateConsecutiveCountRef.current.drowsy = 0;
                     stateConsecutiveCountRef.current.phone = 0;
 
-                    if (stateConsecutiveCountRef.current.distracted % CONSECUTIVE_THRESHOLD === 0) {
+                    if (stateConsecutiveCountRef.current.distracted === CONSECUTIVE_THRESHOLD) {
                         setDistractedCount(prev => prev + 1);
-                        console.log(`👀 주시태만 ${stateConsecutiveCountRef.current.distracted / CONSECUTIVE_THRESHOLD}회 (${stateConsecutiveCountRef.current.distracted / 60}초) → 카운트 +1`);
+                        console.log(`👀 주시태만 2초 연속 감지 → 카운트 +1 (1회 한정)`);
+
+                        // TTS 음성 알림
+                        if (voiceEnabledRef.current) {
+                            voiceService.speak("저만 바라보세요.");
+                        }
                     }
                 } else {  // Normal (0) or Assault (4)
                     // 정상 상태로 돌아오면 모든 연속 카운트 리셋
@@ -927,10 +951,8 @@ const Dashboard = () => {
                 // 1. 연속 감지 체크 (점수 감점용)
                 if (rawState === lastInferenceStateRef.current && rawState !== 0) {
                     consecutiveCountRef.current += 1;
-                } else {
-                    consecutiveCountRef.current = rawState !== 0 ? 1 : 0;
                 }
-                lastInferenceStateRef.current = rawState;
+
 
                 // 2. N회 연속 비정상 상태 → 즉시 감점 (동적 임계값)
                 if (consecutiveCountRef.current >= alertThresholdRef.current) {
@@ -970,6 +992,41 @@ const Dashboard = () => {
                     // 버퍼 절반 클리어 (슬라이딩 윈도우)
                     inferenceBufferRef.current = inferenceBufferRef.current.slice(Math.floor(voteBufferSizeRef.current / 2));
                 }
+            };
+
+            // 🧪 시뮬레이션용 함수 (테스트용)
+            // 5초간 졸음(1) 신호를 60FPS로 주입
+            window.simulateDrowsy5Sec = () => {
+                console.log("🧪 5초 졸음 시뮬레이션 시작 (예상: 카운트 2회, 음성 2회)");
+                let frame = 0;
+                const totalFrames = 300; // 60fps * 5초
+
+                const interval = setInterval(() => {
+                    if (frame >= totalFrames) {
+                        clearInterval(interval);
+                        console.log("🧪 시뮬레이션 종료 - 정상 상태 복귀");
+                        // 정상 상태로 복귀 신호 20번 보냄 (버퍼를 정상으로 채워서 즉시 복귀)
+                        for (let i = 0; i < 20; i++) {
+                            handleInferenceResult({
+                                class_id: 0,
+                                class_name: 'Normal',
+                                alert_threshold: 20
+                            });
+                        }
+                        return;
+                    }
+
+                    handleInferenceResult({
+                        class_id: 1, // Drowsy
+                        class_name: 'Drowsy',
+                        confidence: 0.95,
+                        probabilities: [0.05, 0.95, 0, 0, 0],
+                        alert_threshold: 20,
+                        interval_ms: 16
+                    });
+
+                    frame++;
+                }, 16); // 약 16ms (60fps)
             };
 
             // 에러 콜백
@@ -1607,6 +1664,16 @@ const Dashboard = () => {
                     </div>
                 )}
 
+                {/* 테스트용 시뮬레이션 버튼 (개발용) */}
+                <button
+                    onClick={() => window.simulateDrowsy5Sec && window.simulateDrowsy5Sec()}
+                    className="absolute top-20 left-4 z-50 bg-purple-600 text-white px-3 py-1 rounded shadow-lg text-sm hover:bg-purple-700 transition-colors"
+                    style={{ opacity: 0.7 }}
+                >
+                    🧪 5초 졸음 테스트
+                </button>
+
+                {/* Top Bar: Speed, RPM (Simulated), Signal */}
                 {/* --- CASE 2: LOADING (지자체 배정 중) --- */}
                 {step === 'loading' && (
                     <div className="flex-1 flex flex-col items-center justify-center bg-slate-50 p-8 animate-in fade-in">
