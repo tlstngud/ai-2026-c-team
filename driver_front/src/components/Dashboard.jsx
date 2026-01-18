@@ -848,7 +848,7 @@ const Dashboard = () => {
                 }
 
                 if (state !== 0) {
-                    setEventCount(prev => prev + 1);
+                    // setEventCount(prev => prev + 1); // 4초 카운트 로직으로 이관 (중복 방지)
                 }
 
                 // 운전자 행동 점수 업데이트
@@ -906,6 +906,7 @@ const Dashboard = () => {
                     // 240프레임(4초) 시점에만 1회 카운트 및 알림
                     if (stateConsecutiveCountRef.current.drowsy === CONSECUTIVE_THRESHOLD) {
                         setDrowsyCount(prev => prev + 1);
+                        setEventCount(prev => prev + 1); // Total Events 연동
                         console.log(`😴 졸음 4초 연속 감지 → 카운트 +1 (1회 한정)`);
 
                         // TTS 음성 알림
@@ -920,6 +921,7 @@ const Dashboard = () => {
 
                     if (stateConsecutiveCountRef.current.phone === CONSECUTIVE_THRESHOLD) {
                         setPhoneCount(prev => prev + 1);
+                        setEventCount(prev => prev + 1); // Total Events 연동
                         console.log(`📱 휴대폰 4초 연속 감지 → 카운트 +1 (1회 한정)`);
 
                         // TTS 음성 알림
@@ -934,6 +936,7 @@ const Dashboard = () => {
 
                     if (stateConsecutiveCountRef.current.distracted === CONSECUTIVE_THRESHOLD) {
                         setDistractedCount(prev => prev + 1);
+                        setEventCount(prev => prev + 1); // Total Events 연동
                         console.log(`👀 주시태만 4초 연속 감지 → 카운트 +1 (1회 한정)`);
 
                         // TTS 음성 알림
