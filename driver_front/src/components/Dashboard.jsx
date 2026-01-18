@@ -1104,6 +1104,11 @@ const Dashboard = () => {
 
             // srcObject가 설정된 후 AI 모델 연결 시작
             const startModelCapture = async () => {
+                console.log('[Dashboard] 백엔드 비활성화됨 (개발 모드)');
+                setModelConnectionStatus('connected'); // UI 테스트를 위해 가짜 연결 상태 설정
+                return;
+
+                /* 백엔드 연결 로직 주석 처리
                 console.log('[Dashboard] AI 모델 연결 시작 - srcObject 대기 중...');
 
                 // srcObject가 설정될 때까지 대기
@@ -1135,6 +1140,7 @@ const Dashboard = () => {
                     console.error('[Dashboard] AI 모델 연결 실패:', err);
                     setModelConnectionStatus('error');
                 }
+                */
             };
 
             // AI 모델 캡처 시작
@@ -1197,6 +1203,7 @@ const Dashboard = () => {
             setVoiceStatus('idle');
             setLastTranscript('');
             setInterimTranscript('');
+            setIsWaitingForResponse(false);
         }
 
         return () => {
@@ -1328,6 +1335,11 @@ const Dashboard = () => {
                 console.warn('⚠️ 세션 시간이 너무 짧습니다 (3초 미만). 기록은 저장되지만 의미 있는 데이터가 아닐 수 있습니다.');
             }
 
+            // 음성 서비스 즉시 중단 및 대기 상태 초기화 (STOP 버튼 반응성 향상)
+            voiceService.stop();
+            setIsWaitingForResponse(false);
+            setVoiceEnabled(false); // 마이크 버튼 상태 끄기
+
             // 모달을 먼저 열고, 약간의 지연 후에 isActive를 false로 설정하여 점수 초기화
             setShowSummary(true);
 
@@ -1370,6 +1382,7 @@ const Dashboard = () => {
                 distracted: 0
             };
             finalSessionScoreRef.current = null; // ref도 초기화
+            setVoiceEnabled(true); // 세션 시작 시 마이크 자동 켜기
             setIsActive(true);
         }
     };
