@@ -6,6 +6,7 @@ import { storage } from '../utils/localStorage';
 import { startGpsMonitoring, stopGpsMonitoring, requestMotionPermission } from '../utils/GpsService';
 import { modelAPI } from '../utils/modelAPI';
 import { voiceService } from '../utils/VoiceService';
+import { fetchVilageForecast } from '../services/weatherService';
 import { AlertTriangle, X, MapPin, Search, Award } from 'lucide-react';
 import { STATE_CONFIG, APPLE_STATE_CONFIG } from './constants';
 import Header from './Header';
@@ -194,6 +195,29 @@ const Dashboard = () => {
         };
         loadHistory();
     }, [user]);
+
+    useEffect(() => {
+        let isActive = true;
+
+        const loadWeather = async () => {
+            try {
+                const data = await fetchVilageForecast();
+                if (isActive) {
+                    console.log('[weather] forecast loaded', data);
+                }
+            } catch (error) {
+                if (isActive) {
+                    console.error('[weather] fetch failed', error);
+                }
+            }
+        };
+
+        loadWeather();
+
+        return () => {
+            isActive = false;
+        };
+    }, []);
 
     // --- 주소 입력 및 지자체 배정 로직 ---
     const handleAddressSubmit = () => {

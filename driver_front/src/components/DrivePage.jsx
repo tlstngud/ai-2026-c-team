@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Play, Square, Camera, CameraOff, MapPin, Mic, MicOff, Volume2 } from 'lucide-react';
 import { APPLE_STATE_CONFIG } from './constants';
+import { getCurrentPosition } from '../utils/GpsService';
+import { fetchUltraSrtNcst, latLonToGrid } from '../services/weatherService';
+import { formatRegion, getRegionByLatLon } from '../utils/regionLookup';
 
 const DrivePage = ({
     showCameraView,
@@ -36,12 +39,113 @@ const DrivePage = ({
     const modalRef = useRef(null);
     const [modalHeight, setModalHeight] = useState(360);
     const [isDragging, setIsDragging] = useState(false);
+    const [weatherLoading, setWeatherLoading] = useState(false);
+    const [weatherError, setWeatherError] = useState('');
+    const [weatherInfo, setWeatherInfo] = useState(null);
+    const [showWeather, setShowWeather] = useState(false);
+    const weatherInFlightRef = useRef(false);
+    const WEATHER_REFRESH_MS = 60000;
     const dragStartY = useRef(0);
     const dragStartHeight = useRef(0);
     const isDraggingRef = useRef(false);
 
     // TTS 엔진 라벨 (Web Speech API 전용)
     const ttsEngineLabel = 'Web Speech';
+
+    const parseNowcastSummary = (items) => {
+        if (!Array.isArray(items) || items.length === 0) {
+            return null;
+        }
+
+        const pickValue = (category) => {
+            const match = items.find((item) => item.category === category);
+            if (!match) return null;
+            return match.obsrValue ?? match.fcstValue ?? null;
+        };
+
+        const pty = pickValue('PTY');
+        const rn1 = pickValue('RN1');
+        const tmp = pickValue('T1H');
+
+        const ptyMap = {
+            0: null,
+            1: 'Rain',
+            2: 'Rain/Snow',
+            3: 'Snow',
+            4: 'Shower'
+        };
+
+        const ptyValue = pty !== null ? Number(pty) : null;
+        const weatherLabel = ptyValue && ptyMap[ptyValue] ? ptyMap[ptyValue] : 'Clear';
+        const precipLabel = rn1 === '강수없음' ? '0' : (rn1 ?? '-');
+
+        return {
+            weather: weatherLabel,
+            precipitation: precipLabel,
+            temperature: tmp,
+            timeKey: items[0]?.baseDate && items[0]?.baseTime ? `${items[0].baseDate}${items[0].baseTime}` : null
+        };
+    };
+
+    const handleWeatherFetch = async () => {
+        if (weatherInFlightRef.current) return;
+        weatherInFlightRef.current = true;
+        setWeatherLoading(true);
+        setWeatherError('');
+        setWeatherInfo(null);
+
+        try {
+            const position = await getCurrentPosition();
+            const grid = latLonToGrid(position.latitude, position.longitude);
+            const region = getRegionByLatLon(position.latitude, position.longitude);
+            const data = await fetchUltraSrtNcst({ nx: grid.nx, ny: grid.ny });
+
+            const items = data?.response?.body?.items?.item ?? [];
+            const summary = parseNowcastSummary(items);
+
+            setWeatherInfo({
+                location: position,
+                grid,
+                summary,
+                region
+            });
+        } catch (error) {
+            setWeatherError(error?.message || 'Failed to load weather');
+        } finally {
+            setWeatherLoading(false);
+            weatherInFlightRef.current = false;
+        }
+    };
+
+    const handleWeatherToggle = async () => {
+        if (showWeather) {
+            setShowWeather(false);
+            return;
+        }
+
+        setShowWeather(true);
+        await handleWeatherFetch();
+    };
+
+    useEffect(() => {
+        let isActive = true;
+        let timerId = null;
+
+        const refreshWeather = async () => {
+            if (!isActive || !showWeather) return;
+            await handleWeatherFetch();
+        };
+
+        if (showWeather) {
+            refreshWeather();
+            timerId = setInterval(refreshWeather, WEATHER_REFRESH_MS);
+        }
+
+        return () => {
+            isActive = false;
+            if (timerId) clearInterval(timerId);
+        };
+    }, [showWeather]);
 
     // 모달 드래그 핸들러
     const handleTouchStart = (e) => {
@@ -547,6 +651,52 @@ const DrivePage = ({
                                 )}
                             </div>
                         )}
+
+                        <div className="mt-6 w-full max-w-xs bg-white/95 backdrop-blur-md rounded-2xl p-4 shadow-lg border border-gray-100">
+                            <p className="text-xs font-semibold uppercase text-gray-400 mb-3 text-center">Location Weather</p>
+                            <button
+                                type="button"
+                                onClick={handleWeatherToggle}
+                                disabled={weatherLoading}
+                                className={`w-full h-12 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${
+                                    weatherLoading ? 'bg-gray-200 text-gray-500' : 'bg-black text-white hover:bg-gray-800'
+                                }`}
+                            >
+                                {weatherLoading ? 'Loading...' : showWeather ? 'Hide Weather' : 'Get Current Weather'}
+                            </button>
+                            <p className="text-[10px] text-gray-400 mt-2 text-center">
+                                Auto refresh every 1 min
+                            </p>
+
+                            {showWeather && weatherError && (
+                                <p className="text-xs text-red-500 mt-2 text-center">{weatherError}</p>
+                            )}
+
+                            {showWeather && weatherInfo && (
+                                <div className="mt-3 text-xs text-gray-600 space-y-1">
+                                    <div className="flex items-center justify-between">
+                                        <span className="font-semibold text-gray-400">Region</span>
+                                        <span className="text-gray-700">{formatRegion(weatherInfo.region) || '-'}</span>
+                                            </div>
+                                    <div className="flex items-center justify-between">
+                                        <span className="font-semibold text-gray-400">Weather</span>
+                                        <span className="text-gray-700">{weatherInfo.summary?.weather ?? 'Unknown'}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <span className="font-semibold text-gray-400">Precip</span>
+                                        <span className="text-gray-700">
+                                            {weatherInfo.summary?.precipitation ? `${weatherInfo.summary.precipitation} mm` : '-'}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <span className="font-semibold text-gray-400">Temp</span>
+                                        <span className="text-gray-700">
+                                            {weatherInfo.summary?.temperature ? `${weatherInfo.summary.temperature}°C` : '-'}
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </main>
 
                     <div className="p-6 bg-white/95 backdrop-blur-xl border-t border-gray-100 z-10 relative mt-4">
