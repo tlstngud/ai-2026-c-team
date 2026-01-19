@@ -135,17 +135,19 @@ class VoiceService {
         };
 
         this.recognition.onerror = (event) => {
-            console.error('[VoiceService] 인식 에러:', event.error);
-
+            // 정상적인 상황에서 발생하는 에러는 무시 (로그 노이즈 감소)
             if (event.error === 'no-speech') {
-                console.log('[VoiceService] 음성 없음 - 계속 대기');
+                // 음성 없음 - 운전 중 정상적인 상황, 로그 출력 안함
                 return;
             }
 
             if (event.error === 'aborted') {
-                console.log('[VoiceService] 사용자에 의해 중단됨');
+                // TTS 시작 등으로 인한 중단 - 정상
                 return;
             }
+
+            // 실제 에러만 로그 출력
+            console.error('[VoiceService] 인식 에러:', event.error);
 
             this.onError?.({
                 type: event.error,
