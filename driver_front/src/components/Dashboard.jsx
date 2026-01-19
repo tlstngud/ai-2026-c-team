@@ -3,9 +3,10 @@ import { useAuth } from '../contexts/AuthContext';
 import { Routes, Route, useNavigate, useLocation, useParams } from 'react-router-dom';
 import { addLogByUserId, getLogsByUserId } from '../utils/LogService';
 import { storage } from '../utils/localStorage';
-import { startGpsMonitoring, stopGpsMonitoring, requestMotionPermission, getCurrentPosition, getAddressFromCoords } from '../utils/GpsService';
+import { startGpsMonitoring, stopGpsMonitoring, requestMotionPermission, getCurrentPosition, getAddressFromCoords, SCORE_CONFIG } from '../utils/GpsService';
 import { modelAPI } from '../utils/modelAPI';
 import { voiceService } from '../utils/VoiceService';
+import { wordChainService } from '../utils/WordChainService';
 import { AlertTriangle, X, MapPin, Search, Award } from 'lucide-react';
 import { STATE_CONFIG, APPLE_STATE_CONFIG } from './constants';
 import Header from './Header';
@@ -145,6 +146,7 @@ const Dashboard = () => {
     const [toast, setToast] = useState({ isVisible: false, message: '' });
     const [isWaitingForResponse, setIsWaitingForResponse] = useState(false); // 졸음 2회 누적 시 답변 대기 상태
     const [waitingReason, setWaitingReason] = useState(null); // 대기 원인: 'drowsy' | 'assault'
+    const [isWordChainActive, setIsWordChainActive] = useState(false); // [NEW] 끝말잇기 게임 활성화 상태
     // [추가] 실시간 위치 정보 (기본값: 춘천시청 부근, heading 추가)
     const [currentLocation, setCurrentLocation] = useState({ lat: 37.8813153, lng: 127.7299707, heading: 0 });
 
@@ -192,6 +194,7 @@ const Dashboard = () => {
     const sessionTimeRef = useRef(0);
     const accumulatedDistanceRef = useRef(0); // 누적 거리 (미터 단위)
     const lastGpsTimeRef = useRef(null); // 마지막 GPS 업데이트 시간
+    const normalStateDurationRef = useRef(0); // [NEW] 정상 상태 유지 시간 (초)
 
     // --- Initialize History & User Region ---
     useEffect(() => {
@@ -638,6 +641,38 @@ const Dashboard = () => {
             interval = setInterval(() => {
                 sessionTimeRef.current += 1;
                 setSessionTime(sessionTimeRef.current);
+
+                // [NEW] 30초 정상 상태 유지 시 점수 회복
+                // 0 = Normal State
+                if (lastVotedStateRef.current === 0) {
+                    normalStateDurationRef.current += 1;
+
+                    if (normalStateDurationRef.current >= 30) {
+                        const baseRecovery = SCORE_CONFIG.RECOVERY_30_SEC || 1.0;
+                        // 90점 이상일 때는 회복량 50% 감소
+                        const recoveryMultiplier = scoreRef.current >= 90 ? 0.5 : 1.0;
+                        const pointsToRecover = baseRecovery * recoveryMultiplier;
+
+                        // 모든 항목 골고루 회복 (총점 +1 효과)
+                        driverBehaviorScoreRef.current = Math.min(100, driverBehaviorScoreRef.current + pointsToRecover);
+                        speedLimitScoreRef.current = Math.min(100, speedLimitScoreRef.current + pointsToRecover);
+                        accelDecelScoreRef.current = Math.min(100, accelDecelScoreRef.current + pointsToRecover);
+
+                        setDriverBehaviorScore(driverBehaviorScoreRef.current);
+                        setSpeedLimitScore(speedLimitScoreRef.current);
+                        setAccelDecelScore(accelDecelScoreRef.current);
+
+                        // 점수 재계산
+                        const newScore = calculateWeightedScore();
+                        scoreRef.current = newScore;
+                        setScore(newScore);
+
+                        console.log(`🎁 30초 정상 주행 달성! +${pointsToRecover}점 회복`);
+                        normalStateDurationRef.current = 0; // 카운터 초기화
+                    }
+                } else {
+                    normalStateDurationRef.current = 0; // 비정상 상태 시 카운터 초기화
+                }
             }, 1000);
         } else {
             sessionTimeRef.current = 0;
@@ -679,9 +714,30 @@ const Dashboard = () => {
                             // 속도가 1km/h 미만인 경우(정지 상태 등)는 계산에서 제외하여 노이즈 감소
                             if (data.speed > 1) {
                                 const speedMs = data.speed / 3.6;
-                                const distanceDelta = speedMs * timeDeltaSeconds;
+                                const distanceDelta = speedMs * timeDeltaSeconds; // meters
                                 accumulatedDistanceRef.current += distanceDelta;
-                                // console.log(`📏 거리 증가: +${distanceDelta.toFixed(2)}m (총: ${accumulatedDistanceRef.current.toFixed(2)}m)`);
+
+                                // [NEW] 거리 기반 점수 회복 (1km당 0.8점)
+                                // 90점 이상일 때는 회복량 50% 감소
+                                const distanceKm = distanceDelta / 1000;
+                                const recoveryMultiplier = scoreRef.current >= 90 ? 0.5 : 1.0;
+                                const pointsToRecover = distanceKm * SCORE_CONFIG.RECOVERY_PER_KM * recoveryMultiplier;
+
+                                if (pointsToRecover > 0) {
+                                    // 모든 항목 골고루 회복
+                                    driverBehaviorScoreRef.current = Math.min(100, driverBehaviorScoreRef.current + pointsToRecover);
+                                    speedLimitScoreRef.current = Math.min(100, speedLimitScoreRef.current + pointsToRecover);
+                                    accelDecelScoreRef.current = Math.min(100, accelDecelScoreRef.current + pointsToRecover);
+
+                                    setDriverBehaviorScore(driverBehaviorScoreRef.current);
+                                    setSpeedLimitScore(speedLimitScoreRef.current);
+                                    setAccelDecelScore(accelDecelScoreRef.current);
+
+                                    // 점수 재계산
+                                    const newScore = calculateWeightedScore();
+                                    scoreRef.current = newScore;
+                                    setScore(newScore);
+                                }
                             }
                         }
                         lastGpsTimeRef.current = now;
@@ -719,8 +775,11 @@ const Dashboard = () => {
                             }));
                             setEventCount(prev => prev + 1);
                             // 제한속도 준수 점수 감점 (35% 가중치)
-                            // 과속 1회당 5점 감점 (제한속도 준수 요소만)
-                            speedLimitScoreRef.current = Math.max(0, speedLimitScoreRef.current - 5);
+                            // 과속 감점: 기본 -0.2점 (90점 이상 시 1.5배)
+                            const multiplier = scoreRef.current >= 90 ? SCORE_CONFIG.DIFFICULTY_MULTIPLIER : 1.0;
+                            const penalty = SCORE_CONFIG.PENALTY.OVERSPEED * multiplier;
+
+                            speedLimitScoreRef.current = Math.max(0, speedLimitScoreRef.current - penalty);
                             setSpeedLimitScore(speedLimitScoreRef.current);
 
                             // 가중 평균 점수 재계산
@@ -779,8 +838,11 @@ const Dashboard = () => {
                             }));
                             setEventCount(prev => prev + 1);
                             // 급가속/감속 점수 감점 (25% 가중치)
-                            // 급가속 1회당 4점 감점 (급가속/감속 요소만)
-                            accelDecelScoreRef.current = Math.max(0, accelDecelScoreRef.current - 4);
+                            // 급가속 감점: 기본 -3.0점 (90점 이상 시 1.5배)
+                            const multiplier = scoreRef.current >= 90 ? SCORE_CONFIG.DIFFICULTY_MULTIPLIER : 1.0;
+                            const penalty = SCORE_CONFIG.PENALTY.HARD_ACCEL * multiplier;
+
+                            accelDecelScoreRef.current = Math.max(0, accelDecelScoreRef.current - penalty);
                             setAccelDecelScore(accelDecelScoreRef.current);
 
                             // 가중 평균 점수 재계산
@@ -801,8 +863,11 @@ const Dashboard = () => {
                             }));
                             setEventCount(prev => prev + 1);
                             // 급가속/감속 점수 감점 (25% 가중치)
-                            // 급감속 1회당 5점 감점 (급가속/감속 요소만)
-                            accelDecelScoreRef.current = Math.max(0, accelDecelScoreRef.current - 5);
+                            // 급감속 감점: 기본 -5.0점 (90점 이상 시 1.5배)
+                            const multiplier = scoreRef.current >= 90 ? SCORE_CONFIG.DIFFICULTY_MULTIPLIER : 1.0;
+                            const penalty = SCORE_CONFIG.PENALTY.HARD_BRAKE * multiplier;
+
+                            accelDecelScoreRef.current = Math.max(0, accelDecelScoreRef.current - penalty);
                             setAccelDecelScore(accelDecelScoreRef.current);
 
                             // 가중 평균 점수 재계산
@@ -889,36 +954,48 @@ const Dashboard = () => {
                 }
             }
 
-            // 상태별 감점량 계산 함수
+            // 상태별 감점량 계산 함수 (SCORE_CONFIG 사용)
             const getPenaltyForState = (state) => {
-                // 0=Normal, 1=Drowsy, 2=Searching, 3=Phone, 4=Assault
-                const penalties = { 0: 0, 1: 5.0, 2: 3.0, 3: 4.0, 4: 10.0 };
-                return penalties[state] || 0;
+                // 0=Normal, 1=Drowsy, 2=Searching(Distracted), 3=Phone, 4=Assault
+                switch (state) {
+                    case 1: return SCORE_CONFIG.PENALTY.DROWSY;
+                    case 2: return SCORE_CONFIG.PENALTY.DISTRACTED; // Searching/Distracted 통합
+                    case 3: return SCORE_CONFIG.PENALTY.DISTRACTED; // Phone -> Distracted (4점)
+                    case 4: return SCORE_CONFIG.PENALTY.ASSAULT;
+                    default: return 0;
+                }
             };
 
             // 점수 적용 함수
             const applyPenalty = (state, isConsecutive = false) => {
                 let penalty = getPenaltyForState(state);
-                let recovery = state === 0 ? 0.05 : 0;
 
-                // 연속 감지 시 추가 감점 (1.5배)
+                // 90점 이상일 때 난이도 상승 (1.5배)
+                const difficultyMultiplier = scoreRef.current >= 90 ? SCORE_CONFIG.DIFFICULTY_MULTIPLIER : 1.0;
+                penalty *= difficultyMultiplier;
+
+                // 연속 감지 시 추가 감점 (1.5배) -> 총 2.25배까지 가능
                 if (isConsecutive && state !== 0) {
                     penalty *= 1.5;
                     console.log(`⚡ 연속 ${alertThresholdRef.current}회 감지! 추가 감점 적용`);
                 }
+
+                // 회복 로직(0.05점) 삭제됨 -> 거리 기반 회복으로 변경
 
                 if (state !== 0) {
                     // setEventCount(prev => prev + 1); // 4초 카운트 로직으로 이관 (중복 방지)
                 }
 
                 // 운전자 행동 점수 업데이트
-                driverBehaviorScoreRef.current = Math.max(0, Math.min(100, driverBehaviorScoreRef.current - penalty + recovery));
-                setDriverBehaviorScore(driverBehaviorScoreRef.current);
+                if (penalty > 0) {
+                    driverBehaviorScoreRef.current = Math.max(0, driverBehaviorScoreRef.current - penalty);
+                    setDriverBehaviorScore(driverBehaviorScoreRef.current);
 
-                // 가중 평균 점수 재계산
-                const newScore = calculateWeightedScore();
-                scoreRef.current = newScore;
-                setScore(newScore);
+                    // 가중 평균 점수 재계산
+                    const newScore = calculateWeightedScore();
+                    scoreRef.current = newScore;
+                    setScore(newScore);
+                }
             };
 
             // 투표로 최종 상태 결정
@@ -1015,7 +1092,7 @@ const Dashboard = () => {
 
                         // TTS 음성 알림
                         if (voiceEnabledRef.current) {
-                            voiceService.speak("저만 바라보세요.");
+                            voiceService.speak("전방을 주시해주세요!");
                         }
                     }
                 } else if (rawState === 4) { // Assault (폭행)
@@ -1076,12 +1153,12 @@ const Dashboard = () => {
                         applyPenalty(votedState, false);
                         lastVotedStateRef.current = votedState;
                     } else if (votedState === 0) {
-                        // Normal 상태 유지 시 회복
-                        driverBehaviorScoreRef.current = Math.min(100, driverBehaviorScoreRef.current + 0.05);
-                        setDriverBehaviorScore(driverBehaviorScoreRef.current);
-                        const newScore = calculateWeightedScore();
-                        scoreRef.current = newScore;
-                        setScore(newScore);
+                        // Normal 상태 유지 시 회복 로직 삭제 (거리 기반 회복으로 대체됨)
+                        // driverBehaviorScoreRef.current = Math.min(100, driverBehaviorScoreRef.current + 0.05);
+                        // setDriverBehaviorScore(driverBehaviorScoreRef.current);
+                        // const newScore = calculateWeightedScore();
+                        // scoreRef.current = newScore;
+                        // setScore(newScore);
                     }
 
                     // 버퍼 절반 클리어 (슬라이딩 윈도우)
@@ -1400,16 +1477,46 @@ const Dashboard = () => {
                     setIsWaitingForResponse(false);
                     setWaitingReason(null);
                     // TODO: 추후 TMAP API 연동하여 실제 검색 로직 추가
-                } else if (lastTranscript.includes('끝말잇기') || lastTranscript.includes('게임')) {
-                    voiceService.speak("끝말잇기를 시작합니다.");
-                    setToast({ isVisible: true, message: '끝말잇기를 시작합니다.' });
+                    // TODO: 추후 TMAP API 연동하여 실제 검색 로직 추가
+                } else if (lastTranscript.includes('끝말잇기') || lastTranscript.includes('게임') || lastTranscript.includes('시작') || lastTranscript.includes('좋아') || lastTranscript.includes('응')) {
+                    // '응'이나 '좋아'도 긍정 응답으로 처리 (끝말잇기 맥락에서)
+                    const startMent = wordChainService.startGame();
+                    voiceService.speak(startMent);
+
+                    setIsWordChainActive(true); // 게임 모드 활성화
+                    setToast({ isVisible: true, message: '🎮 끝말잇기 시작! ("그만"이라고 말하면 종료됩니다)' });
+
                     setIsWaitingForResponse(false);
                     setWaitingReason(null);
-                    // TODO: 끝말잇기 게임 로직 연동
                 }
             }
         }
     }, [lastTranscript, isWaitingForResponse, waitingReason]);
+
+    // --- 끝말잇기 게임 루프 (음성 인식 결과 처리) ---
+    useEffect(() => {
+        if (isWordChainActive && lastTranscript) {
+            const userText = lastTranscript.trim();
+            console.log(`🎮 끝말잇기 진행 중: 사용자 입력 '${userText}'`);
+            setLastTranscript(''); // 처리했으므로 초기화
+
+            // 게임 종료 명령어
+            if (userText.includes('그만') || userText.includes('종료') || userText.includes('멈춰')) {
+                voiceService.speak("알겠습니다. 끝말잇기를 종료합니다. 안전운전 하세요!");
+                setIsWordChainActive(false);
+                setToast({ isVisible: true, message: '끝말잇기가 종료되었습니다.' });
+                return;
+            }
+
+            // 다음 단어 생성 및 음성 출력
+            // 비동기 처리
+            (async () => {
+                const aiResponse = await wordChainService.getNextWord(userText);
+                voiceService.speak(aiResponse);
+                setToast({ isVisible: true, message: `AI: ${aiResponse}` });
+            })();
+        }
+    }, [lastTranscript, isWordChainActive]);
 
     // 음성 기능 토글 함수
     const toggleVoice = () => {
@@ -1563,6 +1670,7 @@ const Dashboard = () => {
                 phone: 0,
                 distracted: 0
             };
+            normalStateDurationRef.current = 0; // 리셋
             finalSessionScoreRef.current = null; // ref도 초기화
             setVoiceEnabled(true); // 세션 시작 시 마이크 자동 켜기
             setIsActive(true);
