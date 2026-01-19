@@ -1,0 +1,12 @@
+# Claude.md contains sensitive credentials - DO NOT COMMIT
+claude.md
+
+# Claude settings (may contain sensitive information)
+.claude/
+
+# OS Files
+.DS_Store
+
+# Editor directories
+.vscode/
+.idea/
