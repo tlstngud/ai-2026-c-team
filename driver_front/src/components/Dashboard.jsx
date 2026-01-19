@@ -1155,29 +1155,24 @@ const Dashboard = () => {
 
             // srcObject가 설정된 후 AI 모델 연결 시작
             const startModelCapture = async () => {
-                console.log('[Dashboard] 백엔드 비활성화됨 (개발 모드)');
-                setModelConnectionStatus('connected'); // UI 테스트를 위해 가짜 연결 상태 설정
-                return;
-
-                /* 백엔드 연결 로직 주석 처리
                 console.log('[Dashboard] AI 모델 연결 시작 - srcObject 대기 중...');
- 
+
                 // srcObject가 설정될 때까지 대기
                 const srcObjectReady = await waitForSrcObject();
- 
+
                 if (isCancelled) return;
- 
+
                 if (!srcObjectReady) {
                     console.warn('[Dashboard] ⚠️ srcObject 설정 실패 - AI 모델 연결 취소');
                     setModelConnectionStatus('error');
                     return;
                 }
- 
+
                 try {
                     // captureTarget 사용 (추론 전용 비디오 우선)
                     const success = await modelAPI.startCapture(captureTarget, handleInferenceResult, 60, handleModelError);
                     if (isCancelled) return;
- 
+
                     if (success) {
                         console.log('[Dashboard] ✅ AI 모델 프레임 캡처 시작됨');
                         const status = modelAPI.getStatus();
@@ -1191,7 +1186,6 @@ const Dashboard = () => {
                     console.error('[Dashboard] AI 모델 연결 실패:', err);
                     setModelConnectionStatus('error');
                 }
-                */
             };
 
             // AI 모델 캡처 시작
