@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ChevronLeft, Clock, MapPin, Coffee, Smartphone, Zap, AlertTriangle, Sparkles } from 'lucide-react';
 import { formatDate } from '../utils/dateFormatter';
-import { assessDrivingLog } from '../services/geminiService';
+import { assessDrivingLog } from '../services/aiService';
 
 const DetailItem = ({ icon, title, count, desc }) => (
     <div className="flex items-start gap-4">
