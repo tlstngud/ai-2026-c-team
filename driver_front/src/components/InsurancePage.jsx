@@ -66,14 +66,14 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
     };
 
     useEffect(() => {
-        if (displayScore === null) {
+        if (displayScore === null || displayScore <= 90) {
             setDiscountRate(0);
-        } else if (displayScore >= 110) {
+        } else if (displayScore >= 97) {
             setDiscountRate(10);
-        } else if (displayScore >= 100) {
-            setDiscountRate(5);
+        } else if (displayScore >= 94) {
+            setDiscountRate(7);
         } else {
-            setDiscountRate(0);
+            setDiscountRate(3); // 91~93
         }
     }, [displayScore]);
 

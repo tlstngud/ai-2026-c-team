@@ -10,6 +10,26 @@ const HARD_ACCEL_THRESHOLD = 2.5; // m/s² (급가속) - 시연용으로 낮춤 
 const HARD_BRAKE_THRESHOLD = -3.0; // m/s² (급감속) - 시연용으로 낮춤 (기존 -5.5)
 const MIN_SPEED_FOR_MOTION = 1; // km/h (이 속도 이상일 때만 가속도 센서 판단) - 시연용으로 낮춤 (기존 10)
 
+// 최종 확정된 설정값
+export const SCORE_CONFIG = {
+    // 감점 (Penalty)
+    PENALTY: {
+        DROWSY: 8.0,      // 졸음 (기존 유지)
+        DISTRACTED: 4.0,  // 주시태만 (기존 유지)
+        ASSAULT: 10.0,    // 폭행 (기존 유지)
+        HARD_BRAKE: 5.0,  // 급감속 (기존 유지)
+        HARD_ACCEL: 3.0,  // 급가속 (기존 유지)
+        OVERSPEED: 0.2    // ★ 수정됨: 요청하신 -0.2점 반영
+    },
+    // 회복 (Recovery)
+    RECOVERY_PER_KM: 0.8, // ★ 수정됨: 요청하신 1km당 0.8점 회복
+    RECOVERY_30_SEC: 1.0, // [NEW] 30초 정상 주행 시 1점 회복
+
+
+    // 난이도 조절 (건드리지 않음)
+    DIFFICULTY_MULTIPLIER: 1.5 // 90점 이상일 때 감점 1.5배
+};
+
 // [DEV] 테스트용 춘천 모의 좌표
 const MOCK_LOCATION = {
     latitude: 37.886282,
@@ -452,7 +472,7 @@ export const startGpsMonitoring = (onUpdate, onError) => {
 
     gpsWatchId = navigator.geolocation.watchPosition(
         (position) => {
-            const { latitude, longitude, speed: gpsSpeed, accuracy } = position.coords;
+            const { latitude, longitude, speed: gpsSpeed, accuracy, heading } = position.coords;
             const currentTime = Date.now();
 
             // GPS 속도 직접 사용 (m/s -> km/h)
@@ -549,6 +569,7 @@ export const startGpsMonitoring = (onUpdate, onError) => {
                 latitude,
                 longitude,
                 speed: currentSpeedKmh || 0, // 속도가 없으면 0
+                heading: heading || 0,
                 accuracy: accuracy ? Math.floor(accuracy) : null,
                 isOverspeed,
                 status: gpsStatus,
