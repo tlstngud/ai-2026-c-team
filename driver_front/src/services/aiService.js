@@ -1,20 +1,14 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
-
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+const API_URL = import.meta.env.VITE_CHAT_API_URL || import.meta.env.VITE_GEMINI_API_KEY;
 
 // API 키가 없으면 서비스를 초기화하지 않음
-const genAI = API_KEY ? new GoogleGenerativeAI(API_KEY) : null;
 
 export const assessDrivingLog = async (data) => {
-    if (!genAI) {
-        throw new Error("API Key is missing. Please set VITE_GEMINI_API_KEY in .env file.");
+    if (!API_URL) {
+        throw new Error("API endpoint is missing. Please set VITE_CHAT_API_URL in .env file.");
     }
 
     try {
         // 제미나이 2.5 Flash 모델 사용
-        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-lite" });
-
-
         const prompt = `
 
         [입력 데이터]
@@ -54,11 +48,39 @@ export const assessDrivingLog = async (data) => {
         - (유지하면 좋은 이유)
         `;
 
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        return response.text();
+        const response = await fetch(API_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                prompt,
+                message: prompt,
+                input: prompt,
+                text: prompt,
+                data
+            })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+
+        const payload = await response.json();
+        const body = typeof payload.body === "string" ? JSON.parse(payload.body) : payload.body;
+        const answer =
+            (body && (body.answer || body.result || body.text)) ||
+            payload.answer ||
+            payload.result ||
+            payload.text ||
+            payload.message;
+
+        if (!answer) {
+            throw new Error("Empty response from API");
+        }
+
+        return answer;
     } catch (error) {
-        console.error("Gemini API Error:", error);
+        console.error("AI API Error:", error);
         // 사용자에게 구체적인 에러 메시지 전달 (디버깅용)
         throw new Error(`주행 기록 분석 실패: ${error.message || "알 수 없는 오류"}`);
     }
