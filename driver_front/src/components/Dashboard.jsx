@@ -173,10 +173,62 @@ const Dashboard = () => {
     // 상태별 연속 카운트 (2초마다 반복 카운트용)
     const stateConsecutiveCountRef = useRef({
         drowsy: 0,
-        phone: 0,
         distracted: 0
     });
     const CONSECUTIVE_THRESHOLD = 240; // 4초 = 240프레임 (60 FPS 기준)
+
+    // TMAP 스타일 점수 설정
+    const SCORE_CONFIG = {
+        // 감점 (Penalty)
+        PENALTY: {
+            DROWSY: 8.0,      // 졸음 (4초 연속 감지 시)
+            DISTRACTED: 4.0,  // 주시태만 (4초 연속 감지 시)
+            ASSAULT: 10.0,    // 폭행 (즉시)
+            HARD_BRAKE: 5.0,  // 급감속 (GPS)
+            HARD_ACCEL: 3.0,  // 급가속 (GPS)
+            OVERSPEED: 0.2    // 과속 (GPS)
+        },
+        // 회복 (Recovery)
+        RECOVERY_PER_KM: 0.8, // 1km 주행당 회복 점수
+        DIFFICULTY_MULTIPLIER: 1.5 // 90점 이상일 때 감점 가중치
+    };
+
+    // TMAP 점수 업데이트 함수
+    const updateScore = (changeType, value) => {
+        let currentScore = scoreRef.current;
+        let newScore = currentScore;
+
+        if (changeType === 'PENALTY') {
+            let penalty = value;
+            // 90점 이상일 때 감점 가중치 적용
+            if (currentScore >= 90) {
+                penalty *= SCORE_CONFIG.DIFFICULTY_MULTIPLIER;
+            }
+            newScore = Math.max(0, currentScore - penalty);
+            console.log(`📉 감점: -${penalty.toFixed(1)} (현재: ${newScore.toFixed(1)}점)`);
+        }
+        else if (changeType === 'RECOVERY') {
+            let recovery = value;
+            // 80점 이상일 때 회복 속도 감소
+            if (currentScore >= 80) {
+                recovery *= 0.5;
+            }
+            newScore = Math.min(100, currentScore + recovery);
+        }
+
+        // 상태 업데이트
+        scoreRef.current = newScore;
+
+        // UI 렌더링 최적화를 위해 정수값이 변할 때만 setScore 호출
+        if (Math.floor(currentScore) !== Math.floor(newScore)) {
+            setScore(Math.floor(newScore));
+        }
+
+        // 개별 점수들도 동일하게 맞춰줌 (UI 표시용)
+        setDriverBehaviorScore(newScore);
+        setSpeedLimitScore(newScore);
+        setAccelDecelScore(newScore);
+    };
 
     // 가중 평균 점수 계산 함수
     const calculateWeightedScore = () => {
@@ -952,13 +1004,16 @@ const Dashboard = () => {
                 // 각 상태별 2초마다 반복 카운트 증가
                 if (rawState === 1) {  // Drowsy (졸음)
                     stateConsecutiveCountRef.current.drowsy += 1;
-                    stateConsecutiveCountRef.current.phone = 0;
                     stateConsecutiveCountRef.current.distracted = 0;
 
-                    // 240프레임(4초) 시점에만 1회 카운트 및 알림
-                    if (stateConsecutiveCountRef.current.drowsy === CONSECUTIVE_THRESHOLD) {
+                    // 240프레임(4초)마다 누적 카운트 증가 (4초, 8초, 12초...)
+                    if (stateConsecutiveCountRef.current.drowsy % CONSECUTIVE_THRESHOLD === 0 && stateConsecutiveCountRef.current.drowsy > 0) {
                         setDrowsyCount(prev => {
                             const newCount = prev + 1;
+
+                            // TMAP 감점 적용 (8점)
+                            updateScore('PENALTY', SCORE_CONFIG.PENALTY.DROWSY);
+
                             // TTS 음성 알림 (2회 누적 시 질문, 그 외에는 경고)
                             if (voiceEnabledRef.current) {
                                 if (newCount % 2 === 0) {
@@ -970,43 +1025,35 @@ const Dashboard = () => {
                             }
                             return newCount;
                         });
-                        setEventCount(prev => prev + 1); // Total Events 연동 (from fix/pizza)
-                        console.log(`😴 졸음 4초 연속 감지 → 카운트 +1 (1회 한정)`);
-                    }
-                } else if (rawState === 3) {  // Phone (휴대폰)
-                    stateConsecutiveCountRef.current.phone += 1;
-                    stateConsecutiveCountRef.current.drowsy = 0;
-                    stateConsecutiveCountRef.current.distracted = 0;
-
-                    if (stateConsecutiveCountRef.current.phone === CONSECUTIVE_THRESHOLD) {
-                        setPhoneCount(prev => prev + 1);
                         setEventCount(prev => prev + 1); // Total Events 연동
-                        console.log(`📱 휴대폰 4초 연속 감지 → 카운트 +1 (1회 한정)`);
-
-                        // TTS 음성 알림
-                        if (voiceEnabledRef.current) {
-                            voiceService.speak("누구랑 연락하세요?");
-                        }
+                        console.log(`😴 졸음 4초마다 감지 → 카운트 +1 (누적: ${stateConsecutiveCountRef.current.drowsy / CONSECUTIVE_THRESHOLD}회)`);
                     }
-                } else if (rawState === 2) {  // Distracted (주시태만)
+                } else if (rawState === 2 || rawState === 3) {  // Distracted (주시태만) - 2(Searching), 3(Phone) 통합
                     stateConsecutiveCountRef.current.distracted += 1;
                     stateConsecutiveCountRef.current.drowsy = 0;
-                    stateConsecutiveCountRef.current.phone = 0;
 
-                    if (stateConsecutiveCountRef.current.distracted === CONSECUTIVE_THRESHOLD) {
+                    // 240프레임(4초)마다 누적 카운트 증가
+                    if (stateConsecutiveCountRef.current.distracted % CONSECUTIVE_THRESHOLD === 0 && stateConsecutiveCountRef.current.distracted > 0) {
                         setDistractedCount(prev => prev + 1);
                         setEventCount(prev => prev + 1); // Total Events 연동
-                        console.log(`👀 주시태만 4초 연속 감지 → 카운트 +1 (1회 한정)`);
+
+                        // TMAP 감점 적용 (4점)
+                        updateScore('PENALTY', SCORE_CONFIG.PENALTY.DISTRACTED);
+
+                        console.log(`👀 주시태만 4초마다 감지 → 카운트 +1 (누적: ${stateConsecutiveCountRef.current.distracted / CONSECUTIVE_THRESHOLD}회)`);
 
                         // TTS 음성 알림
                         if (voiceEnabledRef.current) {
-                            voiceService.speak("저만 바라보세요.");
+                            if (rawState === 3) {
+                                voiceService.speak("누구랑 연락하세요?");
+                            } else {
+                                voiceService.speak("저만 바라보세요.");
+                            }
                         }
                     }
                 } else {  // Normal (0) or Assault (4)
                     // 정상 상태로 돌아오면 모든 연속 카운트 리셋
                     stateConsecutiveCountRef.current.drowsy = 0;
-                    stateConsecutiveCountRef.current.phone = 0;
                     stateConsecutiveCountRef.current.distracted = 0;
                 }
 
