@@ -10,12 +10,65 @@ const HARD_ACCEL_THRESHOLD = 2.5; // m/s² (급가속) - 시연용으로 낮춤 
 const HARD_BRAKE_THRESHOLD = -3.0; // m/s² (급감속) - 시연용으로 낮춤 (기존 -5.5)
 const MIN_SPEED_FOR_MOTION = 1; // km/h (이 속도 이상일 때만 가속도 센서 판단) - 시연용으로 낮춤 (기존 10)
 
+// [DEV] 테스트용 춘천 모의 좌표
+const MOCK_LOCATION = {
+    latitude: 37.886282,
+    longitude: 127.788785
+};
+
 // TMAP API 설정
 const TMAP_API_KEY = '49sDimr9yt5PxoX30zQq481OCuwcUNDV6D2cbXs3';
 const TMAP_API_VERSION = '1'; // API 버전
 // TMAP NearToRoad API 엔드포인트 (가까운 도로 찾기)
 const TMAP_NEAR_TO_ROAD_API_URL = `https://apis.openapi.sk.com/tmap/road/nearToRoad`;
+// TMAP Reverse Geocoding API 엔드포인트
+const TMAP_REVERSE_GEOCODING_URL = `https://apis.openapi.sk.com/tmap/geo/reversegeocoding`;
 const SPEED_LIMIT_CHECK_INTERVAL = 5000; // 5초마다 제한 속도 조회
+
+/**
+ * 좌표로 주소 변환 (Reverse Geocoding)
+ * @param {number} latitude
+ * @param {number} longitude
+ * @returns {Promise<string>} 변환된 주소 (실패 시 null)
+ */
+export const getAddressFromCoords = async (latitude, longitude) => {
+    // API 문서: https://tmapapi.sktelecom.com/main.html#webservice/docs/tmapPointer/ReverseGeocoding
+    // addressType: A00(행정동), A01(법정동), A02(도로명), A03(지번), A04(건물명)
+    const queryParams = new URLSearchParams({
+        version: TMAP_API_VERSION,
+        appKey: TMAP_API_KEY,
+        lat: latitude.toString(),
+        lon: longitude.toString(),
+        coordType: 'WGS84GEO',
+        addressType: 'A02' // 도로명+지번
+    });
+
+    const fullUrl = `${TMAP_REVERSE_GEOCODING_URL}?${queryParams.toString()}`;
+
+    try {
+        const response = await fetch(fullUrl, {
+            method: 'GET',
+            headers: { 'Accept': 'application/json' }
+        });
+
+        if (!response.ok) {
+            console.error('Reverse Geocoding Failed:', response.status);
+            return null;
+        }
+
+        const data = await response.json();
+        // 응답에서 시/도, 구/군, 도로명 등을 조합하여 전체 주소 생성
+        // addressInfo 구조: { fullAddress, city_do, gu_gun, roadName, ... }
+        if (data.addressInfo) {
+            return data.addressInfo.fullAddress || `${data.addressInfo.city_do} ${data.addressInfo.gu_gun}`;
+        }
+        return null;
+
+    } catch (error) {
+        console.error('Reverse Geocoding Error:', error);
+        return null;
+    }
+};
 
 /**
  * TMAP NearToRoad API로 도로 제한 속도 조회
@@ -557,13 +610,14 @@ export const stopGpsMonitoring = (cleanup) => {
 };
 
 /**
- * 현재 위치 한 번만 가져오기
+ * 현재 위치 한 번만 가져오기 (실패 시 Mock 좌표 반환)
  * @returns {Promise} 위치 정보
  */
 export const getCurrentPosition = () => {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
         if (!navigator.geolocation) {
-            reject(new Error('GPS를 지원하지 않는 기기입니다.'));
+            console.warn('[GPS] 미지원 기기 -> Mock 좌표 사용');
+            resolve({ ...MOCK_LOCATION, accuracy: 10 });
             return;
         }
 
@@ -576,11 +630,12 @@ export const getCurrentPosition = () => {
                 });
             },
             (error) => {
-                reject(error);
+                console.warn('[GPS] 위치 조회 실패 -> Mock 좌표 사용:', error.message);
+                resolve({ ...MOCK_LOCATION, accuracy: 10 });
             },
             {
                 enableHighAccuracy: true,
-                timeout: 10000,
+                timeout: 5000,
                 maximumAge: 0
             }
         );

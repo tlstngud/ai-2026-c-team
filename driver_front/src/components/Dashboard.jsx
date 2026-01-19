@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Routes, Route, useNavigate, useLocation, useParams } from 'react-router-dom';
 import { addLogByUserId, getLogsByUserId } from '../utils/LogService';
 import { storage } from '../utils/localStorage';
-import { startGpsMonitoring, stopGpsMonitoring, requestMotionPermission } from '../utils/GpsService';
+import { startGpsMonitoring, stopGpsMonitoring, requestMotionPermission, getCurrentPosition, getAddressFromCoords } from '../utils/GpsService';
 import { modelAPI } from '../utils/modelAPI';
 import { voiceService } from '../utils/VoiceService';
 import { AlertTriangle, X, MapPin, Search, Award } from 'lucide-react';
@@ -82,6 +82,9 @@ const Dashboard = () => {
     // --- Refs & State ---
     const videoRef = useRef(null);
     const streamRef = useRef(null);
+    // [추가] 누락된 Refs 추가 (카메라 복구용)
+    const watchdogPausedUntilRef = useRef(0);
+    const consecutivePausedCountRef = useRef(0);
     // 카메라 복구 시스템 refs (PR #16 - Watchdog 제거, 이벤트 기반)
     const captureVideoRef = useRef(null);  // 추론 전용 숨겨진 비디오
     const captureStreamRef = useRef(null);  // 추론 전용 클론 스트림
@@ -141,6 +144,7 @@ const Dashboard = () => {
     const [coupons, setCoupons] = useState([]);
     const [toast, setToast] = useState({ isVisible: false, message: '' });
     const [isWaitingForResponse, setIsWaitingForResponse] = useState(false); // 졸음 2회 누적 시 답변 대기 상태
+
     const gpsWatchIdRef = useRef(null);
 
     // 가중치 상수
@@ -164,6 +168,7 @@ const Dashboard = () => {
     const consecutiveCountRef = useRef(0);  // 연속 동일 상태 카운트
     const lastInferenceStateRef = useRef(0);  // 마지막 추론 상태
     const lastVotedStateRef = useRef(0);  // 마지막 투표 결과 상태
+    const transcriptTimeoutRef = useRef(null); // STT 텍스트 자동 사라짐 타이머
 
     // 상태별 연속 카운트 (2초마다 반복 카운트용)
     const stateConsecutiveCountRef = useRef({
@@ -213,9 +218,47 @@ const Dashboard = () => {
         loadHistory();
     }, [user]);
 
+    // [초기화] '전국 공통'으로 잘못 잡힌 경우 다시 위치 찾기 유도
+    useEffect(() => {
+        if (userRegion && userRegion.name === '전국 공통') {
+            console.log("전국 공통 감지 -> 온보딩으로 리셋 및 재검사");
+            localStorage.removeItem('userRegion');
+            setUserRegion(null);
+            setStep('onboarding');
+        }
+    }, [userRegion]); // userRegion이 변경되거나 마운트될 때 체크
+
+    // --- GPS 기반 자동 위치 찾기 (Onboarding 진입 시) ---
+    useEffect(() => {
+        if (step === 'onboarding' && !inputAddress) {
+            const detectLocation = async () => {
+                try {
+                    setInputAddress("위치 확인 중...");
+                    const pos = await getCurrentPosition();
+                    const address = await getAddressFromCoords(pos.latitude, pos.longitude);
+
+                    if (address) {
+                        setInputAddress(address);
+                        // 자동 제출 (사용자 편의)
+                        setTimeout(() => handleAddressSubmit(address), 500);
+                    } else {
+                        setInputAddress("");
+                        setToast({ isVisible: true, message: '주소를 찾을 수 없습니다. 직접 입력해주세요.' });
+                    }
+                } catch (error) {
+                    console.error("Auto location failed:", error);
+                    setInputAddress("");
+                }
+            };
+            detectLocation();
+        }
+    }, [step]); // step이 onboarding이 될 때 실행
+
     // --- 주소 입력 및 지자체 배정 로직 ---
-    const handleAddressSubmit = () => {
-        if (inputAddress.trim().length < 2) {
+    const handleAddressSubmit = (manualAddress = null) => {
+        const targetAddress = manualAddress || inputAddress;
+
+        if (!targetAddress || targetAddress.trim().length < 2 || targetAddress === "위치 확인 중...") {
             alert("정확한 주소를 입력해주세요.");
             return;
         }
@@ -225,12 +268,12 @@ const Dashboard = () => {
         // 지자체 매칭 시뮬레이션 (1.5초 후 배정)
         setTimeout(() => {
             let assigned = MUNICIPALITY_DB['default'];
-            if (inputAddress.includes('춘천')) assigned = MUNICIPALITY_DB['춘천'];
-            else if (inputAddress.includes('서울')) assigned = MUNICIPALITY_DB['서울'];
+            if (targetAddress.includes('춘천') || targetAddress.includes('강원')) assigned = MUNICIPALITY_DB['춘천'];
+            else if (targetAddress.includes('서울')) assigned = MUNICIPALITY_DB['서울'];
 
             const regionData = {
                 ...assigned,
-                address: inputAddress
+                address: targetAddress
             };
 
             setUserRegion(regionData);
@@ -610,7 +653,10 @@ const Dashboard = () => {
                     if (data.type === 'GPS') {
                         // GPS 데이터: 속도 업데이트
                         // GPS 데이터: 속도 업데이트
+                        // GPS 데이터: 속도 업데이트
                         setCurrentSpeed(data.speed);
+
+
 
                         // 거리 계산 (이전 시간 대비 이동 거리 누적)
                         const now = Date.now();
@@ -889,7 +935,12 @@ const Dashboard = () => {
             // 추론 결과 콜백 (투표 시스템 적용)
             const handleInferenceResult = (result) => {
                 // result: { class_id, class_name, confidence, probabilities, alert_threshold, interval_ms }
-                const rawState = result.class_id;
+                let rawState = result.class_id;
+
+                // [수정] 상태코드 3번(Phone)을 2번(Distracted)으로 통합
+                if (rawState === 3) {
+                    rawState = 2;
+                }
 
                 // 동적 설정 업데이트 (백엔드에서 사용자 수에 따라 조절)
                 if (result.alert_threshold && result.alert_threshold !== alertThresholdRef.current) {
@@ -1110,23 +1161,23 @@ const Dashboard = () => {
 
                 /* 백엔드 연결 로직 주석 처리
                 console.log('[Dashboard] AI 모델 연결 시작 - srcObject 대기 중...');
-
+ 
                 // srcObject가 설정될 때까지 대기
                 const srcObjectReady = await waitForSrcObject();
-
+ 
                 if (isCancelled) return;
-
+ 
                 if (!srcObjectReady) {
                     console.warn('[Dashboard] ⚠️ srcObject 설정 실패 - AI 모델 연결 취소');
                     setModelConnectionStatus('error');
                     return;
                 }
-
+ 
                 try {
                     // captureTarget 사용 (추론 전용 비디오 우선)
                     const success = await modelAPI.startCapture(captureTarget, handleInferenceResult, 60, handleModelError);
                     if (isCancelled) return;
-
+ 
                     if (success) {
                         console.log('[Dashboard] ✅ AI 모델 프레임 캡처 시작됨');
                         const status = modelAPI.getStatus();
@@ -1169,8 +1220,18 @@ const Dashboard = () => {
                         setLastTranscript(result.text);
                         setInterimTranscript('');
                         console.log('[Dashboard] 음성 인식 완료:', result.text);
+
+                        // 기존 타이머 취소
+                        if (transcriptTimeoutRef.current) {
+                            clearTimeout(transcriptTimeoutRef.current);
+                        }
+                        // 1.5초 뒤에 텍스트 사라지게 설정 (사용자 요청: 바로 없어지게)
+                        transcriptTimeoutRef.current = setTimeout(() => {
+                            setLastTranscript('');
+                        }, 1500);
                     } else {
-                        setInterimTranscript(result.text);
+                        // 자막이 너무 많이 뜬다는 피드백 반영: 중간 결과는 표시하지 않음
+                        // setInterimTranscript(result.text);
                     }
                 },
                 onError: (error) => {
@@ -1208,6 +1269,9 @@ const Dashboard = () => {
 
         return () => {
             voiceService.stop();
+            if (transcriptTimeoutRef.current) {
+                clearTimeout(transcriptTimeoutRef.current);
+            }
         };
     }, [isActive, voiceEnabled]);
 
@@ -1742,15 +1806,25 @@ const Dashboard = () => {
                                 muted
                                 style={{
                                     position: 'absolute',
-                                    top: 0,
-                                    left: 0,
-                                    width: showCameraView ? '100%' : '1px',
-                                    height: showCameraView ? '100%' : '1px',
+                                    // showCameraView일 때: 우측 상단 배치 (Top 20px, Right 20px - 점수 표시 영역 아래)
+                                    top: showCameraView ? '20px' : '0',
+                                    right: showCameraView ? '20px' : '0',
+                                    left: showCameraView ? 'auto' : '0', // 전체 화면 해제
+
+                                    // 크기 축소 (가로 120px, 세로 160px)
+                                    width: showCameraView ? '120px' : '1px',
+                                    height: showCameraView ? '160px' : '1px',
+
+                                    // 스타일링 (둥근 모서리, 테두리, 그림자)
+                                    borderRadius: showCameraView ? '16px' : '0',
+                                    border: showCameraView ? '2px solid rgba(255,255,255,0.3)' : 'none',
+                                    boxShadow: showCameraView ? '0 10px 25px rgba(0,0,0,0.5)' : 'none',
+
                                     objectFit: 'cover',
-                                    transform: 'scaleX(-1)',
-                                    WebkitTransform: 'scaleX(-1)',
+                                    transform: 'scaleX(-1)', // 거울 모드 (좌우 반전)
+                                    WebkitTransform: 'scaleX(-1)', // 크로스브라우징용 (iOS 등)
                                     opacity: showCameraView ? 1 : 0,
-                                    zIndex: showCameraView ? 5 : -1,
+                                    zIndex: showCameraView ? 50 : -1, // UI 위에 뜨도록 z-index 높임
                                     pointerEvents: 'none'
                                 }}
                             />

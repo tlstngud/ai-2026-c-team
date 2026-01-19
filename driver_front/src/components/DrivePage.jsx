@@ -216,27 +216,14 @@ const DrivePage = ({
         <>
             {showCameraView ? (
                 /* ========== 카메라 뷰 (showCameraView === true) ========== */
-                <div className="text-white font-sans flex flex-col w-full" style={{
+                <div className="text-white font-sans flex flex-col w-full bg-slate-900 relative overflow-hidden" style={{
                     height: '100dvh',
-                    minHeight: '100%',
-                    maxHeight: '100%',
-                    overflow: 'hidden',
-                    position: 'relative',
                     zIndex: 10
                 }}>
                     <div
                         ref={videoContainerRef}
                         className="overflow-hidden flex-1"
-                        style={{
-                            width: '100%',
-                            height: '100%',
-                            minHeight: 0,
-                            flex: '1 1 0%',
-                            position: 'relative',
-                            maxHeight: '100%',
-                            backgroundColor: 'transparent',
-                            zIndex: 2
-                        }}
+                        style={{ width: '100%', height: '100%' }}
                     >
                         {!hasPermission && (
                             <div className="absolute inset-0 flex items-center justify-center z-50">
@@ -248,54 +235,48 @@ const DrivePage = ({
                             {/* 1. Top Header Area */}
                             <div className="flex justify-between items-start">
                                 {/* Left: Location Badge */}
-                                <div className="flex flex-col gap-2">
-                                    {userRegion && (
-                                        <div className="bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 flex items-center gap-1.5 shadow-sm">
-                                            <MapPin size={12} className={userRegion.accent || "text-emerald-400"} />
-                                            <span className="text-[11px] font-bold text-white/90 uppercase tracking-tight">
-                                                {userRegion.name} Resident
+                                {/* Left: Location Badge (Removed per request) */}
+                                {/* Left: Safety Score & Location */}
+                                <div className="flex flex-col gap-1">
+                                    <div className="flex items-end gap-3">
+                                        <div className="flex flex-col leading-none">
+                                            <span className="text-5xl font-black tracking-tighter drop-shadow-xl text-white">
+                                                {Math.floor(score)}
+                                            </span>
+                                            <span className="text-[10px] font-bold text-white/60 uppercase tracking-widest ml-1">
+                                                Safety Score
                                             </span>
                                         </div>
-                                    )}
-                                    {gpsAccuracy !== null && (
-                                        <div className="px-2">
-                                            <span className={`text-[9px] font-medium ${gpsAccuracy < 20 ? 'text-green-400' : 'text-orange-400'}`}>
-                                                GPS Signal: {Math.round(gpsAccuracy)}m
-                                            </span>
-                                        </div>
-                                    )}
-                                </div>
 
-                                {/* Right: Score & Driving Stats */}
-                                <div className="flex flex-col items-end gap-2">
-                                    <div className="flex flex-col items-end leading-none">
-                                        <span className="text-5xl font-black tracking-tighter drop-shadow-xl text-white">
-                                            {Math.floor(score)}
-                                        </span>
-                                        <span className="text-[10px] font-bold text-white/60 uppercase tracking-widest mr-1">
-                                            Safety Score
-                                        </span>
+                                        {/* Location Badge (Next to Score) */}
+                                        <div className="mb-2 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 flex items-center gap-1.5 shadow-sm">
+                                            <MapPin size={12} className={userRegion?.accent || "text-emerald-400"} />
+                                            <span className="text-[11px] font-bold text-white/90 uppercase tracking-tight">
+                                                {userRegion ? userRegion.name : (roadName ? roadName : 'GPS Searching...')}
+                                            </span>
+                                        </div>
                                     </div>
 
+                                    {/* Speed & Limit Badge (Moved to Left) */}
                                     {isActive && (
-                                        <div className="flex flex-col items-end gap-2 mt-2">
-                                            <div className="bg-black/40 backdrop-blur-xl pl-5 pr-4 py-2 rounded-2xl border border-white/10 shadow-lg flex items-center gap-3">
+                                        <div className="mt-3 flex items-start gap-2">
+                                            <div className="bg-transparent pl-4 pr-3 py-1.5 rounded-xl flex items-center gap-2.5">
                                                 <div className="flex flex-col items-end leading-tight">
-                                                    <div className="flex items-baseline gap-1">
-                                                        <span className="text-2xl font-bold text-white font-mono tracking-tight">
+                                                    <div className="flex items-baseline gap-0.5">
+                                                        <span className="text-xl font-bold text-white font-mono tracking-tight drop-shadow-md">
                                                             {Math.round(currentSpeed || 0)}
                                                         </span>
-                                                        <span className="text-[10px] font-medium text-white/50">km/h</span>
+                                                        <span className="text-[9px] font-medium text-white/50 drop-shadow-sm">km/h</span>
                                                     </div>
                                                 </div>
-                                                <div className="w-[1px] h-6 bg-white/10"></div>
+                                                <div className="w-[1px] h-5 bg-white/10"></div>
                                                 <div className="flex flex-col items-start leading-tight">
-                                                    <span className="text-[9px] font-bold text-white/40 uppercase">Limit</span>
+                                                    <span className="text-[8px] font-bold text-white/40 uppercase drop-shadow-sm">Limit</span>
                                                     <div className="flex items-baseline gap-0.5">
                                                         {speedLimitLoading ? (
-                                                            <span className="text-sm font-bold text-white/30 animate-pulse">--</span>
+                                                            <span className="text-sm font-bold text-white/30 animate-pulse drop-shadow-sm">--</span>
                                                         ) : (
-                                                            <span className={`text-lg font-bold font-mono ${currentSpeed > speedLimit ? 'text-red-400' : 'text-white/80'}`}>
+                                                            <span className={`text-base font-bold font-mono drop-shadow-md ${currentSpeed > speedLimit ? 'text-red-400' : 'text-white/80'}`}>
                                                                 {speedLimit || 60}
                                                             </span>
                                                         )}
@@ -303,26 +284,30 @@ const DrivePage = ({
                                                 </div>
                                             </div>
 
+                                            {/* Road Name Badge (Moved here if needed, or kept separate) */}
                                             {(roadName || speedLimitLoading) && (
-                                                <div className="bg-black/20 backdrop-blur-md px-3 py-1 rounded-lg border border-white/5">
+                                                <div className="bg-black/20 backdrop-blur-md px-2.5 py-1.5 rounded-lg border border-white/5 flex items-center h-full">
                                                     <span className="text-[10px] font-medium text-white/80 truncate max-w-[120px]">
-                                                        {speedLimitLoading ? "도로 정보 스캔중..." : roadName}
+                                                        {speedLimitLoading ? "스캔중..." : roadName}
                                                     </span>
                                                 </div>
                                             )}
+                                        </div>
+                                    )}
+                                </div>
 
-                                            {(gpsEvents.hardAccel > 0 || gpsEvents.hardBrake > 0) && (
-                                                <div className="mt-1 flex flex-col gap-1 items-end">
-                                                    {gpsEvents.hardAccel > 0 && (
-                                                        <div className="bg-red-500/90 backdrop-blur-md px-3 py-1 rounded-md border border-red-400/30 shadow-lg animate-pulse">
-                                                            <span className="text-[10px] font-bold text-white">⚠️ 급가속 감지</span>
-                                                        </div>
-                                                    )}
-                                                    {gpsEvents.hardBrake > 0 && (
-                                                        <div className="bg-orange-500/90 backdrop-blur-md px-3 py-1 rounded-md border border-orange-400/30 shadow-lg animate-pulse">
-                                                            <span className="text-[10px] font-bold text-white">⚠️ 급감속 감지</span>
-                                                        </div>
-                                                    )}
+                                {/* Right: Driving Stats (Empty or Notifications) */}
+                                <div className="flex flex-col items-end gap-2">
+                                    {(gpsEvents.hardAccel > 0 || gpsEvents.hardBrake > 0) && (
+                                        <div className="mt-1 flex flex-col gap-1 items-end">
+                                            {gpsEvents.hardAccel > 0 && (
+                                                <div className="bg-red-500/90 backdrop-blur-md px-3 py-1 rounded-md border border-red-400/30 shadow-lg animate-pulse">
+                                                    <span className="text-[10px] font-bold text-white">⚠️ 급가속 감지</span>
+                                                </div>
+                                            )}
+                                            {gpsEvents.hardBrake > 0 && (
+                                                <div className="bg-orange-500/90 backdrop-blur-md px-3 py-1 rounded-md border border-orange-400/30 shadow-lg animate-pulse">
+                                                    <span className="text-[10px] font-bold text-white">⚠️ 급감속 감지</span>
                                                 </div>
                                             )}
                                         </div>
@@ -331,15 +316,9 @@ const DrivePage = ({
                             </div>
 
                             {/* 2. Center Overlay: Face Bounding Box & Status */}
+                            {/* 2. Center Overlay: Face Bounding Box & Status (Removed per request) */}
                             {isActive && (
-                                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-56 h-72 transition-all duration-300">
-                                    <div className={`absolute top-0 left-0 w-6 h-6 border-t-2 border-l-2 rounded-tl-lg transition-colors duration-300 ${currentState === 0 ? 'border-white/40' : 'border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]'}`}></div>
-                                    <div className={`absolute top-0 right-0 w-6 h-6 border-t-2 border-r-2 rounded-tr-lg transition-colors duration-300 ${currentState === 0 ? 'border-white/40' : 'border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]'}`}></div>
-                                    <div className={`absolute bottom-0 left-0 w-6 h-6 border-b-2 border-l-2 rounded-bl-lg transition-colors duration-300 ${currentState === 0 ? 'border-white/40' : 'border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]'}`}></div>
-                                    <div className={`absolute bottom-0 right-0 w-6 h-6 border-b-2 border-r-2 rounded-br-lg transition-colors duration-300 ${currentState === 0 ? 'border-white/40' : 'border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]'}`}></div>
-                                    {currentState === 0 && (
-                                        <div className="w-full h-[1px] bg-green-400/40 shadow-[0_0_8px_#4ade80] animate-[scan_2.5s_ease-in-out_infinite]"></div>
-                                    )}
+                                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-56 h-72 hidden">
                                 </div>
                             )}
 
@@ -361,15 +340,15 @@ const DrivePage = ({
                         {isActive && (
                             <div className="absolute inset-x-0 top-24 bottom-10 z-30 pointer-events-none flex flex-col justify-between p-6">
                                 {/* Top Area: Stats - Left Aligned Vertical */}
-                                <div className="pointer-events-auto mt-0 self-start">
-                                    <div className="bg-neutral-900/80 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/10 shadow-xl flex flex-col gap-3 min-w-[100px]">
+                                <div className="pointer-events-auto mt-2 self-start">
+                                    <div className="bg-transparent px-4 py-3 rounded-2xl flex flex-col gap-3 min-w-[100px]">
                                         {/* Time Section */}
                                         <div className="flex flex-col gap-0.5">
                                             <div className="flex items-center gap-1.5">
                                                 <div className="w-1.5 h-1.5 rounded-full bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.6)] animate-pulse"></div>
-                                                <span className="text-[9px] font-bold text-neutral-400 uppercase tracking-wider">Time</span>
+                                                <span className="text-[9px] font-bold text-neutral-400 uppercase tracking-wider drop-shadow-sm">Time</span>
                                             </div>
-                                            <span className="text-lg font-mono font-bold text-white tracking-wider tabular-nums">
+                                            <span className="text-lg font-mono font-bold text-white tracking-wider tabular-nums drop-shadow-md">
                                                 {formatTime(sessionTime)}
                                             </span>
                                         </div>
@@ -379,12 +358,12 @@ const DrivePage = ({
 
                                         {/* Events Section */}
                                         <div className="flex flex-col gap-0.5">
-                                            <span className="text-[9px] font-bold text-neutral-400 uppercase tracking-wider">Events</span>
+                                            <span className="text-[9px] font-bold text-neutral-400 uppercase tracking-wider drop-shadow-sm">Events</span>
                                             <div className="flex items-baseline gap-1">
-                                                <span className={`text-lg font-mono font-bold leading-none tabular-nums transition-colors duration-300 ${eventCount > 0 ? 'text-rose-500' : 'text-white'}`}>
+                                                <span className={`text-lg font-mono font-bold leading-none tabular-nums transition-colors duration-300 drop-shadow-md ${eventCount > 0 ? 'text-rose-500' : 'text-white'}`}>
                                                     {eventCount}
                                                 </span>
-                                                <span className="text-[9px] font-medium text-neutral-600">ea</span>
+                                                <span className="text-[9px] font-medium text-neutral-600 drop-shadow-sm">ea</span>
                                             </div>
                                         </div>
                                     </div>
@@ -511,7 +490,7 @@ const DrivePage = ({
                             100% { transform: translateY(280px); opacity: 0; }
                         }
                     `}</style>
-                </div>
+                </div >
             ) : (
                 /* ========== 메인 뷰 (showCameraView === false) ========== */
                 <div className="min-h-full relative bg-white">

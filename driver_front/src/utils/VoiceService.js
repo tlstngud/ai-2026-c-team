@@ -121,8 +121,8 @@ class VoiceService {
                         lang: detectedLang
                     });
 
-                    // 에코 모드: 인식된 텍스트를 감지된 언어로 TTS 출력
-                    this.speak(transcript, { lang: detectedLang });
+                    // [수정] 에코 모드 제거 (운전 중 잡음/경고 방송 겹침 방지)
+                    // this.speak(transcript, { lang: detectedLang });
                 }
             } else {
                 const interimTranscript = lastResult[0].transcript;
