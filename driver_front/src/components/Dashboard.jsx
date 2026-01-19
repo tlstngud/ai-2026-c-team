@@ -144,6 +144,7 @@ const Dashboard = () => {
     const [coupons, setCoupons] = useState([]);
     const [toast, setToast] = useState({ isVisible: false, message: '' });
     const [isWaitingForResponse, setIsWaitingForResponse] = useState(false); // 졸음 2회 누적 시 답변 대기 상태
+    const [waitingReason, setWaitingReason] = useState(null); // 대기 원인: 'drowsy' | 'assault'
     // [추가] 실시간 위치 정보 (기본값: 춘천시청 부근, heading 추가)
     const [currentLocation, setCurrentLocation] = useState({ lat: 37.8813153, lng: 127.7299707, heading: 0 });
 
@@ -976,6 +977,7 @@ const Dashboard = () => {
                                 if (newCount % 2 === 0) {
                                     voiceService.speak("졸음운전이 반복되고 있어요. 근처 휴게소를 탐색할까요? 아니면 끝말잇기를 시작할까요?");
                                     setIsWaitingForResponse(true);
+                                    setWaitingReason('drowsy');
                                 } else {
                                     voiceService.speak("설마 자는거에요?");
                                 }
@@ -1004,6 +1006,7 @@ const Dashboard = () => {
                     stateConsecutiveCountRef.current.distracted += 1;
                     stateConsecutiveCountRef.current.drowsy = 0;
                     stateConsecutiveCountRef.current.phone = 0;
+                    stateConsecutiveCountRef.current.assault = 0;
 
                     if (stateConsecutiveCountRef.current.distracted === CONSECUTIVE_THRESHOLD) {
                         setDistractedCount(prev => prev + 1);
@@ -1015,11 +1018,29 @@ const Dashboard = () => {
                             voiceService.speak("저만 바라보세요.");
                         }
                     }
-                } else {  // Normal (0) or Assault (4)
+                } else if (rawState === 4) { // Assault (폭행)
+                    stateConsecutiveCountRef.current.assault = (stateConsecutiveCountRef.current.assault || 0) + 1;
+                    stateConsecutiveCountRef.current.drowsy = 0;
+                    stateConsecutiveCountRef.current.phone = 0;
+                    stateConsecutiveCountRef.current.distracted = 0;
+
+                    if (stateConsecutiveCountRef.current.assault === CONSECUTIVE_THRESHOLD) {
+                        setEventCount(prev => prev + 1);
+                        console.log(`🚨 폭행 4초 연속 감지 → 신고 프로세스 가동`);
+
+                        // TTS 음성 알림 (질문형으로 변경)
+                        if (voiceEnabledRef.current) {
+                            voiceService.speak("폭행이 의심됩니다. 경찰서에 신고할까요?");
+                            setIsWaitingForResponse(true);
+                            setWaitingReason('assault');
+                        }
+                    }
+                } else {  // Normal (0)
                     // 정상 상태로 돌아오면 모든 연속 카운트 리셋
                     stateConsecutiveCountRef.current.drowsy = 0;
                     stateConsecutiveCountRef.current.phone = 0;
                     stateConsecutiveCountRef.current.distracted = 0;
+                    stateConsecutiveCountRef.current.assault = 0;
                 }
 
                 // 1. 연속 감지 체크 (점수 감점용)
@@ -1101,6 +1122,73 @@ const Dashboard = () => {
 
                     frame++;
                 }, 16); // 약 16ms (60fps)
+            };
+
+            // 📱 4초간 휴대폰(3) 신호를 60FPS로 주입
+            window.simulatePhone4Sec = () => {
+                console.log("📱 4초 휴대폰 시뮬레이션 시작 (예상: 카운트 1회 - 4초 시점)");
+                let frame = 0;
+                const totalFrames = 240; // 60fps * 4초
+
+                const interval = setInterval(() => {
+                    if (frame >= totalFrames) {
+                        clearInterval(interval);
+                        console.log("📱 시뮬레이션 종료 - 정상 상태 복귀");
+                        // 정상 상태로 복귀 신호 20번 보냄
+                        for (let i = 0; i < 20; i++) {
+                            handleInferenceResult({
+                                class_id: 0,
+                                class_name: 'Normal',
+                                alert_threshold: 20
+                            });
+                        }
+                        return;
+                    }
+
+                    handleInferenceResult({
+                        class_id: 3, // Phone
+                        class_name: 'phone_use',
+                        confidence: 0.98,
+                        probabilities: [0.02, 0, 0, 0.98, 0],
+                        alert_threshold: 20,
+                        interval_ms: 16
+                    });
+
+                    frame++;
+                }, 16); // 1000/60 ms
+            };
+
+            // 🚨 4초간 폭행(4) 신호를 60FPS로 주입
+            window.simulateAssault4Sec = () => {
+                console.log("🚨 4초 폭행 시뮬레이션 시작");
+                let frame = 0;
+                const totalFrames = 240; // 60fps * 4초
+
+                const interval = setInterval(() => {
+                    if (frame >= totalFrames) {
+                        clearInterval(interval);
+                        console.log("🚨 시뮬레이션 종료 - 정상 상태 복귀");
+                        for (let i = 0; i < 20; i++) {
+                            handleInferenceResult({
+                                class_id: 0,
+                                class_name: 'Normal',
+                                alert_threshold: 20
+                            });
+                        }
+                        return;
+                    }
+
+                    handleInferenceResult({
+                        class_id: 4, // Assault
+                        class_name: 'Assault',
+                        confidence: 0.99,
+                        probabilities: [0, 0, 0, 0, 0.99],
+                        alert_threshold: 20,
+                        interval_ms: 16
+                    });
+
+                    frame++;
+                }, 16);
             };
 
             // 에러 콜백
@@ -1290,21 +1378,38 @@ const Dashboard = () => {
     // --- 사용자 답변 처리 (졸음 2회 누적 질문에 대한 응답) ---
     useEffect(() => {
         if (isWaitingForResponse && lastTranscript) {
-            console.log(`🗣️ 답변 대기 중 인식된 텍스트: ${lastTranscript}`);
+            console.log(`🗣️ 답변 대기 중(${waitingReason}) 인식된 텍스트: ${lastTranscript}`);
 
-            if (lastTranscript.includes('휴게소') || lastTranscript.includes('탐색')) {
-                voiceService.speak("휴게소를 검색합니다.");
-                setToast({ isVisible: true, message: '휴게소를 검색합니다.' });
+            if (waitingReason === 'assault') {
+                const POSITIVE_ANSWERS = ['응', '네', '어', '신고해줘', '신고해', '그래', '맞아'];
+                if (POSITIVE_ANSWERS.some(ans => lastTranscript.includes(ans))) {
+                    voiceService.speak("경찰서에 신고합니다.");
+                    setToast({ isVisible: true, message: '🚨 경찰서 신고 접수 중...' });
+                    // 실제 신고 로직 호출 (TODO)
+                } else {
+                    voiceService.speak("오작동으로 판단하고 주행을 계속합니다.");
+                    setToast({ isVisible: true, message: '신고가 취소되었습니다.' });
+                }
                 setIsWaitingForResponse(false);
-                // TODO: 추후 TMAP API 연동하여 실제 검색 로직 추가
-            } else if (lastTranscript.includes('끝말잇기') || lastTranscript.includes('게임')) {
-                voiceService.speak("끝말잇기를 시작합니다.");
-                setToast({ isVisible: true, message: '끝말잇기를 시작합니다.' });
-                setIsWaitingForResponse(false);
-                // TODO: 끝말잇기 게임 로직 연동
+                setWaitingReason(null);
+
+            } else if (waitingReason === 'drowsy' || !waitingReason) { // 하위 호환성 (reason 없는 경우 졸음으로 간주)
+                if (lastTranscript.includes('휴게소') || lastTranscript.includes('탐색')) {
+                    voiceService.speak("휴게소를 검색합니다.");
+                    setToast({ isVisible: true, message: '휴게소를 검색합니다.' });
+                    setIsWaitingForResponse(false);
+                    setWaitingReason(null);
+                    // TODO: 추후 TMAP API 연동하여 실제 검색 로직 추가
+                } else if (lastTranscript.includes('끝말잇기') || lastTranscript.includes('게임')) {
+                    voiceService.speak("끝말잇기를 시작합니다.");
+                    setToast({ isVisible: true, message: '끝말잇기를 시작합니다.' });
+                    setIsWaitingForResponse(false);
+                    setWaitingReason(null);
+                    // TODO: 끝말잇기 게임 로직 연동
+                }
             }
         }
-    }, [lastTranscript, isWaitingForResponse]);
+    }, [lastTranscript, isWaitingForResponse, waitingReason]);
 
     // 음성 기능 토글 함수
     const toggleVoice = () => {
@@ -1414,6 +1519,7 @@ const Dashboard = () => {
             // 음성 서비스 즉시 중단 및 대기 상태 초기화 (STOP 버튼 반응성 향상)
             voiceService.stop();
             setIsWaitingForResponse(false);
+            setWaitingReason(null);
             setVoiceEnabled(false); // 마이크 버튼 상태 끄기
 
             // 모달을 먼저 열고, 약간의 지연 후에 isActive를 false로 설정하여 점수 초기화
@@ -1460,6 +1566,7 @@ const Dashboard = () => {
             finalSessionScoreRef.current = null; // ref도 초기화
             setVoiceEnabled(true); // 세션 시작 시 마이크 자동 켜기
             setIsActive(true);
+            setWaitingReason(null);
         }
     };
 
@@ -1778,14 +1885,30 @@ const Dashboard = () => {
                     </div>
                 )}
 
-                {/* 테스트용 시뮬레이션 버튼 (개발용) */}
-                <button
-                    onClick={() => window.simulateDrowsy5Sec && window.simulateDrowsy5Sec()}
-                    className="absolute top-20 left-4 z-50 bg-purple-600 text-white px-3 py-1 rounded shadow-lg text-sm hover:bg-purple-700 transition-colors"
-                    style={{ opacity: 0.7 }}
-                >
-                    🧪 5초 졸음 테스트
-                </button>
+                {/* 테스트용 시뮬레이션 버튼 (개발용) - 화면 좌측 고정 */}
+                <div className="fixed top-1/2 left-4 z-[9999] -translate-y-1/2 flex flex-col gap-2">
+                    <button
+                        onClick={() => window.simulateDrowsy5Sec && window.simulateDrowsy5Sec()}
+                        className="bg-purple-600 text-white px-3 py-1 rounded shadow-lg text-sm hover:bg-purple-700 transition-colors"
+                        style={{ opacity: 0.7 }}
+                    >
+                        🧪 5초 졸음 테스트
+                    </button>
+                    <button
+                        onClick={() => window.simulatePhone4Sec && window.simulatePhone4Sec()}
+                        className="bg-blue-600 text-white px-3 py-1 rounded shadow-lg text-sm hover:bg-blue-700 transition-colors"
+                        style={{ opacity: 0.7 }}
+                    >
+                        📱 4초 휴대폰 테스트
+                    </button>
+                    <button
+                        onClick={() => window.simulateAssault4Sec && window.simulateAssault4Sec()}
+                        className="bg-red-600 text-white px-3 py-1 rounded shadow-lg text-sm hover:bg-red-700 transition-colors"
+                        style={{ opacity: 0.7 }}
+                    >
+                        🚨 4초 폭행 테스트
+                    </button>
+                </div>
 
                 {/* Top Bar: Speed, RPM (Simulated), Signal */}
                 {/* --- CASE 2: LOADING (지자체 배정 중) --- */}

@@ -42,10 +42,12 @@ const MyPage = ({ user, score, history, userRegion, coupons = [] }) => {
 
     // --- Simulation Data ---
     // 할인율 계산 (InsurancePage와 동일한 로직)
+    // 할인율 계산 (InsurancePage와 동일한 로직)
     const calculateDiscountRate = (score) => {
-        if (score >= 110) return 10;
-        else if (score >= 100) return 5;
-        else return 0;
+        if (!score || score <= 90) return 0;
+        if (score >= 97) return 10;
+        if (score >= 94) return 7;
+        return 3; // 91~93
     };
 
     // 평균 점수 계산
@@ -77,7 +79,7 @@ const MyPage = ({ user, score, history, userRegion, coupons = [] }) => {
     };
 
     const avgScore = calculateAvgScore();
-    const lastYearDiscount = calculateDiscountRate(avgScore - 5); // 작년은 현재보다 5점 낮았다고 가정
+    const lastYearDiscount = 0; // 작년 0% 가정 (상승폭 = 현재 예상 할인율)
     const expectedDiscount = calculateDiscountRate(avgScore);
 
     const annualReportData = {
@@ -204,6 +206,12 @@ const MyPage = ({ user, score, history, userRegion, coupons = [] }) => {
                                 <span className="text-2xl font-bold text-slate-900 tracking-tight">{totalDistance.toLocaleString()}</span>
                                 <span className="text-sm font-medium text-slate-400">km</span>
                             </div>
+                            {/* 다음 등급 동기 부여 (거리 기반) */}
+                            {currentTier.nextGoal > 0 && (
+                                <p className="text-[10px] text-slate-400 mt-1">
+                                    다음 등급까지 <span className="font-bold text-slate-600">{Number(currentTier.nextGoal).toFixed(3)}km</span>
+                                </p>
+                            )}
                         </div>
                         <div className="bg-white p-5 rounded-[20px] shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] border border-slate-100">
                             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Safety Score</p>
@@ -235,56 +243,14 @@ const MyPage = ({ user, score, history, userRegion, coupons = [] }) => {
                                         </span>
                                         <span className="text-sm font-medium text-slate-400">pts</span>
                                     </div>
-                                    {/* 다음 등급 동기 부여 */}
-                                    {currentTier.nextGoal > 0 && (
-                                        <p className="text-[10px] text-slate-400">
-                                            다음 등급까지 <span className="font-bold text-slate-600">{currentTier.nextGoal}km</span>
-                                        </p>
-                                    )}
+                                    {/* 다음 등급 동기 부여 삭제됨 (Total Distance로 이동) */}
                                 </div>
                             )}
                         </div>
                     </div>
                 </section>
 
-                {/* 2. Monthly Challenge (Progress Card) */}
-                <section className="bg-white rounded-[24px] p-6 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.08)] border border-slate-100 relative overflow-hidden">
-                    <div className="relative z-10">
-                        <div className="flex justify-between items-start mb-6">
-                            <div>
-                                <h3 className="text-lg font-bold text-slate-900">
-                                    {currentMonthData.month}월 챌린지
-                                </h3>
-                                <p className="text-xs font-medium text-slate-500 mt-1">
-                                    목표까지 <span className="text-indigo-600 font-bold">{10 - currentMonthData.driveTime}시간</span> 남았습니다
-                                </p>
-                            </div>
-                            <div className="bg-slate-100 px-3 py-1.5 rounded-full">
-                                <span className="text-xs font-bold text-slate-600">
-                                    {monthlyProgress}%
-                                </span>
-                            </div>
-                        </div>
 
-                        {/* Custom Progress Bar */}
-                        <div className="relative w-full h-3 bg-slate-100 rounded-full overflow-hidden mb-4">
-                            <div
-                                className="absolute top-0 left-0 h-full bg-indigo-500 rounded-full transition-all duration-1000 ease-out"
-                                style={{ width: `${monthlyProgress}%` }}
-                            ></div>
-                        </div>
-
-                        <div className="flex items-center gap-3 bg-indigo-50 p-3 rounded-xl border border-indigo-100/50">
-                            <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
-                                <Gift size={16} />
-                            </div>
-                            <div>
-                                <p className="text-xs font-bold text-indigo-900">달성 보상</p>
-                                <p className="text-[11px] font-medium text-indigo-600/80">춘천사랑상품권 5,000원</p>
-                            </div>
-                        </div>
-                    </div>
-                </section>
 
                 {/* 3. Insurance Report (Dark Theme Card) */}
                 <button
