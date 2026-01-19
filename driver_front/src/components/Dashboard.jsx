@@ -1015,13 +1015,18 @@ const Dashboard = () => {
                             updateScore('PENALTY', SCORE_CONFIG.PENALTY.DROWSY);
 
                             // TTS 음성 알림 (2회 누적 시 질문, 그 외에는 경고)
+                            console.log(`🔊 TTS 시도: voiceEnabled=${voiceEnabledRef.current}, count=${newCount}`);
                             if (voiceEnabledRef.current) {
                                 if (newCount % 2 === 0) {
+                                    console.log('🔊 TTS 호출: 휴게소/게임 질문');
                                     voiceService.speak("졸음운전이 반복되고 있어요. 근처 휴게소를 탐색할까요? 아니면 끝말잇기를 시작할까요?");
                                     setIsWaitingForResponse(true);
                                 } else {
+                                    console.log('🔊 TTS 호출: 설마 자는거에요?');
                                     voiceService.speak("설마 자는거에요?");
                                 }
+                            } else {
+                                console.log('🔇 TTS 비활성화 - voiceEnabled가 false');
                             }
                             return newCount;
                         });
