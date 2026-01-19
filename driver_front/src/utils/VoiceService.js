@@ -367,7 +367,21 @@ class VoiceService {
             return;
         }
 
+        // Chrome 버그 해결: speechSynthesis가 stuck 상태일 때 resume() 필요
         this.synthesis.cancel();
+        this.synthesis.resume();
+
+        // cancel() 후 약간의 딜레이 (브라우저 호환성)
+        setTimeout(() => {
+            this._doSpeak(text, options);
+        }, 50);
+    }
+
+    /**
+     * 실제 TTS 실행 (내부 함수)
+     */
+    _doSpeak(text, options = {}) {
+        if (!this.synthesis) return;
 
         // 언어 감지 또는 옵션에서 언어 결정
         const lang = options.lang || this.detectLanguage(text);
