@@ -140,9 +140,9 @@ const LogDetailPage = ({ data, onBack }) => {
                         />
                         <DetailItem
                             icon={<Smartphone className="text-blue-500" size={18} />}
-                            title="휴대폰 조작"
-                            count={`${data.phoneCount || 0}회`}
-                            desc="전방 주시 태만"
+                            title="주의산만"
+                            count={`${data.distractedCount || 0}회`}
+                            desc="전방 주시 태만 및 휴대폰 조작"
                         />
                         <DetailItem
                             icon={<Zap className="text-yellow-500" size={18} />}

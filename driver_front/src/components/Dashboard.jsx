@@ -115,8 +115,7 @@ const Dashboard = () => {
     const [currentState, setCurrentState] = useState(0);
     const [eventCount, setEventCount] = useState(0);
     const [drowsyCount, setDrowsyCount] = useState(0); // 졸음 횟수
-    const [phoneCount, setPhoneCount] = useState(0); // 휴대폰 사용 횟수
-    const [distractedCount, setDistractedCount] = useState(0); // 주시 태만 횟수
+    const [distractedCount, setDistractedCount] = useState(0); // 주의산만 횟수 (주시태만 + 휴대폰)
     const [showSummary, setShowSummary] = useState(false);
     const [finalSessionScore, setFinalSessionScore] = useState(null); // 세션 종료 시 최종 점수 저장
     const [history, setHistory] = useState([]);
@@ -167,8 +166,7 @@ const Dashboard = () => {
     // 상태별 연속 카운트 (2초마다 반복 카운트용)
     const stateConsecutiveCountRef = useRef({
         drowsy: 0,
-        phone: 0,
-        distracted: 0
+        distracted: 0  // 주의산만 (주시태만 + 휴대폰)
     });
     const CONSECUTIVE_THRESHOLD = 240; // 4초 = 240프레임 (60 FPS 기준)
 
@@ -900,7 +898,6 @@ const Dashboard = () => {
                 // 각 상태별 2초마다 반복 카운트 증가
                 if (rawState === 1) {  // Drowsy (졸음)
                     stateConsecutiveCountRef.current.drowsy += 1;
-                    stateConsecutiveCountRef.current.phone = 0;
                     stateConsecutiveCountRef.current.distracted = 0;
 
                     // 240프레임(4초) 시점에만 1회 카운트 및 알림
@@ -914,40 +911,27 @@ const Dashboard = () => {
                             voiceService.speak("설마 자는거에요?");
                         }
                     }
-                } else if (rawState === 3) {  // Phone (휴대폰)
-                    stateConsecutiveCountRef.current.phone += 1;
-                    stateConsecutiveCountRef.current.drowsy = 0;
-                    stateConsecutiveCountRef.current.distracted = 0;
-
-                    if (stateConsecutiveCountRef.current.phone === CONSECUTIVE_THRESHOLD) {
-                        setPhoneCount(prev => prev + 1);
-                        setEventCount(prev => prev + 1); // Total Events 연동
-                        console.log(`📱 휴대폰 4초 연속 감지 → 카운트 +1 (1회 한정)`);
-
-                        // TTS 음성 알림
-                        if (voiceEnabledRef.current) {
-                            voiceService.speak("누구랑 연락하세요?");
-                        }
-                    }
-                } else if (rawState === 2) {  // Distracted (주시태만)
+                } else if (rawState === 2 || rawState === 3) {  // Distracted (주의산만: 주시태만 + 휴대폰)
                     stateConsecutiveCountRef.current.distracted += 1;
                     stateConsecutiveCountRef.current.drowsy = 0;
-                    stateConsecutiveCountRef.current.phone = 0;
 
                     if (stateConsecutiveCountRef.current.distracted === CONSECUTIVE_THRESHOLD) {
                         setDistractedCount(prev => prev + 1);
                         setEventCount(prev => prev + 1); // Total Events 연동
-                        console.log(`👀 주시태만 4초 연속 감지 → 카운트 +1 (1회 한정)`);
+                        console.log(`� 주의산만 4초 연속 감지 (신호 ${rawState}) → 카운트 +1 (1회 한정)`);
 
-                        // TTS 음성 알림
+                        // TTS 음성 알림 (신호 타입에 따라 다른 메시지)
                         if (voiceEnabledRef.current) {
-                            voiceService.speak("저만 바라보세요.");
+                            if (rawState === 3) {
+                                voiceService.speak("누구랑 연락하세요?");
+                            } else {
+                                voiceService.speak("저만 바라보세요.");
+                            }
                         }
                     }
                 } else {  // Normal (0) or Assault (4)
                     // 정상 상태로 돌아오면 모든 연속 카운트 리셋
                     stateConsecutiveCountRef.current.drowsy = 0;
-                    stateConsecutiveCountRef.current.phone = 0;
                     stateConsecutiveCountRef.current.distracted = 0;
                 }
 
@@ -1247,7 +1231,6 @@ const Dashboard = () => {
                 duration: finalDuration,
                 events: eventCount,
                 drowsyCount: drowsyCount,
-                phoneCount: phoneCount,
                 distractedCount: distractedCount,
                 gpsEvents: {
                     hardAccel: gpsEvents.hardAccel,
@@ -1325,7 +1308,6 @@ const Dashboard = () => {
             setCurrentState(0);
             setEventCount(0);
             setDrowsyCount(0);
-            setPhoneCount(0);
             setDistractedCount(0);
             setSessionTime(0);
             sessionTimeRef.current = 0;
@@ -1339,7 +1321,6 @@ const Dashboard = () => {
             // 상태별 연속 카운트 리셋
             stateConsecutiveCountRef.current = {
                 drowsy: 0,
-                phone: 0,
                 distracted: 0
             };
             finalSessionScoreRef.current = null; // ref도 초기화
