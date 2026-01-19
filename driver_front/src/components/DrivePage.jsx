@@ -5,6 +5,10 @@ import { getCurrentPosition } from '../utils/GpsService';
 import { fetchUltraSrtNcst, latLonToGrid } from '../services/weatherService';
 import { formatRegion, getRegionByLatLon } from '../utils/regionLookup';
 
+// [재추가] 마커용 빨간 점 이미지 (네트워크 로딩 없이 즉시 표시됨)
+// [재추가] 마커용 빨간 핀 SVG (Base64)
+const MARKER_ICON_BASE64 = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iI0VGNDQ0NCIgc3Ryb2tlPSIjN0YxRDFEIiBzdHJva2Utd2lkdGg9IjEuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMjEgMTBjMCA3LTkgMTMtOSAxM3MtOS02LTktMTNhOSA5IDAgMCAxIDE4IDB6Ij48L3BhdGg+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMCIgcj0iMyIgZmlsbD0id2hpdGUiPjwvY2lyY2xlPjwvc3ZnPg==";
+
 const DrivePage = ({
     showCameraView,
     setShowCameraView,
@@ -33,10 +37,15 @@ const DrivePage = ({
     voiceStatus = 'idle',
     lastTranscript = '',
     interimTranscript = '',
-    toggleVoice = () => { }
+    toggleVoice = () => { },
+    // [추가] 위치 정보 (heading 포함)
+    currentLocation = { lat: 37.8813153, lng: 127.7299707, heading: 0 }
 }) => {
     const videoContainerRef = useRef(null);
     const modalRef = useRef(null);
+    // TMAP 관련 Refs
+    const mapInstanceRef = useRef(null);
+    const markerRef = useRef(null);
     const [modalHeight, setModalHeight] = useState(150);
     const [isDragging, setIsDragging] = useState(false);
     const [weatherLoading, setWeatherLoading] = useState(false);
@@ -147,6 +156,128 @@ const DrivePage = ({
         };
     }, [showWeather]);
 
+    // --- TMAP 경로 그리기 (사용자 요청 로직) ---
+    const drawRoute = async (destLat, destLng) => {
+        if (!mapInstanceRef.current || !window.Tmapv2) return;
+        try {
+            const headers = { appKey: "49sDimr9yt5PxoX30zQq481OCuwcUNDV6D2cbXs3" }; // TMAP App Key
+
+            // TMAP 경로 탐색 API 호출 (출발지: 현재위치, 도착지: 인자값)
+            const response = await fetch(`https://apis.openapi.sk.com/tmap/routes?version=1&format=json&startX=${currentLocation.lng}&startY=${currentLocation.lat}&endX=${destLng}&endY=${destLat}&totalValue=2`, {
+                method: "POST",
+                headers: headers
+            });
+
+            const data = await response.json();
+
+            // 경로 좌표 파싱
+            const routePoints = [];
+            if (data.features) {
+                data.features.forEach(feature => {
+                    if (feature.geometry.type === "LineString") {
+                        feature.geometry.coordinates.forEach(coord => {
+                            routePoints.push(new window.Tmapv2.LatLng(coord[1], coord[0]));
+                        });
+                    }
+                });
+            }
+
+            // 지도에 빨간 선 그리기
+            const polyline = new window.Tmapv2.Polyline({
+                path: routePoints,
+                strokeColor: "#FF0000", // 빨간색
+                strokeWeight: 6,
+                map: mapInstanceRef.current
+            });
+            console.log("경로 그리기 완료");
+
+        } catch (error) {
+            console.error("경로 요청 실패:", error);
+        }
+    };
+
+    // --- TMAP 네비게이션 모드 (Follow + Head Up) ---
+    // --- TMAP 네비게이션 모드 (Follow + Head Up) ---
+
+    // [1] 지도 초기화 (최초 1회 및 뷰 활성화 시)
+    useEffect(() => {
+        if (!showCameraView || !isActive) return;
+
+        let intervalId = null;
+
+        const initTmap = () => {
+            // 0. TMAP 스크립트 로드 확인
+            if (!window.Tmapv2) return false;
+
+            // 1. 지도 컨테이너 확인
+            const mapDiv = document.getElementById("tmap_nav");
+            if (!mapDiv) return false;
+
+            // 2. 이미 초기화되었으면 성공 처리
+            if (mapInstanceRef.current) return true;
+
+            try {
+                mapDiv.innerHTML = ""; // 초기화
+                const map = new window.Tmapv2.Map("tmap_nav", {
+                    center: new window.Tmapv2.LatLng(currentLocation.lat, currentLocation.lng),
+                    width: "100%",
+                    height: "100%",
+                    zoom: 18,
+                    zoomControl: false,
+                    scrollwheel: false
+                });
+                mapInstanceRef.current = map;
+
+                // 마커 생성 (Base64, 크기 확대)
+                const marker = new window.Tmapv2.Marker({
+                    position: new window.Tmapv2.LatLng(currentLocation.lat, currentLocation.lng),
+                    icon: MARKER_ICON_BASE64,
+                    iconSize: new window.Tmapv2.Size(48, 48),
+                    map: map
+                });
+                markerRef.current = marker;
+                console.log("TMAP Initialized Successfully!");
+                return true;
+            } catch (e) {
+                console.error("TMAP Init Error:", e);
+                return false;
+            }
+        };
+
+        // 즉시 시도
+        if (!initTmap()) {
+            intervalId = setInterval(() => {
+                if (initTmap()) clearInterval(intervalId);
+            }, 500);
+        }
+
+        return () => {
+            if (intervalId) clearInterval(intervalId);
+        };
+    }, [showCameraView, isActive]); // currentLocation 변화에 반응하지 않음 (깜박임 방지)
+
+    // [2] 실시간 위치 업데이트 (지도 초기화 된 상태에서만 동작)
+    useEffect(() => {
+        if (!mapInstanceRef.current || !markerRef.current || !window.Tmapv2) return;
+
+        const lat = Number(currentLocation.lat);
+        const lng = Number(currentLocation.lng);
+        const heading = Number(currentLocation.heading) || 0;
+
+        if (!isNaN(lat) && !isNaN(lng)) {
+            const newPos = new window.Tmapv2.LatLng(lat, lng);
+
+            // 마커 및 지도 이동 (에러 방지)
+            try {
+                markerRef.current.setPosition(newPos);
+                mapInstanceRef.current.setCenter(newPos);
+                mapInstanceRef.current.setRotate(-heading);
+            } catch (err) {
+                console.warn("TMAP update ignored:", err);
+            }
+        }
+    }, [currentLocation]);
+
     // 모달 드래그 핸들러
     const handleTouchStart = (e) => {
         setIsDragging(true);
@@ -220,9 +351,21 @@ const DrivePage = ({
                     height: '100dvh',
                     zIndex: 10
                 }}>
+                    {/* [추가] TMAP 배경 레이어 (z-0) */}
+                    <div
+                        id="tmap_nav"
+                        className="absolute inset-0 w-full h-full z-0"
+                    />
+
+                    {/* 1. 비디오 컨테이너 (숨김 처리하여 배경 지도가 보이게 함) */}
                     <div
                         ref={videoContainerRef}
-                        className="overflow-hidden flex-1"
+                        className="absolute inset-0 z-5 opacity-0 pointer-events-none"
+                    />
+
+                    {/* 2. UI 레이어 (비디오와 분리됨) */}
+                    <div
+                        className="overflow-hidden flex-1 relative z-10 pointer-events-none"
                         style={{ width: '100%', height: '100%' }}
                     >
                         {!hasPermission && (

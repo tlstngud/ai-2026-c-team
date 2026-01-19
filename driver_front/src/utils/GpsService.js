@@ -452,7 +452,7 @@ export const startGpsMonitoring = (onUpdate, onError) => {
 
     gpsWatchId = navigator.geolocation.watchPosition(
         (position) => {
-            const { latitude, longitude, speed: gpsSpeed, accuracy } = position.coords;
+            const { latitude, longitude, speed: gpsSpeed, accuracy, heading } = position.coords;
             const currentTime = Date.now();
 
             // GPS 속도 직접 사용 (m/s -> km/h)
@@ -549,6 +549,7 @@ export const startGpsMonitoring = (onUpdate, onError) => {
                 latitude,
                 longitude,
                 speed: currentSpeedKmh || 0, // 속도가 없으면 0
+                heading: heading || 0,
                 accuracy: accuracy ? Math.floor(accuracy) : null,
                 isOverspeed,
                 status: gpsStatus,

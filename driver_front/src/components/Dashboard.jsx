@@ -144,6 +144,8 @@ const Dashboard = () => {
     const [coupons, setCoupons] = useState([]);
     const [toast, setToast] = useState({ isVisible: false, message: '' });
     const [isWaitingForResponse, setIsWaitingForResponse] = useState(false); // 졸음 2회 누적 시 답변 대기 상태
+    // [추가] 실시간 위치 정보 (기본값: 춘천시청 부근, heading 추가)
+    const [currentLocation, setCurrentLocation] = useState({ lat: 37.8813153, lng: 127.7299707, heading: 0 });
 
     const gpsWatchIdRef = useRef(null);
 
@@ -655,6 +657,16 @@ const Dashboard = () => {
                         // GPS 데이터: 속도 업데이트
                         // GPS 데이터: 속도 업데이트
                         setCurrentSpeed(data.speed);
+
+                        // [추가] 지도 이동을 위해 실시간 좌표 업데이트
+                        if (data.latitude && data.longitude) {
+                            setCurrentLocation({
+                                lat: data.latitude,
+                                lng: data.longitude,
+                                heading: data.heading || 0
+                            });
+                            setSensorStatus(prev => ({ ...prev, gps: true }));
+                        }
 
 
 
@@ -1579,44 +1591,39 @@ const Dashboard = () => {
     };
 
     // 페이지별 렌더링 컴포넌트 (PR #16 - videoRef, onStartCamera 제거)
-    const DrivePageWrapper = () => (
-        <>
-            {!showCameraView && (
-                <Header isActive={isActive} averageScore={getAverageScore()} />
-            )}
-            <DrivePage
-                showCameraView={showCameraView}
-                setShowCameraView={setShowCameraView}
-                hasPermission={hasPermission}
-                isActive={isActive}
-                score={score}
-                sessionTime={sessionTime}
-                currentState={currentState}
-                eventCount={eventCount}
-                toggleSession={toggleSession}
-                formatTime={formatTime}
-                currentConfig={currentConfig}
-                CurrentIcon={CurrentIcon}
-                userRegion={userRegion}
-                currentSpeed={currentSpeed}
-                gpsAcceleration={gpsAcceleration}
-                gpsEvents={gpsEvents}
-                sensorStatus={sensorStatus}
-                gpsAccuracy={gpsAccuracy}
-                gpsStatus={gpsStatus}
-                speedLimit={speedLimit}
-                roadName={roadName}
-                speedLimitLoading={speedLimitLoading}
-                speedLimitDebug={speedLimitDebug}
-                modelConnectionStatus={modelConnectionStatus}
-                voiceEnabled={voiceEnabled}
-                voiceStatus={voiceStatus}
-                lastTranscript={lastTranscript}
-                interimTranscript={interimTranscript}
-                toggleVoice={toggleVoice}
-            />
-        </>
-    );
+    // [성능 최적화] DrivePage props 객체화 (불필요한 리렌더링 방지)
+    const drivePageProps = {
+        showCameraView,
+        setShowCameraView,
+        hasPermission,
+        isActive,
+        score,
+        sessionTime,
+        currentState,
+        eventCount,
+        toggleSession,
+        formatTime,
+        currentConfig,
+        CurrentIcon,
+        userRegion,
+        currentSpeed,
+        gpsAcceleration,
+        gpsEvents,
+        sensorStatus,
+        gpsAccuracy,
+        gpsStatus,
+        speedLimit,
+        roadName,
+        speedLimitLoading,
+        speedLimitDebug,
+        modelConnectionStatus,
+        voiceEnabled,
+        voiceStatus,
+        lastTranscript,
+        interimTranscript,
+        toggleVoice,
+        currentLocation
+    };
 
     const InsurancePageWrapper = () => {
         const avgScore = getAverageScore() ?? score;
@@ -1830,8 +1837,18 @@ const Dashboard = () => {
                             />
                             {/* React Router를 사용한 페이지 라우팅 */}
                             <Routes>
-                                <Route index element={<DrivePageWrapper />} />
-                                <Route path="drive" element={<DrivePageWrapper />} />
+                                <Route index element={
+                                    <>
+                                        {!showCameraView && <Header isActive={isActive} averageScore={getAverageScore()} />}
+                                        <DrivePage {...drivePageProps} />
+                                    </>
+                                } />
+                                <Route path="drive" element={
+                                    <>
+                                        {!showCameraView && <Header isActive={isActive} averageScore={getAverageScore()} />}
+                                        <DrivePage {...drivePageProps} />
+                                    </>
+                                } />
                                 <Route path="insurance" element={<InsurancePageWrapper />} />
                                 <Route path="insurance-policy" element={<InsurancePolicyPage />} />
                                 <Route path="challenge" element={<InsurancePageWrapper />} />
