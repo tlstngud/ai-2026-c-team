@@ -141,42 +141,61 @@ const Dashboard = () => {
     const [toast, setToast] = useState({ isVisible: false, message: '' });
     const gpsWatchIdRef = useRef(null);
 
-    // 가중치 상수
-    const WEIGHTS = {
-        DRIVER_BEHAVIOR: 0.40,  // 운전자 행동 40%
-        SPEED_LIMIT: 0.35,      // 제한속도 준수 35%
-        ACCEL_DECEL: 0.25       // 급가속/감속 25%
+    // TMAP 스타일 점수 설정
+    const SCORE_CONFIG = {
+        // 감점 (Penalty)
+        PENALTY: {
+            DROWSY: 8.0,      // 졸음 (기존 카운트 로직 연동)
+            DISTRACTED: 4.0,  // 주시태만/휴대폰
+            ASSAULT: 10.0,    // 폭행
+            HARD_BRAKE: 5.0,  // 급감속 (GPS)
+            HARD_ACCEL: 3.0,  // 급가속 (GPS)
+            OVERSPEED: 0.2    // 과속 (GPS) - 초당 감점 (기존 1.0 -> 0.2로 완화)
+        },
+        // 회복 (Recovery)
+        RECOVERY_PER_KM: 0.8, // 1km 주행당 회복 점수
+        DIFFICULTY_MULTIPLIER: 1.5 // 90점 이상일 때 감점 가중치
     };
 
-    // 각 요소별 점수 ref
-    const driverBehaviorScoreRef = useRef(100);
-    const speedLimitScoreRef = useRef(100);
-    const accelDecelScoreRef = useRef(100);
-    const scoreRef = useRef(100);
+    const scoreRef = useRef(70);
     const finalSessionScoreRef = useRef(null); // 세션 종료 시 최종 점수 저장 (ref로 즉시 접근 가능)
 
-    // 투표 시스템 설정 (동적 - 백엔드에서 조절)
-    const alertThresholdRef = useRef(20);  // 기본값: 20회 (1초에 경고)
-    const voteBufferSizeRef = useRef(20);  // 기본값: 20 (alert_threshold와 동일)
-    const inferenceBufferRef = useRef([]);  // 최근 추론 결과 버퍼
-    const consecutiveCountRef = useRef(0);  // 연속 동일 상태 카운트
-    const lastInferenceStateRef = useRef(0);  // 마지막 추론 상태
-    const lastVotedStateRef = useRef(0);  // 마지막 투표 결과 상태
+    // 점수 업데이트 함수 (중앙 관리)
+    const updateScore = (changeType, value) => {
+        let currentScore = scoreRef.current;
+        let newScore = currentScore;
 
-    // 상태별 연속 카운트 (2초마다 반복 카운트용)
-    const stateConsecutiveCountRef = useRef({
-        drowsy: 0,
-        distracted: 0  // 주의산만 (주시태만 + 휴대폰)
-    });
-    const CONSECUTIVE_THRESHOLD = 240; // 4초 = 240프레임 (60 FPS 기준)
+        if (changeType === 'PENALTY') {
+            let penalty = value;
+            // ★ 90점 이상 구간: 감점 1.5배 가중 (방어 운전 유도)
+            if (currentScore >= 90) {
+                penalty *= SCORE_CONFIG.DIFFICULTY_MULTIPLIER;
+            }
+            newScore = Math.max(0, currentScore - penalty);
+            console.log(`📉 감점: -${penalty.toFixed(1)} (현재: ${newScore.toFixed(1)})`);
+        }
+        else if (changeType === 'RECOVERY') {
+            let recovery = value;
+            // ★ 90점 이상 구간: 회복량 50% 감소 (점수 유지 난이도 상승)
+            if (currentScore >= 90) {
+                recovery *= 0.5;
+            }
+            newScore = Math.min(100, currentScore + recovery);
+            // console.log(`📈 회복: +${recovery.toFixed(2)} (현재: ${newScore.toFixed(1)})`);
+        }
 
-    // 가중 평균 점수 계산 함수
-    const calculateWeightedScore = () => {
-        const weightedScore =
-            (driverBehaviorScoreRef.current * WEIGHTS.DRIVER_BEHAVIOR) +
-            (speedLimitScoreRef.current * WEIGHTS.SPEED_LIMIT) +
-            (accelDecelScoreRef.current * WEIGHTS.ACCEL_DECEL);
-        return Math.max(0, Math.min(100, weightedScore));
+        // 상태 업데이트
+        scoreRef.current = newScore;
+
+        // UI 렌더링 최적화를 위해 정수값이 변할 때만 setScore 호출
+        if (Math.floor(currentScore) !== Math.floor(newScore)) {
+            const integerScore = Math.floor(newScore);
+            setScore(integerScore);
+            // 그래프용 개별 점수들도 동일하게 맞춰줌 (UI 표시용 호환성)
+            setDriverBehaviorScore(integerScore);
+            setSpeedLimitScore(integerScore);
+            setAccelDecelScore(integerScore);
+        }
     };
     const sessionTimeRef = useRef(0);
     const accumulatedDistanceRef = useRef(0); // 누적 거리 (미터 단위)
@@ -619,7 +638,11 @@ const Dashboard = () => {
                                 const speedMs = data.speed / 3.6;
                                 const distanceDelta = speedMs * timeDeltaSeconds;
                                 accumulatedDistanceRef.current += distanceDelta;
-                                // console.log(`📏 거리 증가: +${distanceDelta.toFixed(2)}m (총: ${accumulatedDistanceRef.current.toFixed(2)}m)`);
+
+                                // [추가] 거리 기반 회복 로직
+                                const distanceKm = distanceDelta / 1000;
+                                const recoveryPoints = distanceKm * SCORE_CONFIG.RECOVERY_PER_KM;
+                                updateScore('RECOVERY', recoveryPoints);
                             }
                         }
                         lastGpsTimeRef.current = now;
@@ -656,15 +679,9 @@ const Dashboard = () => {
                                 overspeed: prev.overspeed + 1
                             }));
                             setEventCount(prev => prev + 1);
-                            // 제한속도 준수 점수 감점 (35% 가중치)
-                            // 과속 1회당 5점 감점 (제한속도 준수 요소만)
-                            speedLimitScoreRef.current = Math.max(0, speedLimitScoreRef.current - 5);
-                            setSpeedLimitScore(speedLimitScoreRef.current);
 
-                            // 가중 평균 점수 재계산
-                            const newScore = calculateWeightedScore();
-                            scoreRef.current = newScore;
-                            setScore(newScore);
+                            // 과속 감점 (초당 0.2점)
+                            updateScore('PENALTY', SCORE_CONFIG.PENALTY.OVERSPEED);
                         }
                     } else if (data.type === 'SPEED_LIMIT') {
                         // 제한 속도 업데이트 (TMAP API 응답)
@@ -716,15 +733,9 @@ const Dashboard = () => {
                                 hardAccel: prev.hardAccel + 1
                             }));
                             setEventCount(prev => prev + 1);
-                            // 급가속/감속 점수 감점 (25% 가중치)
-                            // 급가속 1회당 4점 감점 (급가속/감속 요소만)
-                            accelDecelScoreRef.current = Math.max(0, accelDecelScoreRef.current - 4);
-                            setAccelDecelScore(accelDecelScoreRef.current);
 
-                            // 가중 평균 점수 재계산
-                            const newScore = calculateWeightedScore();
-                            scoreRef.current = newScore;
-                            setScore(newScore);
+                            // 급가속 감점 (3점)
+                            updateScore('PENALTY', SCORE_CONFIG.PENALTY.HARD_ACCEL);
                         }
 
                         // 급감속 감지
@@ -738,15 +749,9 @@ const Dashboard = () => {
                                 hardBrake: prev.hardBrake + 1
                             }));
                             setEventCount(prev => prev + 1);
-                            // 급가속/감속 점수 감점 (25% 가중치)
-                            // 급감속 1회당 5점 감점 (급가속/감속 요소만)
-                            accelDecelScoreRef.current = Math.max(0, accelDecelScoreRef.current - 5);
-                            setAccelDecelScore(accelDecelScoreRef.current);
 
-                            // 가중 평균 점수 재계산
-                            const newScore = calculateWeightedScore();
-                            scoreRef.current = newScore;
-                            setScore(newScore);
+                            // 급감속 감점 (5점)
+                            updateScore('PENALTY', SCORE_CONFIG.PENALTY.HARD_BRAKE);
                         }
                     }
                 },
@@ -779,15 +784,12 @@ const Dashboard = () => {
             setSensorStatus({ gps: false, motion: false });
             setSpeedLimit(null);
             setRoadName(null);
-            // 점수 초기화
-            driverBehaviorScoreRef.current = 100;
-            speedLimitScoreRef.current = 100;
-            accelDecelScoreRef.current = 100;
-            setDriverBehaviorScore(100);
-            setSpeedLimitScore(100);
-            setAccelDecelScore(100);
-            scoreRef.current = 100;
-            setScore(100);
+            // 점수 초기화 (70점으로 시작)
+            scoreRef.current = 70;
+            setScore(70);
+            setDriverBehaviorScore(70);
+            setSpeedLimitScore(70);
+            setAccelDecelScore(70);
 
             // 거리 초기화
             accumulatedDistanceRef.current = 0;
@@ -827,38 +829,6 @@ const Dashboard = () => {
                 }
             }
 
-            // 상태별 감점량 계산 함수
-            const getPenaltyForState = (state) => {
-                // 0=Normal, 1=Drowsy, 2=Searching, 3=Phone, 4=Assault
-                const penalties = { 0: 0, 1: 5.0, 2: 3.0, 3: 4.0, 4: 10.0 };
-                return penalties[state] || 0;
-            };
-
-            // 점수 적용 함수
-            const applyPenalty = (state, isConsecutive = false) => {
-                let penalty = getPenaltyForState(state);
-                let recovery = state === 0 ? 0.05 : 0;
-
-                // 연속 감지 시 추가 감점 (1.5배)
-                if (isConsecutive && state !== 0) {
-                    penalty *= 1.5;
-                    console.log(`⚡ 연속 ${alertThresholdRef.current}회 감지! 추가 감점 적용`);
-                }
-
-                if (state !== 0) {
-                    // setEventCount(prev => prev + 1); // 4초 카운트 로직으로 이관 (중복 방지)
-                }
-
-                // 운전자 행동 점수 업데이트
-                driverBehaviorScoreRef.current = Math.max(0, Math.min(100, driverBehaviorScoreRef.current - penalty + recovery));
-                setDriverBehaviorScore(driverBehaviorScoreRef.current);
-
-                // 가중 평균 점수 재계산
-                const newScore = calculateWeightedScore();
-                scoreRef.current = newScore;
-                setScore(newScore);
-            };
-
             // 투표로 최종 상태 결정
             const getVotedState = (buffer) => {
                 if (buffer.length === 0) return 0;
@@ -895,37 +865,46 @@ const Dashboard = () => {
                     voteBufferSizeRef.current = result.alert_threshold;  // 투표 버퍼도 동일하게
                 }
 
-                // 각 상태별 2초마다 반복 카운트 증가
+                // 각 상태별 4초 카운트 증가
                 if (rawState === 1) {  // Drowsy (졸음)
                     stateConsecutiveCountRef.current.drowsy += 1;
                     stateConsecutiveCountRef.current.distracted = 0;
 
-                    // 240프레임(4초) 시점에만 1회 카운트 및 알림
-                    if (stateConsecutiveCountRef.current.drowsy === CONSECUTIVE_THRESHOLD) {
+                    // 4초(240), 8초(480), 12초(720)... 마다 반복 카운트 및 감점
+                    if (stateConsecutiveCountRef.current.drowsy > 0 &&
+                        stateConsecutiveCountRef.current.drowsy % CONSECUTIVE_THRESHOLD === 0) {
                         setDrowsyCount(prev => prev + 1);
                         setEventCount(prev => prev + 1); // Total Events 연동
-                        console.log(`😴 졸음 4초 연속 감지 → 카운트 +1 (1회 한정)`);
+                        console.log(`😴 졸음 4초 연속 감지 → 카운트 +1 (감점 적용)`);
 
-                        // TTS 음성 알림
-                        if (voiceEnabledRef.current) {
-                            voiceService.speak("설마 자는거에요?");
+                        // 졸음 감점 (8점) - 4초마다 반복
+                        updateScore('PENALTY', SCORE_CONFIG.PENALTY.DROWSY);
+
+                        // TTS 음성 알림 (최초 1회만)
+                        if (voiceEnabledRef.current && stateConsecutiveCountRef.current.drowsy === CONSECUTIVE_THRESHOLD) {
+                            voiceService.speak("설마 자는거에요? 점수가 차감됩니다.");
                         }
                     }
                 } else if (rawState === 2 || rawState === 3) {  // Distracted (주의산만: 주시태만 + 휴대폰)
                     stateConsecutiveCountRef.current.distracted += 1;
                     stateConsecutiveCountRef.current.drowsy = 0;
 
-                    if (stateConsecutiveCountRef.current.distracted === CONSECUTIVE_THRESHOLD) {
+                    // 4초(240), 8초(480), 12초(720)... 마다 반복 카운트 및 감점
+                    if (stateConsecutiveCountRef.current.distracted > 0 &&
+                        stateConsecutiveCountRef.current.distracted % CONSECUTIVE_THRESHOLD === 0) {
                         setDistractedCount(prev => prev + 1);
                         setEventCount(prev => prev + 1); // Total Events 연동
-                        console.log(`� 주의산만 4초 연속 감지 (신호 ${rawState}) → 카운트 +1 (1회 한정)`);
+                        console.log(`👀 주의산만 4초 연속 감지 (신호 ${rawState}) → 카운트 +1 (감점 적용)`);
 
-                        // TTS 음성 알림 (신호 타입에 따라 다른 메시지)
-                        if (voiceEnabledRef.current) {
+                        // 주의산만 감점 (4점) - 4초마다 반복
+                        updateScore('PENALTY', SCORE_CONFIG.PENALTY.DISTRACTED);
+
+                        // TTS 음성 알림 (최초 1회만)
+                        if (voiceEnabledRef.current && stateConsecutiveCountRef.current.distracted === CONSECUTIVE_THRESHOLD) {
                             if (rawState === 3) {
                                 voiceService.speak("누구랑 연락하세요?");
                             } else {
-                                voiceService.speak("저만 바라보세요.");
+                                voiceService.speak("전방을 주시해주세요.");
                             }
                         }
                     }
@@ -935,46 +914,27 @@ const Dashboard = () => {
                     stateConsecutiveCountRef.current.distracted = 0;
                 }
 
-                // 1. 연속 감지 체크 (점수 감점용)
-                if (rawState === lastInferenceStateRef.current && rawState !== 0) {
-                    consecutiveCountRef.current += 1;
-                }
+                // 상태 추적 업데이트
+                lastInferenceStateRef.current = rawState;
 
-
-                // 2. N회 연속 비정상 상태 → 즉시 감점 (동적 임계값)
-                if (consecutiveCountRef.current >= alertThresholdRef.current) {
-                    console.log(`🚨 ${alertThresholdRef.current}회 연속 감지: ${['Normal', 'Drowsy', 'Searching', 'Phone', 'Assault'][rawState]}`);
-                    setCurrentState(rawState);
-                    applyPenalty(rawState, true);  // 연속 감지 추가 감점
-                    consecutiveCountRef.current = 0;  // 리셋
-                    inferenceBufferRef.current = [];  // 버퍼 클리어
-                    lastVotedStateRef.current = rawState;
-                    return;
-                }
-
-                // 3. 버퍼에 추가
+                // 버퍼에 추가
                 inferenceBufferRef.current.push(rawState);
                 if (inferenceBufferRef.current.length > voteBufferSizeRef.current) {
                     inferenceBufferRef.current.shift();  // 오래된 것 제거
                 }
 
-                // 4. N개 모이면 투표 (동적 버퍼 크기)
+                // N개 모이면 투표 (폭행 즉시 감지용)
                 if (inferenceBufferRef.current.length >= voteBufferSizeRef.current) {
                     const votedState = getVotedState(inferenceBufferRef.current);
                     setCurrentState(votedState);
 
-                    // 투표 결과가 이전과 다를 때만 감점/회복 적용
-                    if (votedState !== lastVotedStateRef.current) {
-                        applyPenalty(votedState, false);
-                        lastVotedStateRef.current = votedState;
-                    } else if (votedState === 0) {
-                        // Normal 상태 유지 시 회복
-                        driverBehaviorScoreRef.current = Math.min(100, driverBehaviorScoreRef.current + 0.05);
-                        setDriverBehaviorScore(driverBehaviorScoreRef.current);
-                        const newScore = calculateWeightedScore();
-                        scoreRef.current = newScore;
-                        setScore(newScore);
+                    // 폭행(Assault) 확정 시 즉시 감점
+                    if (votedState === 4 && votedState !== lastVotedStateRef.current) {
+                        updateScore('PENALTY', SCORE_CONFIG.PENALTY.ASSAULT);
+                        console.log(`🚨 폭행 감지! 즉시 감점 (-${SCORE_CONFIG.PENALTY.ASSAULT}점)`);
                     }
+
+                    lastVotedStateRef.current = votedState;
 
                     // 버퍼 절반 클리어 (슬라이딩 윈도우)
                     inferenceBufferRef.current = inferenceBufferRef.current.slice(Math.floor(voteBufferSizeRef.current / 2));
@@ -1292,19 +1252,16 @@ const Dashboard = () => {
                 setIsActive(false);
             }, 0);
         } else {
-            // 모든 점수 초기화
+            // 모든 점수 초기화 (70점으로 시작)
             console.log('🚀 세션 시작:', {
                 user: user ? { id: user.id, name: user.name } : null,
                 timestamp: new Date().toISOString()
             });
-            driverBehaviorScoreRef.current = 100;
-            speedLimitScoreRef.current = 100;
-            accelDecelScoreRef.current = 100;
-            setDriverBehaviorScore(100);
-            setSpeedLimitScore(100);
-            setAccelDecelScore(100);
-            scoreRef.current = 100;
-            setScore(100);
+            scoreRef.current = 70;
+            setScore(70);
+            setDriverBehaviorScore(70);
+            setSpeedLimitScore(70);
+            setAccelDecelScore(70);
             setCurrentState(0);
             setEventCount(0);
             setDrowsyCount(0);
