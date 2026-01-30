@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Routes, Route, useNavigate, useLocation, useParams } from 'react-router-dom';
-import { addLogByUserId, getLogsByUserId } from '../utils/LogService';
-import { storage } from '../utils/localStorage';
-import { startGpsMonitoring, stopGpsMonitoring, requestMotionPermission, getCurrentPosition } from '../utils/GpsService';
+import { startGpsMonitoring, stopGpsMonitoring, requestMotionPermission, getCurrentPosition, getAddressFromCoords, SCORE_CONFIG } from '../utils/GpsService';
 import { modelAPI } from '../utils/modelAPI';
 import { voiceService } from '../utils/VoiceService';
 import { searchNearbyRestStop } from '../services/tmapService';
 import { AlertTriangle, X, MapPin, Search, Award } from 'lucide-react';
+import * as drivingService from '../services/drivingService';
+import * as userService from '../services/userService';
+import * as couponService from '../services/couponService';
 import { STATE_CONFIG, APPLE_STATE_CONFIG } from './constants';
 import Header from './Header';
 import BottomNav from './BottomNav';
@@ -108,12 +109,14 @@ const Dashboard = () => {
     }, [showCameraView]);
 
     // 가중치 기반 점수 계산을 위한 상태
-    const [driverBehaviorScore, setDriverBehaviorScore] = useState(70); // 운전자 행동 점수 (40%)
-    const [speedLimitScore, setSpeedLimitScore] = useState(70); // 제한속도 준수 점수 (35%)
-    const [accelDecelScore, setAccelDecelScore] = useState(70); // 급가속/감속 점수 (25%)
+    const initialScore = user?.score || 70;
 
-    // 최종 가중 평균 점수
-    const [score, setScore] = useState(70);
+    const [driverBehaviorScore, setDriverBehaviorScore] = useState(initialScore); // 운전자 행동 점수 (40%)
+    const [speedLimitScore, setSpeedLimitScore] = useState(initialScore); // 제한속도 준수 점수 (35%)
+    const [accelDecelScore, setAccelDecelScore] = useState(initialScore); // 급가속/감속 점수 (25%)
+
+    // 최종 가중 평균 점수 (이전 주행 점수 이어받기)
+    const [score, setScore] = useState(initialScore);
     const [sessionTime, setSessionTime] = useState(0);
     const [currentState, setCurrentState] = useState(0);
     const [eventCount, setEventCount] = useState(0);
@@ -153,11 +156,11 @@ const Dashboard = () => {
         ACCEL_DECEL: 0.25       // 급가속/감속 25%
     };
 
-    // 각 요소별 점수 ref
-    const driverBehaviorScoreRef = useRef(70);
-    const speedLimitScoreRef = useRef(70);
-    const accelDecelScoreRef = useRef(70);
-    const scoreRef = useRef(70);
+    // 각 요소별 점수 ref (user.score 또는 70으로 초기화)
+    const driverBehaviorScoreRef = useRef(user?.score || 70);
+    const speedLimitScoreRef = useRef(user?.score || 70);
+    const accelDecelScoreRef = useRef(user?.score || 70);
+    const scoreRef = useRef(user?.score || 70);
     const finalSessionScoreRef = useRef(null); // 세션 종료 시 최종 점수 저장 (ref로 즉시 접근 가능)
 
     // 투표 시스템 설정 (동적 - 백엔드에서 조절)
@@ -227,6 +230,11 @@ const Dashboard = () => {
         setDriverBehaviorScore(newScore);
         setSpeedLimitScore(newScore);
         setAccelDecelScore(newScore);
+
+        // [FIX] 개별 점수 ref도 반드시 동기화해야 함 (회복 로직에서 ref를 참조하므로)
+        driverBehaviorScoreRef.current = newScore;
+        speedLimitScoreRef.current = newScore;
+        accelDecelScoreRef.current = newScore;
     };
 
     // 가중 평균 점수 계산 함수
@@ -246,7 +254,8 @@ const Dashboard = () => {
         const loadHistory = async () => {
             if (user) {
                 try {
-                    const saved = await getLogsByUserId(user.id);
+                    // Supabase에서 주행 기록 조회
+                    const saved = await drivingService.getLogs(user.id);
                     setHistory(saved || []);
                 } catch (error) {
                     console.error('주행 기록 로드 오류:', error);
@@ -269,9 +278,68 @@ const Dashboard = () => {
         loadHistory();
     }, [user]);
 
+    // user.score가 변경되면 점수 동기화 (Supabase에서 업데이트된 점수 반영)
+    // 또한 주행 중이 아닐 때(isActive=false)는 항상 DB 점수와 로컬 점수를 일치시킴
+    useEffect(() => {
+        if (user?.score !== undefined && !isActive) {
+            const userScore = user.score;
+            // 현재 로컬 점수와 DB 점수가 다르면 DB 점수로 강제 동기화
+            if (score !== userScore) {
+                console.log(`✅ 점수 동기화 (DB: ${userScore} vs Local: ${score}) -> DB 점수로 통일`);
+                setScore(userScore);
+                setDriverBehaviorScore(userScore);
+                setSpeedLimitScore(userScore);
+                setAccelDecelScore(userScore);
+                scoreRef.current = userScore;
+                driverBehaviorScoreRef.current = userScore;
+                speedLimitScoreRef.current = userScore;
+                accelDecelScoreRef.current = userScore;
+            }
+        }
+    }, [user?.score, isActive, score]); // score 의존성 추가해서 불일치 시 즉시 보정
+
+    // [초기화] '전국 공통'으로 잘못 잡힌 경우 다시 위치 찾기 유도
+    useEffect(() => {
+        if (userRegion && userRegion.name === '전국 공통') {
+            console.log("전국 공통 감지 -> 온보딩으로 리셋 및 재검사");
+            localStorage.removeItem('userRegion');
+            setUserRegion(null);
+            setStep('onboarding');
+        }
+    }, [userRegion]); // userRegion이 변경되거나 마운트될 때 체크
+
+    // --- GPS 기반 자동 위치 찾기 (Onboarding 진입 시) ---
+    useEffect(() => {
+        if (step === 'onboarding' && !inputAddress) {
+            const detectLocation = async () => {
+                try {
+                    setInputAddress("위치 확인 중...");
+                    const pos = await getCurrentPosition();
+                    const address = await getAddressFromCoords(pos.latitude, pos.longitude);
+
+                    if (address) {
+                        setInputAddress(address);
+                        // 자동 제출 (사용자 편의)
+                        setTimeout(() => handleAddressSubmit(address), 500);
+                    } else {
+                        setInputAddress("");
+                        setToast({ isVisible: true, message: '주소를 찾을 수 없습니다. 직접 입력해주세요.' });
+                    }
+                } catch (error) {
+                    console.error("Auto location failed:", error);
+                    setInputAddress("");
+                }
+            };
+            detectLocation();
+        }
+    }, [step]); // step이 onboarding이 될 때 실행
+
     // --- 주소 입력 및 지자체 배정 로직 ---
-    const handleAddressSubmit = () => {
-        if (inputAddress.trim().length < 2) {
+    const handleAddressSubmit = (manualAddress = null) => {
+        // manualAddress가 이벤트 객체일수도 있으므로 문자열인지 확인
+        const targetAddress = (typeof manualAddress === 'string') ? manualAddress : inputAddress;
+
+        if (!targetAddress || targetAddress.trim().length < 2 || targetAddress === "위치 확인 중...") {
             alert("정확한 주소를 입력해주세요.");
             return;
         }
@@ -585,6 +653,32 @@ const Dashboard = () => {
         return () => stopCamera();
     }, []);
 
+    // 화면 꺼짐 방지 (Wake Lock만)
+    useEffect(() => {
+        let wakeLock = null;
+
+        const requestWakeLock = async () => {
+            try {
+                if ('wakeLock' in navigator && isActive) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    console.log('💡 Wake Lock active');
+                }
+            } catch (err) {
+                console.warn('Wake Lock error:', err);
+            }
+        };
+
+        if (isActive) {
+            requestWakeLock();
+        }
+
+        return () => {
+            if (wakeLock) {
+                wakeLock.release().catch(() => { });
+            }
+        };
+    }, [isActive]);
+
     // NOTE: showCameraView 변경 시 srcObject 재연결 로직 제거됨
     // DrivePage에서 video 요소가 단일 return으로 항상 DOM에 유지되므로 불필요
     // 이전 로직이 깜박임의 원인이었음
@@ -612,25 +706,7 @@ const Dashboard = () => {
         }
     }, [showCameraView]);
 
-    // 앱 백그라운드/포그라운드 처리 (PR #16 - 간소화)
-    useEffect(() => {
-        const handleVisibilityChange = () => {
-            if (document.hidden) {
-                console.log('[camera] App backgrounded');
-            } else {
-                console.log('[camera] App foregrounded');
-                // 포그라운드 복귀 후 1초 딜레이 후 비디오 재생 재시도
-                setTimeout(() => {
-                    if (videoRef.current?.paused && streamRef.current?.active) {
-                        videoRef.current.play().catch(() => { });
-                    }
-                }, 1000);
-            }
-        };
 
-        document.addEventListener('visibilitychange', handleVisibilityChange);
-        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-    }, []);
 
     // 페이지 이동 후 돌아왔을 때 스트림 재연결
     useEffect(() => {
@@ -648,6 +724,36 @@ const Dashboard = () => {
             interval = setInterval(() => {
                 sessionTimeRef.current += 1;
                 setSessionTime(sessionTimeRef.current);
+
+                // [NEW] 30초 정상 상태 유지 시 점수 회복
+                // 0 = Normal State
+                if (lastVotedStateRef.current === 0) {
+                    normalStateDurationRef.current += 1;
+
+                    if (normalStateDurationRef.current >= 5) {
+                        // [TEMP] 테스트용: 5초마다 5점 상승
+                        const pointsToRecover = 5.0;
+
+                        // 모든 항목 골고루 회복
+                        driverBehaviorScoreRef.current = Math.min(100, driverBehaviorScoreRef.current + pointsToRecover);
+                        speedLimitScoreRef.current = Math.min(100, speedLimitScoreRef.current + pointsToRecover);
+                        accelDecelScoreRef.current = Math.min(100, accelDecelScoreRef.current + pointsToRecover);
+
+                        setDriverBehaviorScore(driverBehaviorScoreRef.current);
+                        setSpeedLimitScore(speedLimitScoreRef.current);
+                        setAccelDecelScore(accelDecelScoreRef.current);
+
+                        // 점수 재계산
+                        const newScore = calculateWeightedScore();
+                        scoreRef.current = newScore;
+                        setScore(newScore);
+
+                        console.log(`🎁 [TEST] 5초 정상 주행 달성! +${pointsToRecover}점 회복`);
+                        normalStateDurationRef.current = 0; // 카운터 초기화
+                    }
+                } else {
+                    normalStateDurationRef.current = 0; // 비정상 상태 시 카운터 초기화
+                }
             }, 1000);
         } else {
             sessionTimeRef.current = 0;
@@ -826,15 +932,16 @@ const Dashboard = () => {
             setSensorStatus({ gps: false, motion: false });
             setSpeedLimit(null);
             setRoadName(null);
-            // 점수 초기화 (70점으로 시작)
-            driverBehaviorScoreRef.current = 70;
-            speedLimitScoreRef.current = 70;
-            accelDecelScoreRef.current = 70;
-            setDriverBehaviorScore(70);
-            setSpeedLimitScore(70);
-            setAccelDecelScore(70);
-            scoreRef.current = 70;
-            setScore(70);
+            // 점수 초기화 (user.score 또는 70으로)
+            const startScore = user?.score || 70;
+            driverBehaviorScoreRef.current = startScore;
+            speedLimitScoreRef.current = startScore;
+            accelDecelScoreRef.current = startScore;
+            setDriverBehaviorScore(startScore);
+            setSpeedLimitScore(startScore);
+            setAccelDecelScore(startScore);
+            scoreRef.current = startScore;
+            setScore(startScore);
 
             // 거리 초기화
             accumulatedDistanceRef.current = 0;
@@ -1339,42 +1446,80 @@ const Dashboard = () => {
                 maxSpeed: Math.round(currentSpeed)
             };
 
-            // Save log for specific user (localStorage 기반)
+            // Supabase에 주행 기록 저장 (재시도 + localStorage 백업)
             if (user) {
-                console.log('💾 기록 저장 시도:', { userId: user.id, entry: newEntry });
-                addLogByUserId(user.id, newEntry).then(updatedLogs => {
-                    console.log('✅ 기록 저장 성공:', { count: updatedLogs.length, logs: updatedLogs.slice(0, 3) });
-                    setHistory(updatedLogs); // Update local state with returned logs
-                }).catch(error => {
-                    console.error('❌ 주행 기록 저장 오류:', error);
-                    setToast({ isVisible: true, message: '기록 저장에 실패했습니다. 다시 시도해주세요.' });
-                });
+                let saveSuccess = false;
+                let retryCount = 0;
+                const maxRetries = 3;
 
-                // Update user score in localStorage and AuthContext
-                const savedUser = storage.getUser();
-                if (savedUser) {
-                    const updatedUser = {
-                        ...savedUser,
-                        score: finalScore,
-                        updatedAt: new Date().toISOString()
-                    };
-                    storage.setUser(updatedUser);
-                    setUser({
-                        id: updatedUser.id,
-                        name: updatedUser.name,
-                        score: updatedUser.score,
-                        region: updatedUser.region
-                    });
-                } else {
-                    console.warn('⚠️ localStorage에서 사용자 정보를 찾을 수 없습니다.');
+                while (!saveSuccess && retryCount < maxRetries) {
+                    try {
+                        console.log(`💾 기록 저장 시도 ${retryCount + 1}/${maxRetries} (Supabase):`, { userId: user.id, entry: newEntry });
+
+                        // 1. 주행 기록 저장
+                        const savedLog = await drivingService.saveLog(user.id, newEntry);
+                        console.log('✅ 주행 기록 저장 완료 (Supabase):', savedLog);
+
+                        // 2. 사용자 점수 업데이트
+                        await userService.updateUserScore(user.id, finalScore);
+                        console.log('✅ 사용자 점수 업데이트 완료 (Supabase):', finalScore);
+
+                        // 3. AuthContext의 user 상태 업데이트
+                        setUser({
+                            ...user,
+                            score: finalScore
+                        });
+                        console.log('✅ User 컨텍스트 업데이트 완료');
+
+                        saveSuccess = true;
+
+                    } catch (error) {
+                        retryCount++;
+                        console.error(`❌ 주행 기록 저장 실패 (시도 ${retryCount}/${maxRetries}):`, error);
+
+                        if (retryCount < maxRetries) {
+                            // 재시도 전 대기 (exponential backoff)
+                            const delay = 1000 * retryCount;
+                            console.log(`⏳ ${delay}ms 후 재시도...`);
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                        } else {
+                            // 최대 재시도 횟수 초과 → localStorage에 백업
+                            console.warn('⚠️ Supabase 저장 실패 - localStorage에 백업합니다');
+
+                            try {
+                                const backupLogs = JSON.parse(localStorage.getItem('backup_driving_logs') || '[]');
+                                backupLogs.push({
+                                    ...newEntry,
+                                    userId: user.id,
+                                    backupTimestamp: new Date().toISOString()
+                                });
+                                localStorage.setItem('backup_driving_logs', JSON.stringify(backupLogs));
+                                console.log('💾 localStorage 백업 완료:', backupLogs.length, '개 기록');
+
+                                setToast({
+                                    isVisible: true,
+                                    message: '⚠️ 네트워크 오류로 기록을 임시 저장했습니다. 나중에 자동 동기화됩니다.'
+                                });
+                            } catch (backupError) {
+                                console.error('❌ localStorage 백업 실패:', backupError);
+                                setToast({
+                                    isVisible: true,
+                                    message: '❌ 기록 저장 실패! 주행 기록이 손실되었을 수 있습니다.'
+                                });
+                            }
+                        }
+                    }
+                }
+
+                if (saveSuccess) {
+                    // 4. 로컬 history 상태 업데이트 (UI 반영)
+                    const updatedLogs = await drivingService.getLogs(user.id);
+                    setHistory(updatedLogs);
+                    setToast({ isVisible: true, message: '주행 기록이 저장되었습니다!' });
                 }
             } else {
-                // Fallback for no user context (though should be protected)
-                console.warn('⚠️ 사용자 정보가 없어 기록이 저장되지 않습니다. 로그인 상태를 확인해주세요.');
-                setToast({ isVisible: true, message: '로그인이 필요합니다. 기록이 저장되지 않았습니다.' });
-                const newHistory = [newEntry, ...history].slice(0, 10);
-                setHistory(newHistory);
-                localStorage.setItem('drivingHistory', JSON.stringify(newHistory));
+                console.error('❌ 사용자 정보 없음 - 로그 저장 불가');
+                setToast({ isVisible: true, message: '로그인 정보가 없습니다. 다시 로그인해주세요.' });
             }
 
             // 세션 시간이 너무 짧으면 경고
@@ -1400,14 +1545,14 @@ const Dashboard = () => {
                 user: user ? { id: user.id, name: user.name } : null,
                 timestamp: new Date().toISOString()
             });
-            driverBehaviorScoreRef.current = 100;
-            speedLimitScoreRef.current = 100;
-            accelDecelScoreRef.current = 100;
-            setDriverBehaviorScore(100);
-            setSpeedLimitScore(100);
-            setAccelDecelScore(100);
-            scoreRef.current = 100;
-            setScore(100);
+            driverBehaviorScoreRef.current = user?.score || 70;
+            speedLimitScoreRef.current = user?.score || 70;
+            accelDecelScoreRef.current = user?.score || 70;
+            setDriverBehaviorScore(user?.score || 70);
+            setSpeedLimitScore(user?.score || 70);
+            setAccelDecelScore(user?.score || 70);
+            scoreRef.current = user?.score || 70;
+            setScore(user?.score || 70);
             setCurrentState(0);
             setEventCount(0);
             setDrowsyCount(0);
@@ -1457,12 +1602,12 @@ const Dashboard = () => {
     const CurrentIcon = showCameraView ? STATE_CONFIG[currentState].icon : APPLE_STATE_CONFIG[currentState].icon;
     const currentConfig = showCameraView ? STATE_CONFIG : APPLE_STATE_CONFIG;
 
-    // 쿠폰 목록 localStorage에서 불러오기
+    // 쿠폰 목록 Supabase에서 불러오기
     useEffect(() => {
-        const loadCoupons = () => {
+        const loadCoupons = async () => {
             if (user) {
                 try {
-                    const savedCoupons = storage.getCoupons(user.id);
+                    const savedCoupons = await couponService.getCoupons(user.id);
                     // 기존 형식으로 변환
                     const formattedCoupons = savedCoupons.map(coupon => ({
                         id: coupon.couponId || coupon.id,
@@ -1486,7 +1631,7 @@ const Dashboard = () => {
         loadCoupons();
     }, [user]);
 
-    // 쿠폰 추가 함수 (localStorage 기반)
+    // 쿠폰 추가 함수 (Supabase 연동)
     const addCoupon = async (couponData) => {
         try {
             if (!user) {
@@ -1510,7 +1655,8 @@ const Dashboard = () => {
                 challengeId: couponData.challengeId || null
             };
 
-            const savedCoupon = storage.addCoupon(newCoupon);
+            // Supabase에 쿠폰 저장
+            const savedCoupon = await couponService.addCoupon(newCoupon);
 
             if (savedCoupon) {
                 // 상태에 추가
@@ -1602,8 +1748,9 @@ const Dashboard = () => {
     );
 
     const InsurancePageWrapper = () => {
-        const avgScore = getAverageScore() ?? score;
-        return <InsurancePage score={avgScore} history={history} userRegion={userRegion} onShowChallengeDetail={setShowChallengeDetail} onClaimReward={addCoupon} showChallengeDetail={showChallengeDetail} />;
+        // [FIX] 평균 점수가 아닌 현재 내 점수(DB와 동기화된 score)를 사용
+        const currentScore = score;
+        return <InsurancePage score={currentScore} history={history} userRegion={userRegion} onShowChallengeDetail={setShowChallengeDetail} onClaimReward={addCoupon} showChallengeDetail={showChallengeDetail} />;
     };
 
     const LogPageWrapper = () => {

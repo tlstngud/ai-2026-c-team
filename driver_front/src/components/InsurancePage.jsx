@@ -5,7 +5,7 @@ import Header from './Header';
 import { useAuth } from '../contexts/AuthContext';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import ChallengeDetail from './ChallengeDetail';
-import { storage } from '../utils/localStorage';
+import * as challengeService from '../services/challengeService';
 
 const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChallengeDetail = null, onClaimReward = null, showChallengeDetail = false }) => {
     const navigate = useNavigate();
@@ -17,21 +17,25 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
     const [challenge, setChallenge] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    // [2026-01-16 수정] 챌린지 시작/취소 토글 핸들러 (localStorage 연동)
-    const handleChallengeStart = (status) => {
+    // 챌린지 시작/취소 토글 핸들러 (Supabase 연동)
+    const handleChallengeStart = async (status) => {
         if (!user) return;
 
         // challenge가 아직 로드되지 않았을 경우를 대비
         const currentChallengeId = challenge ? challenge.challengeId : `challenge_${region.name.replace(/\s/g, '_')}`;
 
-        if (status) {
-            storage.joinChallenge(user.id, currentChallengeId);
-            setIsChallengeJoined(true);
-            setShowRewardCard(true);
-        } else {
-            storage.leaveChallenge(user.id, currentChallengeId);
-            setIsChallengeJoined(false);
-            setShowRewardCard(false);
+        try {
+            if (status) {
+                await challengeService.joinChallenge(user.id, currentChallengeId);
+                setIsChallengeJoined(true);
+                setShowRewardCard(true);
+            } else {
+                await challengeService.leaveChallenge(user.id, currentChallengeId);
+                setIsChallengeJoined(false);
+                setShowRewardCard(false);
+            }
+        } catch (error) {
+            console.error('챌린지 상태 변경 오류:', error);
         }
     };
 
@@ -41,7 +45,13 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
     const hasNoData = history.length === 0;
 
     // 점수 계산 로직
+    // 점수 계산 로직
     const calculateDisplayScore = () => {
+        // [FIX] props로 전달된 score(user.score)가 있으면 그것을 우선 사용
+        // 사용자가 "DB 값(현재 score)과 같아야 한다"고 했으므로 history 평균 계산보다 우선
+        if (score !== undefined && score !== null) return score;
+
+        // score가 없을 때만 fallback으로 history 평균 계산
         if (hasNoData) return null;
         if (history.length < MIN_RECORDS_FOR_SCORE) {
             // 7개 미만: 전체 기록의 평균 점수
@@ -77,11 +87,12 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
         }
     }, [displayScore]);
 
-    // 챌린지 정보 localStorage에서 불러오기
+    // 챌린지 정보 Supabase에서 불러오기
     useEffect(() => {
-        const loadChallenge = () => {
+        const loadChallenge = async () => {
             try {
-                const challenges = storage.getChallenges();
+                // Supabase에서 챌린지 목록 조회
+                const challenges = await challengeService.getChallenges();
 
                 if (userRegion?.name) {
                     // 지역에 맞는 챌린지 찾기
@@ -116,29 +127,37 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
         loadChallenge();
     }, [userRegion]);
 
-    // [2026-01-16 추가] 챌린지 참여 상태 동기화
+    // 챌린지 참여 상태 동기화 (Supabase)
     useEffect(() => {
-        if (user && (challenge || userRegion)) {
-            // challenge가 없으면 userRegion으로 임시 ID 생성해서 체크
-            const currentChallengeId = challenge ? challenge.challengeId : `challenge_${region.name.replace(/\s/g, '_')}`;
-            const status = storage.getChallengeStatus(user.id, currentChallengeId);
+        const syncChallengeStatus = async () => {
+            if (user && (challenge || userRegion)) {
+                // challenge가 없으면 userRegion으로 임시 ID 생성해서 체크
+                const currentChallengeId = challenge ? challenge.challengeId : `challenge_${region.name.replace(/\s/g, '_')}`;
 
-            if (status) {
-                // 이미 참여 중
-                if (status.status === 'REWARD_CLAIMED') {
-                    setIsChallengeJoined(true);
-                    setIsRewardClaimed(true);
-                    setShowRewardCard(false); // 이미 받았으면 숨김
-                } else {
-                    setIsChallengeJoined(true);
-                    setIsRewardClaimed(false);
-                    setShowRewardCard(true); // 진행 중이면 표시
+                try {
+                    const status = await challengeService.getChallengeStatus(user.id, currentChallengeId);
+
+                    if (status) {
+                        // 이미 참여 중
+                        if (status.status === 'REWARD_CLAIMED') {
+                            setIsChallengeJoined(true);
+                            setIsRewardClaimed(true);
+                            setShowRewardCard(false); // 이미 받았으면 숨김
+                        } else {
+                            setIsChallengeJoined(true);
+                            setIsRewardClaimed(false);
+                            setShowRewardCard(true); // 진행 중이면 표시
+                        }
+                    } else {
+                        setIsChallengeJoined(false);
+                        setShowRewardCard(false);
+                    }
+                } catch (error) {
+                    console.error('챌린지 상태 조회 오류:', error);
                 }
-            } else {
-                setIsChallengeJoined(false);
-                setShowRewardCard(false);
             }
-        }
+        };
+        syncChallengeStatus();
     }, [user, challenge, userRegion]);
 
     // 지자체 정보가 없으면 기본값 사용
@@ -336,7 +355,7 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
                                     </button>
                                 ) : (
                                     <button
-                                        onClick={() => {
+                                        onClick={async () => {
                                             if (onClaimReward) {
                                                 // 쿠폰 데이터 생성
                                                 const couponData = {
@@ -355,10 +374,14 @@ const InsurancePage = ({ score = 85, history = [], userRegion = null, onShowChal
                                                 };
                                                 onClaimReward(couponData);
 
-                                                // [2026-01-16 추가] 리워드 발급 상태 저장
+                                                // 리워드 발급 상태 Supabase에 저장
                                                 if (user) {
                                                     const currentChallengeId = challenge ? challenge.challengeId : `challenge_${region.name.replace(/\s/g, '_')}`;
-                                                    storage.claimChallengeReward(user.id, currentChallengeId);
+                                                    try {
+                                                        await challengeService.claimChallengeReward(user.id, currentChallengeId);
+                                                    } catch (error) {
+                                                        console.error('리워드 수령 상태 저장 오류:', error);
+                                                    }
                                                 }
 
                                                 // 2초 후에 카드가 사라지도록 설정

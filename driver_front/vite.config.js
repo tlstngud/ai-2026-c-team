@@ -47,6 +47,7 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 8888,
+
     proxy: {
       '/auth': {
         target: 'http://localhost:8000',

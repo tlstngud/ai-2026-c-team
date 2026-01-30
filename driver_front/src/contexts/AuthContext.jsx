@@ -1,191 +1,229 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import API_BASE_URL from '../config/api';
+import { supabase, authHelpers } from '../config/supabase';
 
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-    const [user, setUser] = useState(null); // 현재 로그인한 유저
+    const [user, setUser] = useState(null); // 현재 로그인한 유저 (public.users 데이터)
+    const [authUser, setAuthUser] = useState(null); // Supabase auth.users
     const [loading, setLoading] = useState(true);
 
-    // 초기 로드 시 localStorage에서 로그인 상태 복원
+    // 초기 로드 시 Supabase 세션 확인
     useEffect(() => {
-        const initAuth = () => {
-            const savedUser = localStorage.getItem('currentUser');
-            if (savedUser) {
-                const userData = JSON.parse(savedUser);
-                setUser(userData);
-                if (userData.region) {
-                    localStorage.setItem('userRegion', JSON.stringify(userData.region));
+        const initAuth = async () => {
+            try {
+                // 현재 세션 확인
+                const { data: { session }, error } = await supabase.auth.getSession();
+
+                if (error) {
+                    console.error('세션 확인 오류:', error);
+                    setLoading(false);
+                    return;
                 }
+
+                if (session?.user) {
+                    setAuthUser(session.user);
+                    // public.users에서 프로필 정보 가져오기
+                    await loadUserProfile(session.user.id);
+                }
+            } catch (error) {
+                console.error('인증 초기화 오류:', error);
+            } finally {
+                setLoading(false);
             }
-            setLoading(false);
         };
+
         initAuth();
+
+        // 인증 상태 변경 리스너
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+            console.log('🔐 Auth 상태 변경:', event, session?.user?.id);
+
+            // SIGNED_IN 이벤트는 백그라운드 복귀 시 계속 발생 → 무시
+            if (event === 'SIGNED_IN') {
+                console.log('⏭️ Skipping SIGNED_IN event (prevents infinite loop)');
+                return;
+            }
+
+            if (session?.user) {
+                setAuthUser(session.user);
+                await loadUserProfile(session.user.id);
+            } else {
+                setAuthUser(null);
+                setUser(null);
+            }
+        });
+
+        return () => {
+            subscription?.unsubscribe();
+        };
     }, []);
 
-    // 1. 회원가입 함수 - localStorage 기반 (임시)
+    // public.users에서 사용자 프로필 로드
+    const loadUserProfile = async (userId) => {
+        try {
+            const { data, error } = await supabase
+                .from('users')
+                .select('*')
+                .eq('id', userId)
+                .single();
+
+            if (error) {
+                console.error('프로필 로드 오류:', error);
+                return;
+            }
+
+            if (data) {
+                const userData = {
+                    id: data.id,
+                    name: data.name,
+                    score: data.score || 70,
+                    region: data.region,
+                    lastSeen: data.last_seen,
+                    metadata: data.metadata
+                };
+                setUser(userData);
+                console.log('✅ 사용자 프로필 로드 완료:', userData);
+            }
+        } catch (error) {
+            console.error('프로필 로드 중 오류:', error);
+        }
+    };
+
+    // 회원가입 함수 - Supabase Auth 사용
     const signUp = async (id, name, password, regionData = null) => {
-        // 주소에서 지역 정보 추출
-        const address = regionData?.address || '';
-        let regionName = '전국 공통';
-        let regionCampaign = '대한민국 안전운전 챌린지';
-        let regionTarget = 90;
-        let regionReward = '안전운전 인증서 발급';
-
-        if (address.includes('춘천')) {
-            regionName = '춘천시';
-            regionCampaign = '스마일 춘천 안전운전';
-            regionTarget = 90;
-            regionReward = '춘천사랑상품권 3만원 + 보험할인';
-        } else if (address.includes('서울')) {
-            regionName = '서울특별시';
-            regionCampaign = '서울 마이-티 드라이버';
-            regionTarget = 92;
-            regionReward = '서울시 공영주차장 50% 할인권';
-        }
-
-        // localStorage에서 기존 회원 목록 가져오기
-        const usersJson = localStorage.getItem('registeredUsers');
-        const users = usersJson ? JSON.parse(usersJson) : [];
-
-        // 중복 아이디 체크
-        if (users.find(u => u.id === id)) {
-            return { success: false, message: '이미 존재하는 아이디입니다.' };
-        }
-
-        // 새 회원 정보 저장
-        const newUser = {
-            id,
-            name,
-            password,
-            address,
-            score: 85,
-            region: {
-                name: regionName,
-                campaign: regionCampaign,
-                target: regionTarget,
-                reward: regionReward
-            }
-        };
-
-        users.push(newUser);
-        localStorage.setItem('registeredUsers', JSON.stringify(users));
-
-        return { success: true };
-
-        /* 원본 회원가입 로직 (나중에 복원)
         try {
-            // 백엔드 API 호출
-            const response = await fetch(`${API_BASE_URL}/auth/signup`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    id,
-                    name,
-                    password,
-                    address,
-                    region_name: regionName,
-                    region_campaign: regionCampaign,
-                    region_target: regionTarget,
-                    region_reward: regionReward
-                })
+            // 아이디를 이메일 형식으로 변환 (Supabase는 이메일 필수)
+            const email = `${id}@driver.local`;
+
+            // 지역 정보 구성
+            const region = regionData ? {
+                name: regionData.name || '전국 공통',
+                campaign: regionData.campaign || '대한민국 안전운전 챌린지',
+                target: regionData.target || 90,
+                reward: regionData.reward || '안전운전 인증서 발급',
+                address: regionData.address
+            } : null;
+
+            // Supabase Auth 회원가입
+            const { data: authData, error: authError } = await supabase.auth.signUp({
+                email,
+                password,
+                options: {
+                    data: {
+                        name,
+                        user_id: id, // 원래 아이디 저장
+                        region
+                    }
+                }
             });
 
-            const data = await response.json();
+            if (authError) {
+                console.error('회원가입 오류:', authError);
 
-            if (!response.ok) {
-                return { success: false, message: data.detail || '회원가입 실패' };
+                // 중복 이메일 처리
+                if (authError.message.includes('already registered')) {
+                    return { success: false, message: '이미 존재하는 아이디입니다.' };
+                }
+
+                return { success: false, message: authError.message };
             }
 
+            if (!authData.user) {
+                return { success: false, message: '회원가입 중 오류가 발생했습니다.' };
+            }
+
+            console.log('✅ Supabase Auth 회원가입 완료:', authData.user.id);
+
+            // public.users는 트리거가 자동으로 생성함
+            // handle_new_user() 트리거가 auth.users INSERT 시 public.users에 row 생성
+
             return { success: true };
+
         } catch (error) {
-            console.error('회원가입 오류:', error);
-            return { success: false, message: '서버 연결 오류. 잠시 후 다시 시도해주세요.' };
+            console.error('회원가입 중 오류:', error);
+            return { success: false, message: '회원가입 중 오류가 발생했습니다.' };
         }
-        */
     };
 
-    // 2. 로그인 함수 - localStorage 기반 (임시)
+    // 로그인 함수 - Supabase Auth 사용
     const login = async (id, password) => {
-        // localStorage에서 회원 목록 가져오기
-        const usersJson = localStorage.getItem('registeredUsers');
-        const users = usersJson ? JSON.parse(usersJson) : [];
-
-        // 회원 찾기
-        const foundUser = users.find(u => u.id === id);
-
-        if (!foundUser) {
-            return { success: false, message: '존재하지 않는 아이디입니다.' };
-        }
-
-        if (foundUser.password !== password) {
-            return { success: false, message: '비밀번호가 일치하지 않습니다.' };
-        }
-
-        // 로그인 성공
-        const userData = {
-            id: foundUser.id,
-            name: foundUser.name,
-            score: foundUser.score || 85,
-            region: foundUser.region
-        };
-
-        setUser(userData);
-        localStorage.setItem('currentUser', JSON.stringify(userData));
-        localStorage.setItem('userRegion', JSON.stringify(userData.region));
-
-        return { success: true };
-
-        /* 원본 로그인 로직 (나중에 복원)
         try {
-            // 백엔드 API 호출
-            const response = await fetch(`${API_BASE_URL}/auth/login`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ id, password })
+            // 아이디를 이메일 형식으로 변환
+            const email = `${id}@driver.local`;
+
+            const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+                email,
+                password
             });
 
-            const data = await response.json();
+            if (authError) {
+                console.error('로그인 오류:', authError);
 
-            if (!response.ok) {
-                return { success: false, message: data.detail || '로그인 실패' };
+                if (authError.message.includes('Invalid login credentials')) {
+                    return { success: false, message: '아이디 또는 비밀번호가 일치하지 않습니다.' };
+                }
+
+                return { success: false, message: authError.message };
             }
 
-            // 로그인 성공 - 사용자 정보 저장
-            const userData = {
-                id: data.user.id,
-                name: data.user.name,
-                score: data.user.score,
-                region: data.user.region
-            };
-
-            setUser(userData);
-            localStorage.setItem('currentUser', JSON.stringify(userData));
-
-            if (data.user.region) {
-                localStorage.setItem('userRegion', JSON.stringify(data.user.region));
+            if (!authData.user) {
+                return { success: false, message: '로그인 중 오류가 발생했습니다.' };
             }
+
+            console.log('✅ Supabase Auth 로그인 완료:', authData.user.id);
+
+            // public.users에서 프로필 로드 (useEffect의 onAuthStateChange가 처리)
+            // 여기서는 명시적으로 한 번 더 호출
+            await loadUserProfile(authData.user.id);
 
             return { success: true };
+
         } catch (error) {
-            console.error('로그인 오류:', error);
-            return { success: false, message: '서버 연결 오류. 잠시 후 다시 시도해주세요.' };
+            console.error('로그인 중 오류:', error);
+            return { success: false, message: '로그인 중 오류가 발생했습니다.' };
         }
-        */
     };
 
+    // 로그아웃 함수
     const logout = async () => {
-        setUser(null);
-        localStorage.removeItem('currentUser');
-        localStorage.removeItem('userRegion');
+        try {
+            const { error } = await supabase.auth.signOut();
+
+            if (error) {
+                console.error('로그아웃 오류:', error);
+                return;
+            }
+
+            // 상태 초기화
+            setUser(null);
+            setAuthUser(null);
+
+            // localStorage 정리
+            localStorage.removeItem('userRegion');
+            localStorage.removeItem('voiceEnabled');
+
+            console.log('✅ 로그아웃 완료');
+
+            // 로그인 페이지로 리다이렉트
+            window.location.href = '/login';
+
+        } catch (error) {
+            console.error('로그아웃 중 오류:', error);
+        }
     };
 
     return (
-        <AuthContext.Provider value={{ user, signUp, login, logout, setUser, loading }}>
+        <AuthContext.Provider value={{
+            user,
+            authUser,
+            signUp,
+            login,
+            logout,
+            setUser,
+            loading,
+            loadUserProfile
+        }}>
             {!loading && children}
         </AuthContext.Provider>
     );
